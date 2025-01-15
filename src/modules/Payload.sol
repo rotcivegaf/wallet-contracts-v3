@@ -108,8 +108,7 @@ library Payload {
     _decoded.kind = KIND_TRANSACTIONS;
 
     // Read the global flag
-    uint8 globalFlag;
-    (globalFlag, pointer) = packed.readUint8(pointer);
+    (uint256 globalFlag, uint256 pointer) = packed.readFirstUint8();
 
     // First bit determines if space is zero or not
     if (globalFlag & 0x01 == 0x01) {
@@ -125,6 +124,8 @@ library Payload {
       // Read the nonce
       (_decoded.nonce, pointer) = packed.readUintX(nonceSize, pointer);
     }
+
+    uint256 numCalls;
 
     // Next bit determines if the batch contains a single call
     if (globalFlag & 0x10 == 0x10) {

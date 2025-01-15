@@ -1,6 +1,14 @@
 pragma solidity ^0.8.18;
 
 library LibBytesPointer {
+  function readFirstUint8(bytes calldata _data) internal pure returns (uint8 a, uint256 newPointer) {
+    assembly {
+      let word := calldataload(_data.offset)
+      a := shr(248, word)
+      newPointer := 1
+    }
+  }
+
   function readFirstUint16(bytes calldata _data) internal pure returns (uint16 a, uint256 newPointer) {
     assembly {
       let word := calldataload(_data.offset)
