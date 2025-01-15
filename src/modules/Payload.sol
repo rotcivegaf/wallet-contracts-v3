@@ -28,10 +28,10 @@ library Payload {
   }
 
   bytes32 private constant CALL_TYPEHASH =
-    keccak256("Call(address to,uint256 value,bytes data,uint256 gasLimit,bool delegateCall,bool revertOnError)");
+    keccak256("Call(address to,uint256 value,bytes data,uint256 gasLimit,bool delegateCall,bool onlyFallback,uint256 behaviorOnError)");
 
   bytes32 private constant CALLS_TYPEHASH =
-    keccak256("Calls(Call[],address[] wallets)Call(address to,uint256 value,bytes data,uint256 gasLimit,bool delegateCall,bool revertOnError)");
+    keccak256("Calls(Call[],address[] wallets)Call(address to,uint256 value,bytes data,uint256 gasLimit,bool delegateCall,bool onlyFallback,uint256 behaviorOnError)");
 
   bytes32 private constant MESSAGE_TYPEHASH =
     keccak256("Message(bytes message,address[] wallets)");
@@ -66,6 +66,7 @@ library Payload {
 
     // Transaction kind
     Call[] calls;
+    uint256 space;
     uint256 nonce;
 
     // Message kind
@@ -106,9 +107,38 @@ library Payload {
   function fromPackedCalls(bytes calldata packed) internal view returns (Decoded memory _decoded) {
     _decoded.kind = KIND_TRANSACTIONS;
 
-    // First 2 bytes are the number of calls
-    (uint256 numCalls, uint256 pointer) = packed.readFirstUint16();
+    // Read the global flag
+    uint8 globalFlag;
+    (globalFlag, pointer) = packed.readUint8(pointer);
 
+    // First bit determines if space is zero or not
+    if (globalFlag & 0x01 == 0x01) {
+      _decoded.space = 0;
+    } else {
+      (_decoded.space, pointer) = packed.readUint160(pointer);
+    }
+
+    // Next 4 bits determine the size of the nonce
+    uint256 nonceSize = (globalFlag & 0x0E) >> 1;
+
+    if (nonceSize > 0) {
+      // Read the nonce
+      (_decoded.nonce, pointer) = packed.readUintX(nonceSize, pointer);
+    }
+
+    // Next bit determines if the batch contains a single call
+    if (globalFlag & 0x10 == 0x10) {
+      numCalls = 1;
+    } else {
+      // Next bit determines if the number of calls uses 1 byte or 2 bytes
+      if (globalFlag & 0x20 == 0x20) {
+        (numCalls, pointer) = packed.readUint8(pointer);
+      } else {
+        (numCalls, pointer) = packed.readUint16(pointer);
+      }
+    }
+
+    // Read the calls
     _decoded.calls = new Call[](numCalls);
 
     for (uint256 i = 0; i < numCalls; i++) {
@@ -161,7 +191,7 @@ library Payload {
         CALL_TYPEHASH,
         c.to,
         c.value,
-        keccak256(c.data), // For variable-length bytes, use keccak256 of contents
+        keccak256(c.data),
         c.gasLimit,
         c.delegateCall,
         c.onlyFallback,
