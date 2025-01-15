@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
+import { LibBytesPointer } from "../utils/LibBytesPointer.sol";
+
+using LibBytesPointer for bytes;
 
 library Payload {
   bytes32 private constant EIP712_DOMAIN_TYPEHASH =
@@ -34,15 +37,19 @@ library Payload {
     keccak256("Message(bytes message,address[] wallets)");
 
   bytes32 private constant CONFIG_UPDATE_TYPEHASH =
-    keccak256("ConfigUpdate(bytes32 imageHash)");
+    keccak256("ConfigUpdate(bytes32 imageHash,address[] wallets)");
 
   bytes32 private constant DIGEST_TYPEHASH =
-    keccak256("Digest(bytes32 digest)");
+    keccak256("Digest(bytes32 digest,address[] wallets)");
 
   uint8 internal constant KIND_TRANSACTIONS = 0x00;
   uint8 internal constant KIND_MESSAGE = 0x01;
   uint8 internal constant KIND_CONFIG_UPDATE = 0x02;
   uint8 internal constant KIND_DIGEST = 0x03;
+
+  uint8 internal constant BEHAVIOR_IGNORE_ERROR = 0x00;
+  uint8 internal constant BEHAVIOR_REVERT_ON_ERROR = 0x01;
+  uint8 internal constant BEHAVIOR_ABORT_ON_ERROR = 0x02;
 
   struct Call {
     address to;
@@ -50,7 +57,8 @@ library Payload {
     bytes data;
     uint256 gasLimit;
     bool delegateCall;
-    bool revertOnError;
+    bool onlyFallback;
+    uint256 behaviorOnError;
   }
 
   struct Decoded {
@@ -80,12 +88,155 @@ library Payload {
     }
   }
 
-  // TODO: More efficient encoding/decoding
-  function decode(bytes calldata _data) internal pure returns (Decoded memory _decoded) {
-    _decoded = abi.decode(_data, (Decoded));
+  function fromMessage(bytes memory message) internal pure returns (Decoded memory _decoded) {
+    _decoded.kind = KIND_MESSAGE;
+    _decoded.message = message;
   }
 
-  function encode(Decoded memory _decoded) internal pure returns (bytes memory _data) {
-    _data = abi.encodePacked(_decoded.kind);
+  function fromConfigUpdate(bytes32 imageHash) internal pure returns (Decoded memory _decoded) {
+    _decoded.kind = KIND_CONFIG_UPDATE;
+    _decoded.imageHash = imageHash;
+  }
+
+  function fromDigest(bytes32 digest) internal pure returns (Decoded memory _decoded) {
+    _decoded.kind = KIND_DIGEST;
+    _decoded.digest = digest;
+  }
+
+  function fromPackedCalls(bytes calldata packed) internal view returns (Decoded memory _decoded) {
+    _decoded.kind = KIND_TRANSACTIONS;
+
+    // First 2 bytes are the number of calls
+    (uint256 numCalls, uint256 pointer) = packed.readFirstUint16();
+
+    _decoded.calls = new Call[](numCalls);
+
+    for (uint256 i = 0; i < numCalls; i++) {
+      uint8 flags;
+      (flags, pointer) = packed.readUint8(pointer);
+
+      // First bit determines if this is a call to self
+      // or a call to another address
+      if (flags & 0x01 == 0x01) {
+        // Call to self
+        _decoded.calls[i].to = address(this);
+      } else {
+        // Call to another address
+        (_decoded.calls[i].to, pointer) = packed.readAddress(pointer);
+      }
+
+      // Second bit determines if the call has value or not
+      if (flags & 0x02 == 0x02) {
+        (_decoded.calls[i].value, pointer) = packed.readUint256(pointer);
+      }
+
+      // Third bit determines if the call has data or not
+      if (flags & 0x04 == 0x04) {
+        // 3 bytes determine the size of the calldata
+        uint256 calldataSize;
+        (calldataSize, pointer) = packed.readUint24(pointer);
+        _decoded.calls[i].data = packed[pointer:pointer + calldataSize];
+        pointer += calldataSize;
+      }
+
+      // Fourth bit determines if the call has a gas limit or not
+      if (flags & 0x08 == 0x08) {
+        (_decoded.calls[i].gasLimit, pointer) = packed.readUint256(pointer);
+      }
+
+      // Fifth bit determines if the call is a delegate call or not
+      _decoded.calls[i].delegateCall = (flags & 0x10 == 0x10);
+
+      // Sixth bit determines if the call is fallback only
+      _decoded.calls[i].onlyFallback = (flags & 0x20 == 0x20);
+
+      // Last 2 bits are directly mapped to the behavior on error
+      _decoded.calls[i].behaviorOnError = (flags & 0xC0) >> 6;
+    }
+  }
+
+  function _hashCall(Call memory c) internal pure returns (bytes32) {
+    return keccak256(
+      abi.encode(
+        CALL_TYPEHASH,
+        c.to,
+        c.value,
+        keccak256(c.data), // For variable-length bytes, use keccak256 of contents
+        c.gasLimit,
+        c.delegateCall,
+        c.onlyFallback,
+        c.behaviorOnError
+      )
+    );
+  }
+
+  function _hashCalls(Call[] memory calls) internal pure returns (bytes32) {
+    // In EIP712, an array is often hashed as the keccak256 of the concatenated
+    // hashes of each item. So we hash each Call, pack them, and hash again.
+    bytes memory encoded;
+    for (uint256 i = 0; i < calls.length; i++) {
+      bytes32 callHash = _hashCall(calls[i]);
+      encoded = abi.encodePacked(encoded, callHash);
+    }
+    return keccak256(encoded);
+  }
+
+  function _hashParentWallets(address[] memory wallets) internal pure returns (bytes32) {
+    // Similar approach for an address array: treat each address as 32 bytes
+    // (left or right padded), then keccak the concatenation.
+    bytes memory encoded;
+    for (uint256 i = 0; i < wallets.length; i++) {
+      // We can encode each address as a full 32 bytes
+      encoded = abi.encodePacked(encoded, wallets[i]);
+    }
+    return keccak256(encoded);
+  }
+
+  function toEIP712(Decoded memory _decoded) internal pure returns (bytes32) {
+    bytes32 walletsHash = _hashParentWallets(_decoded.parentWallets);
+
+    if (_decoded.kind == KIND_TRANSACTIONS) {
+      bytes32 callsHash = _hashCalls(_decoded.calls);
+      // The top-level struct for Calls might be something like:
+      // Calls(bytes32 callsHash,uint256 nonce,bytes32 walletsHash)
+      return keccak256(
+        abi.encode(
+          CALLS_TYPEHASH,
+          callsHash,
+          _decoded.nonce,
+          walletsHash
+        )
+      );
+    } else if (_decoded.kind == KIND_MESSAGE) {
+      // If you define your top-level as: Message(bytes32 messageHash,bytes32 walletsHash)
+      return keccak256(
+        abi.encode(
+          MESSAGE_TYPEHASH,
+          keccak256(_decoded.message),
+          walletsHash
+        )
+      );
+    } else if (_decoded.kind == KIND_CONFIG_UPDATE) {
+      // Top-level: ConfigUpdate(bytes32 imageHash,bytes32 walletsHash)
+      return keccak256(
+        abi.encode(
+          CONFIG_UPDATE_TYPEHASH,
+          _decoded.imageHash,
+          walletsHash
+        )
+      );
+    } else if (_decoded.kind == KIND_DIGEST) {
+      // Top-level: Digest(bytes32 digest,bytes32 walletsHash)
+      return keccak256(
+        abi.encode(
+          DIGEST_TYPEHASH,
+          _decoded.digest,
+          walletsHash
+        )
+      );
+    } else {
+      // Unknown kind
+      revert("Unsupported kind");
+    }
   }
 }
