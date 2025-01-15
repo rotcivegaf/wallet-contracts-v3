@@ -103,12 +103,10 @@ contract BaseSig {
           (addrWeight, rindex) = _signature.readUint8(rindex);
 
           // Read r, s and v
-          uint8 v;
           bytes32 r;
           bytes32 s;
-          (r, rindex) = _signature.readBytes32(rindex);
-          (s, rindex) = _signature.readBytes32(rindex);
-          (v, rindex) = _signature.readUint8(rindex);
+          uint8 v;
+          (r, s, v, rindex) = _signature.readRSV(rindex);
 
           // Recover signature
           address addr = ecrecover(_subdigest, v, r, s);
@@ -233,12 +231,10 @@ contract BaseSig {
           (addrWeight, rindex) = _signature.readUint8(rindex);
 
           // Read r, s and v
-          uint8 v;
           bytes32 r;
           bytes32 s;
-          (r, rindex) = _signature.readBytes32(rindex);
-          (s, rindex) = _signature.readBytes32(rindex);
-          (v, rindex) = _signature.readUint8(rindex);
+          uint8 v;
+          (r, s, v, rindex) = _signature.readRSV(rindex);
 
           // Recover signature
           address addr = ecrecover(

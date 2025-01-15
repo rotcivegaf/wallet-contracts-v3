@@ -104,4 +104,13 @@ library LibBytesPointer {
       newPointer := add(_index, 20)
     }
   }
+
+  function readRSV(bytes calldata _data, uint256 _index) internal pure returns (bytes32 r, bytes32 s, uint8 v, uint256 newPointer) {
+    assembly {
+      r := calldataload(add(_index, _data.offset))
+      s := calldataload(add(_index, add(_data.offset, 32)))
+      v := shr(248, calldataload(add(_index, add(_data.offset, 64))))
+      newPointer := add(_index, 64)
+    }
+  }
 }

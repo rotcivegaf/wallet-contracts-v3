@@ -81,6 +81,22 @@ library LibBytes {
     }
   }
 
+  function readRSV(
+    bytes calldata data,
+    uint256 index
+  ) internal pure returns (
+    bytes32 r,
+    bytes32 s,
+    uint8 v
+  ) {
+    assembly {
+      let offset := data.offset
+      r := calldataload(add(offset, index))
+      s := calldataload(add(offset, add(index, 32)))
+      v := shr(248, calldataload(add(offset, add(index, 64))))
+    }
+  }
+
   function readMBytes4(
     bytes memory data,
     uint256 index
@@ -101,6 +117,21 @@ library LibBytes {
   ) {
     assembly {
       a := mload(add(add(data, 0x20), index))
+    }
+  }
+
+  function readMRSV(
+    bytes memory data,
+    uint256 index
+  ) internal pure returns (
+    bytes32 r,
+    bytes32 s,
+    uint8 v
+  ) {
+    assembly {
+      r := mload(add(add(data, 0x20), index))
+      s := mload(add(add(data, 0x20), add(index, 32)))
+      v := shr(248, mload(add(add(data, 0x20), add(index, 64))))
     }
   }
 }
