@@ -12,6 +12,14 @@ abstract contract IAuth {
   // Errors
   error ImageHashIsZero();
   error InvalidSignatureType(bytes1 _type);
+  error OnlySelf(address _sender);
+
+  modifier onlySelf() {
+    if (msg.sender != address(this)) {
+      revert OnlySelf(msg.sender);
+    }
+    _;
+  }
 
   function signatureValidation(
     Payload.Decoded memory _payload,

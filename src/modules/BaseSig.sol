@@ -56,6 +56,27 @@ contract BaseSig {
     return keccak256(abi.encodePacked('Sequence static digest:\n', _subdigest));
   }
 
+  function recover(
+    Payload.Decoded memory _payload,
+    bytes calldata _signature
+  ) internal view returns (
+    uint256 threshold,
+    uint256 weight,
+    bytes32 imageHash,
+    uint256 checkpoint
+  ) {
+    // First byte is the signature flag
+    (uint256 signatureFlag, uint256 rindex) = _signature.readFirstUint8();
+
+    // The possible flags are:
+    // - 0000 00XX: signature type (00 = normal, 01 = chained, 10 = no chain id)
+    // - 0000 XX00: checkpoint size (00 = 0 bytes, 01 = 1 byte, 10 = 2 bytes, 11 = 4 bytes)
+    // - 000X 0000: threshold size (0 = 1 byte, 1 = 2 bytes)
+    // - 00X0 0000: set if imageHash middleware is used
+    // - XX00 0000: reserved
+
+  }
+
   function recoverBranch(
     Payload.Decoded memory _payload,
     bytes32 _subdigest,

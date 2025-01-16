@@ -83,12 +83,6 @@ library Payload {
     address[] parentWallets;
   }
 
-  // Generate digest
-  function subdigestFor(Payload.Decoded memory _decoded) internal pure returns (bytes32 _digest) {
-    if (_decoded.kind == KIND_TRANSACTIONS) {
-    }
-  }
-
   function fromMessage(bytes memory message) internal pure returns (Decoded memory _decoded) {
     _decoded.kind = KIND_MESSAGE;
     _decoded.message = message;
@@ -127,11 +121,11 @@ library Payload {
 
     uint256 numCalls;
 
-    // Next bit determines if the batch contains a single call
+    // Bit 5 determines if the batch contains a single call
     if (globalFlag & 0x10 == 0x10) {
       numCalls = 1;
     } else {
-      // Next bit determines if the number of calls uses 1 byte or 2 bytes
+      // Bit 6 determines if the number of calls uses 1 byte or 2 bytes
       if (globalFlag & 0x20 == 0x20) {
         (numCalls, pointer) = packed.readUint8(pointer);
       } else {
