@@ -100,9 +100,9 @@ export function encode(payload: CallPayload, self?: `0x${string}`): Uint8Array {
   let callsCountSize = 0
   if (callsLen !== 1) {
     if (callsLen < 256) {
-      globalFlag |= 0x20
       callsCountSize = 1
     } else {
+      globalFlag |= 0x20
       callsCountSize = 2
     }
   }
