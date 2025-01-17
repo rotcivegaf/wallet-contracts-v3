@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import { Payload } from "../Payload.sol";
+import {Payload} from "../Payload.sol";
 
 /**
  * @title ISapient
@@ -10,10 +10,10 @@ import { Payload } from "../Payload.sol";
  * @dev The consumer of this signer must validate if the imageHash is valid or not, for the desired configuration
  */
 interface ISapient {
-  function isValidSapientSignature(
-    Payload.Decoded calldata _payload,
-    bytes calldata _signature
-  ) external view returns (bytes32);
+    function isValidSapientSignature(Payload.Decoded calldata _payload, bytes calldata _signature)
+        external
+        view
+        returns (bytes32);
 }
 
 /**
@@ -23,8 +23,8 @@ interface ISapient {
  * @dev The consumer of this signer must validate if the imageHash is valid or not, for the desired configuration
  */
 interface ISapientCompact {
-  function isValidSapientSignatureCompact(
-    bytes32 _digest,
-    bytes calldata _signature
-  ) external view returns (bytes32);
+    function isValidSapientSignatureCompact(bytes32 _digest, bytes calldata _signature)
+        external
+        view
+        returns (bytes32);
 }

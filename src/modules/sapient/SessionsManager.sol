@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import {ISessionManager, SessionSignature, SessionConfiguration, SessionConfigurationPermissions} from "../interfaces/ISessionManager.sol";
+import {
+    ISessionManager,
+    SessionSignature,
+    SessionConfiguration,
+    SessionConfigurationPermissions
+} from "../interfaces/ISessionManager.sol";
 import {Permissions} from "../Permissions.sol";
 import {ISapient, Payload} from "../interfaces/ISapient.sol";
 import {Attestation, LibAttestation} from "../Attestation.sol";
@@ -14,30 +19,24 @@ using LibBytes for bytes;
 using LibAttestation for Attestation;
 
 contract SessionsManager is ISessionManager {
-    function isValidSapientSignature(
-        Payload.Decoded calldata _payload,
-        bytes calldata _encodedSignature
-    ) external view returns (bytes32) {
+    function isValidSapientSignature(Payload.Decoded calldata _payload, bytes calldata _encodedSignature)
+        external
+        view
+        returns (bytes32)
+    {
         address wallet = msg.sender;
 
         // Recover the session signer from the session signature
         bytes32 payloadHash = keccak256(abi.encode(_payload));
-        SessionSignature memory signature = abi.decode(
-            _encodedSignature,
-            (SessionSignature)
-        );
-        (bytes32 r, bytes32 s, uint8 v) = signature.sessionSignature.readMRSV(
-            0
-        );
+        SessionSignature memory signature = abi.decode(_encodedSignature, (SessionSignature));
+        (bytes32 r, bytes32 s, uint8 v) = signature.sessionSignature.readMRSV(0);
         address recoveredPayloadSigner = ecrecover(payloadHash, v, r, s); // This is the session signer
 
         // Verify global signer's signature on the attestation
         bytes32 attestationHash = signature.attestation.toHash();
         (r, s, v) = signature.globalSignature.readMRSV(0);
         address recoveredGlobalSigner = ecrecover(attestationHash, v, r, s);
-        if (
-            recoveredGlobalSigner != signature.sessionConfiguration.globalSigner
-        ) {
+        if (recoveredGlobalSigner != signature.sessionConfiguration.globalSigner) {
             revert InvalidAttestationSignature();
         }
 
@@ -55,19 +54,9 @@ contract SessionsManager is ISessionManager {
     ) internal view {
         // Continue with existing validation
         if (signature.isImplicit) {
-            _validateImplicitMode(
-                wallet,
-                signature,
-                _payload,
-                recoveredPayloadSigner
-            );
+            _validateImplicitMode(wallet, signature, _payload, recoveredPayloadSigner);
         } else {
-            _validateExplicitMode(
-                wallet,
-                signature,
-                _payload,
-                recoveredPayloadSigner
-            );
+            _validateExplicitMode(wallet, signature, _payload, recoveredPayloadSigner);
         }
     }
 
@@ -77,9 +66,7 @@ contract SessionsManager is ISessionManager {
         Payload.Decoded calldata _payload,
         address recoveredPayloadSigner
     ) internal pure {
-        SessionConfigurationPermissions[] memory sessionPermissions = signature
-            .sessionConfiguration
-            .sessionPermissions;
+        SessionConfigurationPermissions[] memory sessionPermissions = signature.sessionConfiguration.sessionPermissions;
 
         // Binary search to find matching permissions for the signer
         uint256 left = 0;
@@ -102,22 +89,13 @@ contract SessionsManager is ISessionManager {
         for (uint256 i = 0; i < _payload.calls.length; i++) {
             bool isPermissionValid = false;
             for (uint256 j = 0; j < permissions.length; j++) {
-                if (
-                    Permissions.validatePermission(
-                        permissions[j],
-                        _payload.calls[i]
-                    )
-                ) {
+                if (Permissions.validatePermission(permissions[j], _payload.calls[i])) {
                     isPermissionValid = true;
                     break;
                 }
             }
             if (!isPermissionValid) {
-                revert MissingPermission(
-                    wallet,
-                    _payload.calls[i].to,
-                    bytes4(_payload.calls[i].data)
-                );
+                revert MissingPermission(wallet, _payload.calls[i].to, bytes4(_payload.calls[i].data));
             }
         }
     }
@@ -134,9 +112,7 @@ contract SessionsManager is ISessionManager {
         }
 
         // Validate blacklist
-        address[] memory blacklist = signature
-            .sessionConfiguration
-            .implicitBlacklist;
+        address[] memory blacklist = signature.sessionConfiguration.implicitBlacklist;
 
         // Check each call's target address against blacklist
         for (uint256 i = 0; i < _payload.calls.length; i++) {
@@ -145,22 +121,14 @@ contract SessionsManager is ISessionManager {
             }
         }
 
-        bytes32 attestationMagic = signature
-            .attestation
-            .generateImplicitRequestMagic(wallet);
-        bytes32 redirectUrlHash = keccak256(
-            abi.encodePacked(signature.attestation._authData)
-        );
+        bytes32 attestationMagic = signature.attestation.generateImplicitRequestMagic(wallet);
+        bytes32 redirectUrlHash = keccak256(abi.encodePacked(signature.attestation._authData));
 
         for (uint256 i = 0; i < _payload.calls.length; i++) {
             // Validate implicit mode
-            bytes32 result = ISignalsImplicitMode(_payload.calls[i].to)
-                .acceptImplicitRequest(
-                    wallet,
-                    signature.attestation,
-                    redirectUrlHash,
-                    _payload.calls[i]
-                );
+            bytes32 result = ISignalsImplicitMode(_payload.calls[i].to).acceptImplicitRequest(
+                wallet, signature.attestation, redirectUrlHash, _payload.calls[i]
+            );
             if (result != attestationMagic) {
                 revert InvalidImplicitResult();
             }
@@ -168,10 +136,7 @@ contract SessionsManager is ISessionManager {
     }
 
     // New helper function for binary search in blacklist
-    function _isAddressBlacklisted(
-        address target,
-        address[] memory blacklist
-    ) internal pure returns (bool) {
+    function _isAddressBlacklisted(address target, address[] memory blacklist) internal pure returns (bool) {
         int256 left = 0;
         int256 right = int256(blacklist.length) - 1;
 
@@ -194,8 +159,6 @@ contract SessionsManager is ISessionManager {
     /// @notice Returns true if the contract implements the given interface
     /// @param interfaceId The interface identifier
     function supportsInterface(bytes4 interfaceId) public pure returns (bool) {
-        return
-            interfaceId == type(ISapient).interfaceId ||
-            interfaceId == type(ISessionManager).interfaceId;
+        return interfaceId == type(ISapient).interfaceId || interfaceId == type(ISessionManager).interfaceId;
     }
 }

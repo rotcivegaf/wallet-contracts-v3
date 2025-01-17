@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import { Payload } from "./interfaces/ISapient.sol";
+import {Payload} from "./interfaces/ISapient.sol";
 
 library Permissions {
     /// @notice Permission types for different token standards and actions
     enum PermissionType {
-        FUNCTION_CALL,    
-        ERC20_TRANSFER,   
-        ERC721_TRANSFER,  
-        ERC1155_TRANSFER  
+        FUNCTION_CALL,
+        ERC20_TRANSFER,
+        ERC721_TRANSFER,
+        ERC1155_TRANSFER
     }
 
     /// @notice Base permission fields common to all types
     struct BasePermission {
-        PermissionType pType;    
-        address target;          
-        bytes4 selector;         
+        PermissionType pType;
+        address target;
+        bytes4 selector;
     }
 
     /// @notice Permission types and their encoded data
@@ -53,11 +53,8 @@ library Permissions {
 
     /// @notice Encodes a function call permission
     function encodeFunctionCall(address _target, bytes4 _selector) internal pure returns (EncodedPermission memory) {
-        BasePermission memory base = BasePermission({
-            pType: PermissionType.FUNCTION_CALL,
-            target: _target,
-            selector: _selector
-        });
+        BasePermission memory base =
+            BasePermission({pType: PermissionType.FUNCTION_CALL, target: _target, selector: _selector});
         return EncodedPermission({
             pType: PermissionType.FUNCTION_CALL,
             data: abi.encode(FunctionCallPermission({base: base}))
@@ -65,76 +62,63 @@ library Permissions {
     }
 
     /// @notice Encodes an ERC20 permission
-    function encodeERC20(address _token, bytes4 _selector, uint256 _amountLimit) internal pure returns (EncodedPermission memory) {
-        BasePermission memory base = BasePermission({
-            pType: PermissionType.ERC20_TRANSFER,
-            target: _token,
-            selector: _selector
-        });
+    function encodeERC20(address _token, bytes4 _selector, uint256 _amountLimit)
+        internal
+        pure
+        returns (EncodedPermission memory)
+    {
+        BasePermission memory base =
+            BasePermission({pType: PermissionType.ERC20_TRANSFER, target: _token, selector: _selector});
         return EncodedPermission({
             pType: PermissionType.ERC20_TRANSFER,
-            data: abi.encode(ERC20Permission({
-                base: base,
-                amountLimit: _amountLimit,
-                used: 0
-            }))
+            data: abi.encode(ERC20Permission({base: base, amountLimit: _amountLimit, used: 0}))
         });
     }
 
     /// @notice Encodes an ERC721 permission
-    function encodeERC721(address _token, bytes4 _selector, uint256 _tokenId) internal pure returns (EncodedPermission memory) {
-        BasePermission memory base = BasePermission({
-            pType: PermissionType.ERC721_TRANSFER,
-            target: _token,
-            selector: _selector
-        });
+    function encodeERC721(address _token, bytes4 _selector, uint256 _tokenId)
+        internal
+        pure
+        returns (EncodedPermission memory)
+    {
+        BasePermission memory base =
+            BasePermission({pType: PermissionType.ERC721_TRANSFER, target: _token, selector: _selector});
         return EncodedPermission({
             pType: PermissionType.ERC721_TRANSFER,
-            data: abi.encode(ERC721Permission({
-                base: base,
-                tokenId: _tokenId
-            }))
+            data: abi.encode(ERC721Permission({base: base, tokenId: _tokenId}))
         });
     }
 
     /// @notice Encodes an ERC1155 permission
-    function encodeERC1155(
-        address _token,
-        bytes4 _selector,
-        uint256 _tokenId,
-        uint256 _amountLimit
-    ) internal pure returns (EncodedPermission memory) {
-        BasePermission memory base = BasePermission({
-            pType: PermissionType.ERC1155_TRANSFER,
-            target: _token,
-            selector: _selector
-        });
+    function encodeERC1155(address _token, bytes4 _selector, uint256 _tokenId, uint256 _amountLimit)
+        internal
+        pure
+        returns (EncodedPermission memory)
+    {
+        BasePermission memory base =
+            BasePermission({pType: PermissionType.ERC1155_TRANSFER, target: _token, selector: _selector});
         return EncodedPermission({
             pType: PermissionType.ERC1155_TRANSFER,
-            data: abi.encode(ERC1155Permission({
-                base: base,
-                tokenId: _tokenId,
-                amountLimit: _amountLimit,
-                used: 0
-            }))
+            data: abi.encode(ERC1155Permission({base: base, tokenId: _tokenId, amountLimit: _amountLimit, used: 0}))
         });
     }
 
     /// @notice Validates a permission against a call
-    function validatePermission(EncodedPermission memory _permission, Payload.Call calldata _call) internal pure returns (bool) {
+    function validatePermission(EncodedPermission memory _permission, Payload.Call calldata _call)
+        internal
+        pure
+        returns (bool)
+    {
         if (_permission.pType == PermissionType.FUNCTION_CALL) {
             FunctionCallPermission memory fp = abi.decode(_permission.data, (FunctionCallPermission));
             return validateFunctionCall(fp, _call);
-        } 
-        else if (_permission.pType == PermissionType.ERC20_TRANSFER) {
+        } else if (_permission.pType == PermissionType.ERC20_TRANSFER) {
             ERC20Permission memory ep = abi.decode(_permission.data, (ERC20Permission));
             return validateERC20(ep, _call);
-        }
-        else if (_permission.pType == PermissionType.ERC721_TRANSFER) {
+        } else if (_permission.pType == PermissionType.ERC721_TRANSFER) {
             ERC721Permission memory ep = abi.decode(_permission.data, (ERC721Permission));
             return validateERC721(ep, _call);
-        }
-        else if (_permission.pType == PermissionType.ERC1155_TRANSFER) {
+        } else if (_permission.pType == PermissionType.ERC1155_TRANSFER) {
             ERC1155Permission memory ep = abi.decode(_permission.data, (ERC1155Permission));
             return validateERC1155(ep, _call);
         }
@@ -142,15 +126,21 @@ library Permissions {
     }
 
     /// @notice Validates a function call permission
-    function validateFunctionCall(FunctionCallPermission memory _permission, Payload.Call calldata _call) internal pure returns (bool) {
-        return _permission.base.target == _call.to && 
-               _permission.base.selector == bytes4(_call.data);
+    function validateFunctionCall(FunctionCallPermission memory _permission, Payload.Call calldata _call)
+        internal
+        pure
+        returns (bool)
+    {
+        return _permission.base.target == _call.to && _permission.base.selector == bytes4(_call.data);
     }
 
     /// @notice Validates an ERC20 transfer permission
-    function validateERC20(ERC20Permission memory _permission, Payload.Call calldata _call) internal pure returns (bool) {
-        if (_permission.base.target != _call.to || 
-            _permission.base.selector != bytes4(_call.data)) {
+    function validateERC20(ERC20Permission memory _permission, Payload.Call calldata _call)
+        internal
+        pure
+        returns (bool)
+    {
+        if (_permission.base.target != _call.to || _permission.base.selector != bytes4(_call.data)) {
             return false;
         }
 
@@ -160,9 +150,12 @@ library Permissions {
     }
 
     /// @notice Validates an ERC721 transfer permission
-    function validateERC721(ERC721Permission memory _permission, Payload.Call calldata _call) internal pure returns (bool) {
-        if (_permission.base.target != _call.to || 
-            _permission.base.selector != bytes4(_call.data)) {
+    function validateERC721(ERC721Permission memory _permission, Payload.Call calldata _call)
+        internal
+        pure
+        returns (bool)
+    {
+        if (_permission.base.target != _call.to || _permission.base.selector != bytes4(_call.data)) {
             return false;
         }
 
@@ -172,15 +165,17 @@ library Permissions {
     }
 
     /// @notice Validates an ERC1155 transfer permission
-    function validateERC1155(ERC1155Permission memory _permission, Payload.Call calldata _call) internal pure returns (bool) {
-        if (_permission.base.target != _call.to || 
-            _permission.base.selector != bytes4(_call.data)) {
+    function validateERC1155(ERC1155Permission memory _permission, Payload.Call calldata _call)
+        internal
+        pure
+        returns (bool)
+    {
+        if (_permission.base.target != _call.to || _permission.base.selector != bytes4(_call.data)) {
             return false;
         }
 
         // Decode transfer parameters
         (, uint256 tokenId, uint256 amount) = abi.decode(_call.data[4:], (address, uint256, uint256));
-        return tokenId == _permission.tokenId && 
-               amount <= _permission.amountLimit - _permission.used;
+        return tokenId == _permission.tokenId && amount <= _permission.amountLimit - _permission.used;
     }
 }

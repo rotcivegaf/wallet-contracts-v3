@@ -18,24 +18,19 @@ struct Attestation {
 }
 
 library LibAttestation {
-    function toHash(
-        Attestation memory _attestation
-    ) internal pure returns (bytes32) {
+    function toHash(Attestation memory _attestation) internal pure returns (bytes32) {
         return keccak256(abi.encode(_attestation));
     }
 
-    function generateImplicitRequestMagic(
-        Attestation memory _attestation,
-        address _wallet
-    ) internal pure returns (bytes32) {
-        return
-            keccak256(
-                abi.encodePacked(
-                    ACCEPT_IMPLICIT_REQUEST_MAGIC_PREFIX,
-                    _wallet,
-                    _attestation._audienceHash,
-                    _attestation._issuerHash
-                )
-            );
+    function generateImplicitRequestMagic(Attestation memory _attestation, address _wallet)
+        internal
+        pure
+        returns (bytes32)
+    {
+        return keccak256(
+            abi.encodePacked(
+                ACCEPT_IMPLICIT_REQUEST_MAGIC_PREFIX, _wallet, _attestation._audienceHash, _attestation._issuerHash
+            )
+        );
     }
 }
