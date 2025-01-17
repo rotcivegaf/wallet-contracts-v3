@@ -30,6 +30,7 @@ contract BaseSig {
   error InvalidNestedSignature(Payload.Decoded _payload, bytes32 _subdigest, address _signer, bytes _signature);
   error WrongChainedCheckpointOrder(uint256 _nextCheckpoint, uint256 _checkpoint);
   error UnusedSnapshot(Snapshot _snapshot);
+  error InvalidSignatureFlag(uint256 _flag);
 
   function _leafForAddressAndWeight(address _addr, uint96 _weight) internal pure returns (bytes32) {
     unchecked {
@@ -404,6 +405,8 @@ contract BaseSig {
           root = root != bytes32(0) ? LibOptim.fkeccak256(root, node) : node;
           continue;
         }
+
+        revert InvalidSignatureFlag(flag);
       }
     }
   }

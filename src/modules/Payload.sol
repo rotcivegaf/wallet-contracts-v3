@@ -131,9 +131,9 @@ library Payload {
     } else {
       // Bit 6 determines if the number of calls uses 1 byte or 2 bytes
       if (globalFlag & 0x20 == 0x20) {
-        (numCalls, pointer) = packed.readUint8(pointer);
-      } else {
         (numCalls, pointer) = packed.readUint16(pointer);
+      } else {
+        (numCalls, pointer) = packed.readUint8(pointer);
       }
     }
 
