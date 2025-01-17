@@ -1,4 +1,4 @@
-import { minBytesFor } from "./utils"
+import { minBytesFor } from './utils'
 
 export type Call = {
   to: `0x${string}`
@@ -36,30 +36,28 @@ export type ParentPayload = {
   parentWallets?: `0x${string}`[]
 }
 
-export type Payload = (
-  CallPayload | MessagePayload | ConfigUpdatePayload | DigestPayload
-)
+export type Payload = CallPayload | MessagePayload | ConfigUpdatePayload | DigestPayload
 
 export type ParentedPayload = Payload & ParentPayload
 
 export function fromMessage(message: Uint8Array): Payload {
   return {
     type: 'message',
-    message
+    message,
   }
 }
 
 export function fromConfigUpdate(imageHash: `0x${string}`): Payload {
   return {
     type: 'config-update',
-    imageHash
+    imageHash,
   }
 }
 
 export function fromDigest(digest: `0x${string}`): Payload {
   return {
     type: 'digest',
-    digest
+    digest,
   }
 }
 
@@ -68,7 +66,7 @@ export function fromCall(nonce: bigint, space: bigint, calls: Call[]): Payload {
     type: 'call',
     nonce,
     space,
-    calls
+    calls,
   }
 }
 
@@ -93,7 +91,7 @@ export function encode(payload: CallPayload, self?: `0x${string}`): Uint8Array {
   if (payload.space === 0n) {
     globalFlag |= 0x01
   }
-  globalFlag |= (minBytes << 1)
+  globalFlag |= minBytes << 1
   if (callsLen === 1) {
     globalFlag |= 0x10
   }
@@ -192,15 +190,13 @@ export function encode(payload: CallPayload, self?: `0x${string}`): Uint8Array {
       default:
         throw new Error(`Unknown behavior: ${call.behaviorOnError}`)
     }
-    flags |= (behaviorBits << 6)
+    flags |= behaviorBits << 6
 
     out.push(flags)
 
     // If bit0 is 0, we store the address in 20 bytes
     if ((flags & 0x01) === 0) {
-      const addr = call.to.startsWith('0x')
-        ? call.to.substring(2)
-        : call.to
+      const addr = call.to.startsWith('0x') ? call.to.substring(2) : call.to
       if (addr.length !== 40) {
         throw new Error(`Invalid 'to' address: ${call.to}`)
       }
@@ -240,4 +236,3 @@ export function encode(payload: CallPayload, self?: `0x${string}`): Uint8Array {
 
   return new Uint8Array(out)
 }
-

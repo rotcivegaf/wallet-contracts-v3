@@ -2,12 +2,9 @@ import cac from 'cac'
 
 const cli = cac('sequence-fuego')
 
-cli
-  .command('encode-message <message>', 'Encode message')
-  .action((message) => {
-
-    console.log('message:', message)
-  })
+cli.command('encode-message <message>', 'Encode message').action((message) => {
+  console.log('message:', message)
+})
 
 cli.on('command:*', () => {
   console.error('Command not found')
