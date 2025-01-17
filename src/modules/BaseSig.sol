@@ -11,6 +11,7 @@ import { ISapient, ISapientCompact } from "./interfaces/ISapient.sol";
 
 using LibBytesPointer for bytes;
 using LibOptim for bytes;
+using Payload for Payload.Decoded;
 
 contract BaseSig {
 
@@ -95,7 +96,7 @@ contract BaseSig {
       _payload.noChainId = true;
     }
 
-    bytes32 opHash = Payload.toEIP712(_payload);
+    bytes32 opHash = _payload.hash();
 
     // Recover the checkpoint using the size defined by the flag
     // we skip over the size of 3 since it will probably not be common

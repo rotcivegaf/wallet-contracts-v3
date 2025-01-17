@@ -11,7 +11,6 @@ library Payload {
     keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
 
   bytes32 private constant EIP712_DOMAIN_NAME_SEQUENCE = keccak256("Sequence Wallet");
-
   bytes32 private constant EIP712_DOMAIN_VERSION_SEQUENCE = keccak256("3");
 
   function domainSeparator(
@@ -243,6 +242,14 @@ library Payload {
       // Unknown kind
       revert("Unsupported kind");
     }
+  }
+
+  function hash(
+    Decoded memory _decoded
+  ) internal view returns (bytes32) {
+    bytes32 domain = domainSeparator(_decoded.noChainId);
+    bytes32 structHash = toEIP712(_decoded);
+    return keccak256(abi.encodePacked("\x19\x01", domain, structHash));
   }
 
 }
