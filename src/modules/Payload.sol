@@ -63,6 +63,7 @@ library Payload {
 
   struct Decoded {
     uint8 kind;
+    bool noChainId;
     // Transaction kind
     Call[] calls;
     uint256 space;
