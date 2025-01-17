@@ -10,83 +10,87 @@ pragma solidity ^0.8.18;
  *         Reading out of bounds may return dirty values.
  */
 library LibBytes {
-    /**
-     * @notice Returns the bytes32 value at the given index in the input data.
-     * @param data The input data.
-     * @param index The index of the value to retrieve.
-     * @return a The bytes32 value at the given index.
-     */
-    function readBytes32(bytes calldata data, uint256 index) internal pure returns (bytes32 a) {
-        assembly {
-            a := calldataload(add(data.offset, index))
-        }
-    }
 
-    /**
-     * @notice Returns the uint8 value at the given index in the input data.
-     * @param data The input data.
-     * @param index The index of the value to retrieve.
-     * @return a The uint8 value at the given index.
-     */
-    function readUint8(bytes calldata data, uint256 index) internal pure returns (uint8 a) {
-        assembly {
-            let word := calldataload(add(index, data.offset))
-            a := shr(248, word)
-        }
+  /**
+   * @notice Returns the bytes32 value at the given index in the input data.
+   * @param data The input data.
+   * @param index The index of the value to retrieve.
+   * @return a The bytes32 value at the given index.
+   */
+  function readBytes32(bytes calldata data, uint256 index) internal pure returns (bytes32 a) {
+    assembly {
+      a := calldataload(add(data.offset, index))
     }
+  }
 
-    /**
-     * @notice Returns the first uint16 value in the input data.
-     * @param data The input data.
-     * @return a The first uint16 value in the input data.
-     */
-    function readFirstUint16(bytes calldata data) internal pure returns (uint16 a) {
-        assembly {
-            let word := calldataload(data.offset)
-            a := shr(240, word)
-        }
+  /**
+   * @notice Returns the uint8 value at the given index in the input data.
+   * @param data The input data.
+   * @param index The index of the value to retrieve.
+   * @return a The uint8 value at the given index.
+   */
+  function readUint8(bytes calldata data, uint256 index) internal pure returns (uint8 a) {
+    assembly {
+      let word := calldataload(add(index, data.offset))
+      a := shr(248, word)
     }
+  }
 
-    /**
-     * @notice Returns the uint32 value at the given index in the input data.
-     * @param data The input data.
-     * @param index The index of the value to retrieve.
-     * @return a The uint32 value at the given index.
-     */
-    function readUint32(bytes calldata data, uint256 index) internal pure returns (uint32 a) {
-        assembly {
-            let word := calldataload(add(index, data.offset))
-            a := shr(224, word)
-        }
+  /**
+   * @notice Returns the first uint16 value in the input data.
+   * @param data The input data.
+   * @return a The first uint16 value in the input data.
+   */
+  function readFirstUint16(
+    bytes calldata data
+  ) internal pure returns (uint16 a) {
+    assembly {
+      let word := calldataload(data.offset)
+      a := shr(240, word)
     }
+  }
 
-    function readRSV(bytes calldata data, uint256 index) internal pure returns (bytes32 r, bytes32 s, uint8 v) {
-        assembly {
-            let offset := data.offset
-            r := calldataload(add(offset, index))
-            s := calldataload(add(offset, add(index, 32)))
-            v := shr(248, calldataload(add(offset, add(index, 64))))
-        }
+  /**
+   * @notice Returns the uint32 value at the given index in the input data.
+   * @param data The input data.
+   * @param index The index of the value to retrieve.
+   * @return a The uint32 value at the given index.
+   */
+  function readUint32(bytes calldata data, uint256 index) internal pure returns (uint32 a) {
+    assembly {
+      let word := calldataload(add(index, data.offset))
+      a := shr(224, word)
     }
+  }
 
-    function readMBytes4(bytes memory data, uint256 index) internal pure returns (bytes4 a) {
-        assembly {
-            let word := mload(add(add(data, 0x20), index))
-            a := and(word, 0xFFFFFFFF00000000000000000000000000000000000000000000000000000000)
-        }
+  function readRSV(bytes calldata data, uint256 index) internal pure returns (bytes32 r, bytes32 s, uint8 v) {
+    assembly {
+      let offset := data.offset
+      r := calldataload(add(offset, index))
+      s := calldataload(add(offset, add(index, 32)))
+      v := shr(248, calldataload(add(offset, add(index, 64))))
     }
+  }
 
-    function readMBytes32(bytes memory data, uint256 index) internal pure returns (bytes32 a) {
-        assembly {
-            a := mload(add(add(data, 0x20), index))
-        }
+  function readMBytes4(bytes memory data, uint256 index) internal pure returns (bytes4 a) {
+    assembly {
+      let word := mload(add(add(data, 0x20), index))
+      a := and(word, 0xFFFFFFFF00000000000000000000000000000000000000000000000000000000)
     }
+  }
 
-    function readMRSV(bytes memory data, uint256 index) internal pure returns (bytes32 r, bytes32 s, uint8 v) {
-        assembly {
-            r := mload(add(add(data, 0x20), index))
-            s := mload(add(add(data, 0x20), add(index, 32)))
-            v := shr(248, mload(add(add(data, 0x20), add(index, 64))))
-        }
+  function readMBytes32(bytes memory data, uint256 index) internal pure returns (bytes32 a) {
+    assembly {
+      a := mload(add(add(data, 0x20), index))
     }
+  }
+
+  function readMRSV(bytes memory data, uint256 index) internal pure returns (bytes32 r, bytes32 s, uint8 v) {
+    assembly {
+      r := mload(add(add(data, 0x20), index))
+      s := mload(add(add(data, 0x20), add(index, 32)))
+      v := shr(248, mload(add(add(data, 0x20), add(index, 64))))
+    }
+  }
+
 }
