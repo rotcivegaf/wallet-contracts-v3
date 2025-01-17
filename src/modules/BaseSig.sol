@@ -127,39 +127,20 @@ contract BaseSig {
     Snapshot memory _snapshot,
     bytes calldata _signature
   ) internal view returns (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint) {
-    // First uint24 is the size of the signature
-    (uint256 sigSize, uint256 rindex) = _signature.readFirstUint24();
-    uint256 nrindex = sigSize + rindex;
-
-    (threshold, weight, imageHash, checkpoint) = recover(_payload, _signature[rindex:nrindex]);
-
-    if (weight < threshold) {
-      revert LowWeightChainedSignature(_signature[rindex:nrindex], threshold, weight);
-    }
-
-    if (_snapshot.imageHash == imageHash) {
-      _snapshot.imageHash = bytes32(0);
-    }
-
-    rindex = nrindex;
-
     Payload.Decoded memory linkedPayload;
     linkedPayload.kind = Payload.KIND_CONFIG_UPDATE;
 
-    // The following signatures are handled by this loop.
-    // This is done this way because the first signature does not have a
-    // checkpoint to be validated against.
+    uint256 rindex;
+    uint256 prevCheckpoint = type(uint256).max;
+
     while (rindex < _signature.length) {
-      // First uint24 is the size of the signature
-      (sigSize, rindex) = _signature.readUint24(rindex);
-      nrindex = sigSize + rindex;
+      (uint256 sigSize, uint256 tmpIndex) = _signature.readUint24(rindex);
+      rindex = tmpIndex;
+      uint256 nrindex = sigSize + rindex;
 
-      uint256 nextCheckpoint;
-      linkedPayload.imageHash = imageHash;
+      (threshold, weight, imageHash, checkpoint) =
+        recover(prevCheckpoint == type(uint256).max ? _payload : linkedPayload, _signature[rindex:nrindex]);
 
-      (threshold, weight, imageHash, nextCheckpoint) = recover(linkedPayload, _signature[rindex:nrindex]);
-
-      // Validate signature
       if (weight < threshold) {
         revert LowWeightChainedSignature(_signature[rindex:nrindex], threshold, weight);
       }
@@ -168,14 +149,12 @@ contract BaseSig {
         _snapshot.imageHash = bytes32(0);
       }
 
-      // Checkpoints must be provided in descending order
-      // since the first signature is the one that is used to validate the message
-      // and the last signature is the one that is used to validate the current configuration
-      if (nextCheckpoint >= checkpoint) {
-        revert WrongChainedCheckpointOrder(nextCheckpoint, checkpoint);
+      if (checkpoint >= prevCheckpoint) {
+        revert WrongChainedCheckpointOrder(checkpoint, prevCheckpoint);
       }
 
-      checkpoint = nextCheckpoint;
+      linkedPayload.imageHash = imageHash;
+      prevCheckpoint = checkpoint;
       rindex = nrindex;
     }
 
