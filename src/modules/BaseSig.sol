@@ -171,25 +171,37 @@ contract BaseSig {
     unchecked {
       uint256 rindex;
 
-      // TODO: Organise flag checks by expected usage frequency
-
       // Iterate until the image is completed
       while (rindex < _signature.length) {
+        // The first byte is half flag (the first 4 bits)
+        // and the second set of 4 bits can freely be used by the part
+
         // Read next item type
-        uint256 flag;
-        (flag, rindex) = _signature.readUint8(rindex);
+        uint256 firstByte;
+        (firstByte, rindex) = _signature.readUint8(rindex);
+
+        // The first 4 bits are the flag
+        uint256 flag = (firstByte & 0xf0) >> 4;
 
         // Signature hash (0x00)
         if (flag == FLAG_SIGNATURE_HASH) {
+          // Free bits layout:
+          // - X000 : v (0 = 27, 1 = 28)
+          // - 0XXX : Weight (000 = dynamic, 001 = 1, 010 = 2, 011 = 3, 100 = 4, 101 = 5, 110 = 6, 111 = 7)
+
+          // Read v
+          uint8 v = uint8((firstByte & 0x10) >> 4) + 27;
+
           // Read weight
-          uint8 addrWeight;
-          (addrWeight, rindex) = _signature.readUint8(rindex);
+          uint8 addrWeight = uint8(firstByte & 0x07);
+          if (addrWeight == 0) {
+            (addrWeight, rindex) = _signature.readUint8(rindex);
+          }
 
           // Read r, s and v
-          uint8 v;
           bytes32 r;
           bytes32 s;
-          (r, s, v, rindex) = _signature.readRSV(rindex);
+          (r, s,, rindex) = _signature.readRSV(rindex);
 
           // Recover signature
           address addr = ecrecover(_opHash, v, r, s);
@@ -203,9 +215,18 @@ contract BaseSig {
 
         // Address (0x01) (without signature)
         if (flag == FLAG_ADDRESS) {
-          uint8 addrWeight;
+          // Free bits layout:
+          // - XXXX : Weight (0000 = dynamic, 0001 = 1, 0010 = 2, ...)
+
+          // Read weight
+          uint8 addrWeight = uint8(firstByte & 0x0f);
+          if (addrWeight == 0) {
+            (addrWeight, rindex) = _signature.readUint8(rindex);
+          }
+
+          // Read address
           address addr;
-          (addrWeight, addr, rindex) = _signature.readUint8Address(rindex);
+          (addr, rindex) = _signature.readAddress(rindex);
 
           // Compute the merkle root WITHOUT adding the weight
           bytes32 node = _leafForAddressAndWeight(addr, addrWeight);
@@ -215,14 +236,25 @@ contract BaseSig {
 
         // Signature ERC1271 (0x02)
         if (flag == FLAG_SIGNATURE_ERC1271) {
-          // Read signer and weight
-          uint8 addrWeight;
+          // Free bits layout:
+          // - XX00 : Signature size size (00 = 0 byte, 01 = 1 byte, 10 = 2 bytes, 11 = 3 bytes)
+          // - 00XX : Weight (00 = dynamic, 01 = 1, 10 = 2, 11 = 3)
+
+          // Read weight
+          uint8 addrWeight = uint8(firstByte & 0x03);
+          if (addrWeight == 0) {
+            (addrWeight, rindex) = _signature.readUint8(rindex);
+          }
+
+          // Read signer
           address addr;
-          (addrWeight, addr, rindex) = _signature.readUint8Address(rindex);
+          (addr, rindex) = _signature.readAddress(rindex);
 
           // Read signature size
+          uint256 sizeSize = uint8(firstByte & 0x0c) >> 2;
           uint256 size;
-          (size, rindex) = _signature.readUint24(rindex);
+
+          (size, rindex) = _signature.readUintX(rindex, sizeSize);
 
           // Read dynamic size signature
           uint256 nrindex = rindex + size;
@@ -241,6 +273,8 @@ contract BaseSig {
 
         // Node (0x03)
         if (flag == FLAG_NODE) {
+          // Free bits left unused
+
           // Read node hash
           bytes32 node;
           (node, rindex) = _signature.readBytes32(rindex);
@@ -250,9 +284,15 @@ contract BaseSig {
 
         // Branch (0x04)
         if (flag == FLAG_BRANCH) {
-          // Enter a branch of the signature merkle tree
+          // Free bits layout:
+          // - XXXX : Size size (0000 = 0 byte, 0001 = 1 byte, 0010 = 2 bytes, ...)
+
+          // Read size
+          uint256 sizeSize = uint8(firstByte & 0x0f);
           uint256 size;
-          (size, rindex) = _signature.readUint24(rindex);
+          (size, rindex) = _signature.readUintX(rindex, sizeSize);
+
+          // Enter a branch of the signature merkle tree
           uint256 nrindex = rindex + size;
 
           uint256 nweight;
@@ -268,13 +308,21 @@ contract BaseSig {
 
         // Nested (0x05)
         if (flag == FLAG_NESTED) {
+          // Unused free bits:
+          // - XX00 : Weight (00 = dynamic, 01 = 1, 10 = 2, 11 = 3)
+          // - 00XX : Threshold (00 = dynamic, 01 = 1, 10 = 2, 11 = 3)
+
           // Enter a branch of the signature merkle tree
           // but with an internal threshold and an external fixed weight
-          uint256 externalWeight;
-          (externalWeight, rindex) = _signature.readUint8(rindex);
+          uint256 externalWeight = uint8(firstByte & 0x03);
+          if (externalWeight == 0) {
+            (externalWeight, rindex) = _signature.readUint8(rindex);
+          }
 
-          uint256 internalThreshold;
-          (internalThreshold, rindex) = _signature.readUint16(rindex);
+          uint256 internalThreshold = uint8(firstByte & 0x0c) >> 2;
+          if (internalThreshold == 0) {
+            (internalThreshold, rindex) = _signature.readUint16(rindex);
+          }
 
           uint256 size;
           (size, rindex) = _signature.readUint24(rindex);
@@ -297,6 +345,8 @@ contract BaseSig {
 
         // Subdigest (0x06)
         if (flag == FLAG_SUBDIGEST) {
+          // Free bits left unused
+
           // A hardcoded always accepted digest
           // it pushes the weight to the maximum
           bytes32 hardcoded;
@@ -312,15 +362,23 @@ contract BaseSig {
 
         // Signature ETH Sign (0x07)
         if (flag == FLAG_SIGNATURE_ETH_SIGN) {
+          // Free bits layout:
+          // - X000 : v (0 = 27, 1 = 28)
+          // - 0XXX : Weight (000 = dynamic, 001 = 1, 010 = 2, 011 = 3, 100 = 4, 101 = 5, 110 = 6, 111 = 7)
+
+          // Read v
+          uint8 v = uint8((firstByte & 0x10) >> 4) + 27;
+
           // Read weight
-          uint8 addrWeight;
-          (addrWeight, rindex) = _signature.readUint8(rindex);
+          uint8 addrWeight = uint8(firstByte & 0x07);
+          if (addrWeight == 0) {
+            (addrWeight, rindex) = _signature.readUint8(rindex);
+          }
 
           // Read r, s and v
-          uint8 v;
           bytes32 r;
           bytes32 s;
-          (r, s, v, rindex) = _signature.readRSV(rindex);
+          (r, s,, rindex) = _signature.readRSV(rindex);
 
           // Recover signature
           address addr = ecrecover(keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", _opHash)), v, r, s);
@@ -335,18 +393,28 @@ contract BaseSig {
         // Signature EIP712 (0x08)
         if (flag == FLAG_SIGNATURE_EIP712) {
           // TODO: Implement EIP712 signature recovery
+          // DELETE? EIP712 hash as subdigest may be enough
         }
 
         // Signature Sapient (0x09)
         if (flag == FLAG_SIGNATURE_SAPIENT) {
+          // Free bits layout:
+          // - XX00 : Signature size size (00 = 0 byte, 01 = 1 byte, 10 = 2 bytes, 11 = 3 bytes)
+          // - 00XX : Weight (00 = dynamic, 01 = 1, 10 = 2, 11 = 3)
+
           // Read signer and weight
-          uint8 addrWeight;
+          uint8 addrWeight = uint8(firstByte & 0x03);
+          if (addrWeight == 0) {
+            (addrWeight, rindex) = _signature.readUint8(rindex);
+          }
+
           address addr;
-          (addrWeight, addr, rindex) = _signature.readUint8Address(rindex);
+          (addr, rindex) = _signature.readAddress(rindex);
 
           // Read signature size
+          uint256 sizeSize = uint8(firstByte & 0x0c) >> 2;
           uint256 size;
-          (size, rindex) = _signature.readUint24(rindex);
+          (size, rindex) = _signature.readUintX(rindex, sizeSize);
 
           // Read dynamic size signature
           uint256 nrindex = rindex + size;
@@ -363,14 +431,23 @@ contract BaseSig {
 
         // Signature Sapient Compact (0x0A)
         if (flag == FLAG_SIGNATURE_SAPIENT_COMPACT) {
+          // Free bits layout:
+          // - XX00 : Signature size size (00 = 0 byte, 01 = 1 byte, 10 = 2 bytes, 11 = 3 bytes)
+          // - 00XX : Weight (00 = dynamic, 01 = 1, 10 = 2, 11 = 3)
+
           // Read signer and weight
-          uint8 addrWeight;
+          uint8 addrWeight = uint8(firstByte & 0x03);
+          if (addrWeight == 0) {
+            (addrWeight, rindex) = _signature.readUint8(rindex);
+          }
+
           address addr;
-          (addrWeight, addr, rindex) = _signature.readUint8Address(rindex);
+          (addr, rindex) = _signature.readAddress(rindex);
 
           // Read signature size
+          uint256 sizeSize = uint8(firstByte & 0x0c) >> 2;
           uint256 size;
-          (size, rindex) = _signature.readUint24(rindex);
+          (size, rindex) = _signature.readUintX(rindex, sizeSize);
 
           // Read dynamic size signature
           uint256 nrindex = rindex + size;
