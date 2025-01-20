@@ -11,8 +11,6 @@
   "license": "ISC",
   "dependencies": {
     "cac": "^6.7.14",
-    "micro-eth-signer": "^0.13.2",
-    "ox": "^0.6.4",
-    "viem": "^2.22.8"
+    "ox": "^0.6.4"
   }
 }
