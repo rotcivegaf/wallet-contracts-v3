@@ -43,7 +43,7 @@ contract BaseSig {
     return keccak256(abi.encodePacked("Sequence nested config:\n", _node, _threshold, _weight));
   }
 
-  function _leafForSapient(address _addr, uint96 _weight, bytes32 _imageHash) internal pure returns (bytes32) {
+  function _leafForSapient(address _addr, uint256 _weight, bytes32 _imageHash) internal pure returns (bytes32) {
     return keccak256(abi.encodePacked("Sequence sapient config:\n", _addr, _weight, _imageHash));
   }
 
@@ -55,7 +55,8 @@ contract BaseSig {
 
   function recover(
     Payload.Decoded memory _payload,
-    bytes calldata _signature
+    bytes calldata _signature,
+    bool _ignoreCheckpointer
   ) internal view returns (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint) {
     // First byte is the signature flag
     (uint256 signatureFlag, uint256 rindex) = _signature.readFirstUint8();
@@ -78,12 +79,14 @@ contract BaseSig {
       uint256 checkpointerDataSize;
       (checkpointerDataSize, rindex) = _signature.readUint24(rindex);
 
-      // Read the checkpointer data
-      bytes memory checkpointerData = _signature[rindex:rindex + checkpointerDataSize];
-      rindex += checkpointerDataSize;
+      if (!_ignoreCheckpointer) {
+        // Read the checkpointer data
+        bytes memory checkpointerData = _signature[rindex:rindex + checkpointerDataSize];
+        rindex += checkpointerDataSize;
 
-      // Call the middleware
-      snapshot = ICheckpointer(checkpointer).snapshotFor(address(this), checkpointerData);
+        // Call the middleware
+        snapshot = ICheckpointer(checkpointer).snapshotFor(address(this), checkpointerData);
+      }
     }
 
     // If signature type is 01 we do a chained signature
@@ -92,9 +95,7 @@ contract BaseSig {
     }
 
     // If the signature type is 10 we do a no chain id signature
-    if (signatureFlag & 0x02 == 0x02) {
-      _payload.noChainId = true;
-    }
+    _payload.noChainId = signatureFlag & 0x02 == 0x02;
 
     bytes32 opHash = _payload.hash();
 
@@ -138,8 +139,11 @@ contract BaseSig {
       rindex = tmpIndex;
       uint256 nrindex = sigSize + rindex;
 
-      (threshold, weight, imageHash, checkpoint) =
-        recover(prevCheckpoint == type(uint256).max ? _payload : linkedPayload, _signature[rindex:nrindex]);
+      (threshold, weight, imageHash, checkpoint) = recover(
+        prevCheckpoint == type(uint256).max ? _payload : linkedPayload,
+        _signature[rindex:nrindex],
+        true // The checkpointer is only needed once
+      );
 
       if (weight < threshold) {
         revert LowWeightChainedSignature(_signature[rindex:nrindex], threshold, weight);
