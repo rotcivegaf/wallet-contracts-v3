@@ -114,8 +114,8 @@ library Payload {
       (_decoded.space, pointer) = packed.readUint160(pointer);
     }
 
-    // Next 4 bits determine the size of the nonce
-    uint256 nonceSize = (globalFlag & 0x0E) >> 1;
+    // Next 3 bits determine the size of the nonce
+    uint256 nonceSize = (globalFlag >> 1) & 0x07;
 
     if (nonceSize > 0) {
       // Read the nonce
