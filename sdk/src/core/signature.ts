@@ -288,8 +288,9 @@ export function parseBranch(signature: Uint8Array): { nodes: RawTopology[]; left
       // Read internal threshold
       let threshold = (firstByte & 0x0c) >> 2
       if (threshold === 0) {
-        threshold = signature[index]
-        index++
+        // Read 2 bytes
+        threshold = Bytes.toNumber(signature.slice(index, index + 2))
+        index += 2
       }
 
       // Read size (3 bytes)

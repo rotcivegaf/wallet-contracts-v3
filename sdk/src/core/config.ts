@@ -87,8 +87,8 @@ export function isLeaf(cand: Topology): cand is Leaf {
 function hashConfiguration(topology: Topology | Configuration): Uint8Array {
   if (isConfiguration(topology)) {
     let root = hashConfiguration(topology.topology)
-    root = Hash.keccak256(Bytes.concat(root, Bytes.fromNumber(topology.checkpoint)))
     root = Hash.keccak256(Bytes.concat(root, Bytes.fromNumber(topology.threshold)))
+    root = Hash.keccak256(Bytes.concat(root, Bytes.fromNumber(topology.checkpoint)))
     root = Hash.keccak256(
       Bytes.concat(
         root,
@@ -130,8 +130,8 @@ function hashConfiguration(topology: Topology | Configuration): Uint8Array {
       Bytes.concat(
         Bytes.fromString('Sequence nested config:\n'),
         hashConfiguration(topology.tree),
-        Bytes.padLeft(Bytes.fromNumber(topology.weight), 32),
-        Bytes.padLeft(Bytes.fromNumber(topology.threshold), 32)
+        Bytes.padLeft(Bytes.fromNumber(topology.threshold), 32),
+        Bytes.padLeft(Bytes.fromNumber(topology.weight), 32)
       )
     )
   }
