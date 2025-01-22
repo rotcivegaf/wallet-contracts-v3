@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
+import { IPermissionValidator } from "./interfaces/IPermissionValidator.sol";
 import { Payload } from "./interfaces/ISapient.sol";
-
-//FIXME Add timestamp to these permissions?
 
 library Permissions {
 
@@ -13,7 +12,8 @@ library Permissions {
     NATIVE,
     ERC20,
     ERC721,
-    ERC1155
+    ERC1155,
+    REMOTE
   }
 
   /// @notice Permission for basic function calls
@@ -49,6 +49,13 @@ library Permissions {
     address target;
     uint256 tokenId;
     uint256 limit;
+  }
+
+  /// @notice Permission for remote validation through external contract
+  struct RemotePermission {
+    PermissionType pType;
+    address validator;
+    bytes data;
   }
 
   /// @notice Permission types and their encoded data
@@ -107,11 +114,19 @@ library Permissions {
     });
   }
 
+  /// @notice Encodes a remote permission
+  function encodeRemote(address _validator, bytes memory _data) internal pure returns (EncodedPermission memory) {
+    return EncodedPermission({
+      pType: PermissionType.REMOTE,
+      data: abi.encode(RemotePermission({ pType: PermissionType.REMOTE, validator: _validator, data: _data }))
+    });
+  }
+
   /// @notice Validates a permission against a call
   function validatePermission(
     EncodedPermission memory _permission,
     Payload.Call calldata _call
-  ) internal pure returns (bool) {
+  ) internal view returns (bool) {
     if (_permission.pType == PermissionType.FUNCTION_CALL) {
       FunctionCallPermission memory fp = abi.decode(_permission.data, (FunctionCallPermission));
       return validateFunctionCall(fp, _call);
@@ -127,6 +142,9 @@ library Permissions {
     } else if (_permission.pType == PermissionType.ERC1155) {
       ERC1155Permission memory ep = abi.decode(_permission.data, (ERC1155Permission));
       return validateERC1155(ep, _call);
+    } else if (_permission.pType == PermissionType.REMOTE) {
+      RemotePermission memory rp = abi.decode(_permission.data, (RemotePermission));
+      return validateRemote(rp, _call);
     }
     return false;
   }
@@ -218,6 +236,14 @@ library Permissions {
       return !approved;
     }
     return false;
+  }
+
+  /// @notice Validates a remote permission by calling external validator
+  function validateRemote(
+    RemotePermission memory _permission,
+    Payload.Call calldata _call
+  ) internal view returns (bool) {
+    return IPermissionValidator(_permission.validator).validatePermission(_permission.data, _call);
   }
 
   /// @notice Gets the usage limit from a permission

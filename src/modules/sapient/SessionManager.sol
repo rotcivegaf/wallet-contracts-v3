@@ -172,13 +172,18 @@ contract SessionManager is ISessionManager {
     Payload.Decoded calldata _payload,
     Permissions.EncodedPermission[] memory permissions,
     uint8[] memory permissionIdxPerCall
-  ) private pure returns (uint256 totalValueUsed, uint256[] memory totalUsage) {
+  ) private view returns (uint256 totalValueUsed, uint256[] memory totalUsage) {
     totalUsage = new uint256[](permissions.length);
     totalValueUsed = 0;
 
-    for (uint256 i = 0; i < _payload.calls.length - 1; i++) {
+    for (uint256 i = 0; i < _payload.calls.length; i++) {
       if (_payload.calls[i].delegateCall) {
         revert InvalidDelegateCall();
+      }
+
+      if (_payload.calls[i].to == address(this)) {
+        // No validation for calls to this contract
+        continue;
       }
 
       if (_payload.calls[i].value > 0) {
@@ -235,21 +240,23 @@ contract SessionManager is ISessionManager {
       }
     }
 
-    Payload.Call memory lastCall = _payload.calls[_payload.calls.length - 1];
-    if (lastCall.behaviorOnError != Payload.BEHAVIOR_REVERT_ON_ERROR) {
-      revert InvalidLimitUsageIncrement();
-    }
+    if (limitUsageCount != 0) {
+      Payload.Call memory lastCall = _payload.calls[_payload.calls.length - 1];
+      if (lastCall.behaviorOnError != Payload.BEHAVIOR_REVERT_ON_ERROR) {
+        revert InvalidLimitUsageIncrement();
+      }
 
-    bytes32 expectedDataHash = keccak256(
-      abi.encodeWithSelector(this.incrementLimitUsage.selector, expectedLimitUsageHashes, expectedUsageAmounts)
-    );
-    bytes32 actualDataHash = keccak256(lastCall.data);
+      bytes32 expectedDataHash = keccak256(
+        abi.encodeWithSelector(this.incrementLimitUsage.selector, expectedLimitUsageHashes, expectedUsageAmounts)
+      );
+      bytes32 actualDataHash = keccak256(lastCall.data);
 
-    if (
-      lastCall.to != address(this) || bytes4(lastCall.data) != this.incrementLimitUsage.selector
-        || actualDataHash != expectedDataHash
-    ) {
-      revert MissingLimitUsageIncrement();
+      if (
+        lastCall.to != address(this) || bytes4(lastCall.data) != this.incrementLimitUsage.selector
+          || actualDataHash != expectedDataHash
+      ) {
+        revert MissingLimitUsageIncrement();
+      }
     }
   }
 

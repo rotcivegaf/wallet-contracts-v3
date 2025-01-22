@@ -13,22 +13,12 @@ import {
 } from "../src/modules/interfaces/ISessionManager.sol";
 import { ISignalsImplicitMode } from "../src/modules/interfaces/ISignalsImplicitMode.sol";
 import { SessionManager } from "../src/modules/sapient/SessionManager.sol";
+
+import { MockImplicitContract } from "./mocks/MockImplicitContract.sol";
+import { MockPermissionValidator } from "./mocks/MockPermissionValidator.sol";
 import { Test, Vm } from "forge-std/Test.sol";
 
 using LibAttestation for Attestation;
-
-contract MockImplicitContract is ISignalsImplicitMode {
-
-  function acceptImplicitRequest(
-    address wallet,
-    Attestation calldata attestation,
-    bytes32,
-    Payload.Call calldata
-  ) external pure returns (bytes32) {
-    return attestation.generateImplicitRequestMagic(wallet);
-  }
-
-}
 
 contract SessionManagerTest is Test, ISessionManagerSignals {
 
@@ -266,6 +256,116 @@ contract SessionManagerTest is Test, ISessionManagerSignals {
 
     // Verify hashes match
     assertEq(actualHash, expectedHash, "Image hash mismatch");
+  }
+
+  function test_ExplicitMode_RemotePermission() public {
+    address target = address(0x1234);
+    bytes memory callData = abi.encodeWithSignature("someFunction(uint256)", 123);
+
+    // Create validator that will allow the call
+    MockPermissionValidator validator = new MockPermissionValidator(true);
+
+    // Create session configuration with remote permission
+    Permissions.EncodedPermission[] memory permissions = new Permissions.EncodedPermission[](1);
+    permissions[0] = Permissions.encodeRemote(
+      address(validator),
+      callData // Pass the same data we'll use in the call
+    );
+
+    SessionConfigurationPermissions[] memory sessionPermissions = new SessionConfigurationPermissions[](1);
+    sessionPermissions[0] = SessionConfigurationPermissions({
+      signer: sessionSigner.addr,
+      deadline: 0,
+      permissions: permissions,
+      valueLimit: 0
+    });
+
+    SessionConfiguration memory config = _createSessionConfiguration(sessionPermissions, new address[](0));
+
+    // Create call that matches our permission
+    Payload.Call[] memory calls = new Payload.Call[](1);
+    calls[0] = Payload.Call({
+      to: target,
+      value: 0,
+      data: callData,
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    (SessionSignature memory signature, bytes32 expectedImageHash) = _createValidSignature(calls, config, 1);
+
+    vm.prank(wallet.addr);
+    bytes32 imageHash = sessionManager.isValidSapientSignature(
+      Payload.Decoded({
+        kind: Payload.KIND_TRANSACTIONS,
+        noChainId: false,
+        calls: calls,
+        space: 0,
+        nonce: 0,
+        message: "",
+        imageHash: bytes32(0),
+        digest: bytes32(0),
+        parentWallets: new address[](0)
+      }),
+      abi.encode(signature)
+    );
+
+    assertEq(imageHash, expectedImageHash);
+  }
+
+  function test_RevertInvalidRemotePermission() public {
+    address target = address(0x1234);
+    bytes memory callData = abi.encodeWithSignature("someFunction(uint256)", 123);
+
+    // Create validator that will deny the call
+    MockPermissionValidator validator = new MockPermissionValidator(false);
+
+    // Create session configuration with remote permission
+    Permissions.EncodedPermission[] memory permissions = new Permissions.EncodedPermission[](1);
+    permissions[0] = Permissions.encodeRemote(address(validator), callData);
+
+    SessionConfigurationPermissions[] memory sessionPermissions = new SessionConfigurationPermissions[](1);
+    sessionPermissions[0] = SessionConfigurationPermissions({
+      signer: sessionSigner.addr,
+      deadline: 0,
+      permissions: permissions,
+      valueLimit: 0
+    });
+
+    SessionConfiguration memory config = _createSessionConfiguration(sessionPermissions, new address[](0));
+
+    // Create call
+    Payload.Call[] memory calls = new Payload.Call[](1);
+    calls[0] = Payload.Call({
+      to: target,
+      value: 0,
+      data: callData,
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    (SessionSignature memory signature,) = _createValidSignature(calls, config, 1);
+
+    vm.prank(wallet.addr);
+    vm.expectRevert();
+    sessionManager.isValidSapientSignature(
+      Payload.Decoded({
+        kind: Payload.KIND_TRANSACTIONS,
+        noChainId: false,
+        calls: calls,
+        space: 0,
+        nonce: 0,
+        message: "",
+        imageHash: bytes32(0),
+        digest: bytes32(0),
+        parentWallets: new address[](0)
+      }),
+      abi.encode(signature)
+    );
   }
 
   // Helper functions
