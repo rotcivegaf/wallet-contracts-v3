@@ -22,7 +22,7 @@ using LibAttestation for Attestation;
 //FIXME Find a way to use permissions across multiple sessions
 // 1. Combine permissions from all available sessions? No, only "used" sessions
 
-contract SessionsManager is ISessionManager {
+contract SessionManager is ISessionManager {
 
   // Track usage per wallet/session/target
   mapping(bytes32 => uint256) private limitUsage;
@@ -97,7 +97,6 @@ contract SessionsManager is ISessionManager {
     Payload.Decoded calldata _payload,
     address recoveredPayloadSigner
   ) internal view {
-    // Continue with existing validation
     if (signature.isImplicit) {
       _validateImplicitMode(wallet, signature, _payload, recoveredPayloadSigner);
     } else {
@@ -120,13 +119,20 @@ contract SessionsManager is ISessionManager {
     (SessionConfigurationPermissions memory signerPermissions, Permissions.EncodedPermission[] memory permissions) =
       _findSignerPermissions(signature.sessionConfiguration.sessionPermissions, recoveredPayloadSigner);
 
+    // Check if session has expired
+    if (signerPermissions.deadline != 0 && block.timestamp > signerPermissions.deadline) {
+      revert SessionExpired(wallet, recoveredPayloadSigner);
+    }
+
     // Validate calls and track usage
     (uint256 totalValueUsed, uint256[] memory totalUsage) =
       _validateCallsAndTrackUsage(wallet, _payload, permissions, signature.permissionIdxPerCall);
 
     // Verify total value is within limit
-    if (totalValueUsed > 0 && totalValueUsed > signerPermissions.valueLimit) {
-      revert PermissionLimitExceeded(wallet, VALUE_TRACKING_ADDRESS);
+    if (totalValueUsed > 0) {
+      if (totalValueUsed > signerPermissions.valueLimit) {
+        revert PermissionLimitExceeded(wallet, VALUE_TRACKING_ADDRESS);
+      }
     }
 
     // Verify limit usage increment call
@@ -168,6 +174,7 @@ contract SessionsManager is ISessionManager {
     uint8[] memory permissionIdxPerCall
   ) private pure returns (uint256 totalValueUsed, uint256[] memory totalUsage) {
     totalUsage = new uint256[](permissions.length);
+    totalValueUsed = 0;
 
     for (uint256 i = 0; i < _payload.calls.length - 1; i++) {
       if (_payload.calls[i].delegateCall) {
@@ -175,7 +182,8 @@ contract SessionsManager is ISessionManager {
       }
 
       if (_payload.calls[i].value > 0) {
-        totalValueUsed += _payload.calls[i].value;
+        uint256 newTotal = totalValueUsed + _payload.calls[i].value;
+        totalValueUsed = newTotal;
       }
 
       uint256 permissionIdx = permissionIdxPerCall[i];
@@ -189,7 +197,9 @@ contract SessionsManager is ISessionManager {
       }
 
       if (_hasLimit(permission.pType)) {
-        totalUsage[permissionIdx] += Permissions.getUsageAmount(permission, _payload.calls[i]);
+        uint256 usageAmount = Permissions.getUsageAmount(permission, _payload.calls[i]);
+        uint256 newUsage = totalUsage[permissionIdx] + usageAmount;
+        totalUsage[permissionIdx] = newUsage;
       }
     }
   }
@@ -230,8 +240,9 @@ contract SessionsManager is ISessionManager {
       revert InvalidLimitUsageIncrement();
     }
 
-    bytes32 expectedDataHash =
-      keccak256(abi.encode(this.incrementLimitUsage.selector, expectedLimitUsageHashes, expectedUsageAmounts));
+    bytes32 expectedDataHash = keccak256(
+      abi.encodeWithSelector(this.incrementLimitUsage.selector, expectedLimitUsageHashes, expectedUsageAmounts)
+    );
     bytes32 actualDataHash = keccak256(lastCall.data);
 
     if (

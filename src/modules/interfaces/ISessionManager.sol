@@ -38,6 +38,8 @@ struct SessionConfigurationPermissions {
   address signer;
   /// @notice Maximum native token value this signer can send
   uint256 valueLimit;
+  /// @notice Deadline for the session. (0 = no deadline)
+  uint256 deadline;
   /// @notice Array of encoded permissions granted to this signer
   Permissions.EncodedPermission[] permissions;
 }
@@ -70,6 +72,9 @@ interface ISessionManagerSignals {
 
   /// @notice Invalid delegate call
   error InvalidDelegateCall();
+
+  /// @notice Session has expired
+  error SessionExpired(address wallet, address sessionSigner);
 
 }
 
