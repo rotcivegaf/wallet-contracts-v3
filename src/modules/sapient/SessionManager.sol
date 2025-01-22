@@ -28,7 +28,7 @@ contract SessionManager is ISessionManager {
   mapping(bytes32 => uint256) private limitUsage;
 
   // Special address used for tracking native token value limits
-  address private constant VALUE_TRACKING_ADDRESS = address(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
+  address public constant VALUE_TRACKING_ADDRESS = address(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
 
   /// @notice Increments the usage counter for multiple limit/session/target combinations
   /// @param limitUsageHashes Array of hashes representing wallet/session/target combinations
@@ -241,6 +241,12 @@ contract SessionManager is ISessionManager {
     }
 
     if (limitUsageCount != 0) {
+      // Fix the array length
+      assembly {
+        mstore(expectedLimitUsageHashes, limitUsageCount)
+        mstore(expectedUsageAmounts, limitUsageCount)
+      }
+
       Payload.Call memory lastCall = _payload.calls[_payload.calls.length - 1];
       if (lastCall.behaviorOnError != Payload.BEHAVIOR_REVERT_ON_ERROR) {
         revert InvalidLimitUsageIncrement();
@@ -251,11 +257,11 @@ contract SessionManager is ISessionManager {
       );
       bytes32 actualDataHash = keccak256(lastCall.data);
 
-      if (
-        lastCall.to != address(this) || bytes4(lastCall.data) != this.incrementLimitUsage.selector
-          || actualDataHash != expectedDataHash
-      ) {
+      if (lastCall.to != address(this)) {
         revert MissingLimitUsageIncrement();
+      }
+      if (actualDataHash != expectedDataHash) {
+        revert InvalidLimitUsageIncrement();
       }
     }
   }
@@ -287,6 +293,10 @@ contract SessionManager is ISessionManager {
       }
       if (_isAddressBlacklisted(_payload.calls[i].to, blacklist)) {
         revert BlacklistedAddress(wallet, _payload.calls[i].to);
+      }
+      // No value
+      if (_payload.calls[i].value > 0) {
+        revert InvalidValue();
       }
     }
 

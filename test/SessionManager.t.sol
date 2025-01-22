@@ -15,6 +15,8 @@ import { ISignalsImplicitMode } from "../src/modules/interfaces/ISignalsImplicit
 import { SessionManager } from "../src/modules/sapient/SessionManager.sol";
 
 import { MockImplicitContract } from "./mocks/MockImplicitContract.sol";
+
+import { MockPayableReceiver } from "./mocks/MockPayableReceiver.sol";
 import { MockPermissionValidator } from "./mocks/MockPermissionValidator.sol";
 import { Test, Vm } from "forge-std/Test.sol";
 
@@ -351,7 +353,210 @@ contract SessionManagerTest is Test, ISessionManagerSignals {
     (SessionSignature memory signature,) = _createValidSignature(calls, config, 1);
 
     vm.prank(wallet.addr);
-    vm.expectRevert();
+    vm.expectRevert(abi.encodeWithSelector(MissingPermission.selector, wallet.addr, target, bytes4(callData)));
+    sessionManager.isValidSapientSignature(
+      Payload.Decoded({
+        kind: Payload.KIND_TRANSACTIONS,
+        noChainId: false,
+        calls: calls,
+        space: 0,
+        nonce: 0,
+        message: "",
+        imageHash: bytes32(0),
+        digest: bytes32(0),
+        parentWallets: new address[](0)
+      }),
+      abi.encode(signature)
+    );
+  }
+
+  function test_ImplicitMode_RevertBlacklistedAddress() public {
+    address blacklistedAddr = address(0xdead);
+
+    // Create blacklist with one address
+    address[] memory blacklist = new address[](1);
+    blacklist[0] = blacklistedAddr;
+
+    // Create session configuration for implicit mode
+    SessionConfiguration memory config = SessionConfiguration({
+      sessionPermissions: new SessionConfigurationPermissions[](0),
+      implicitBlacklist: blacklist
+    });
+
+    // Create call to blacklisted address
+    Payload.Call[] memory calls = new Payload.Call[](1);
+    calls[0] = Payload.Call({
+      to: blacklistedAddr,
+      value: 0,
+      data: abi.encodeWithSelector(bytes4(keccak256("someFunction()"))),
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    // Create implicit mode signature
+    (SessionSignature memory signature,) = _createValidSignature(calls, config, 1);
+    signature.isImplicit = true;
+
+    // Expect revert when trying to call blacklisted address
+    vm.prank(wallet.addr);
+    vm.expectRevert(abi.encodeWithSelector(BlacklistedAddress.selector, wallet.addr, blacklistedAddr));
+    sessionManager.isValidSapientSignature(
+      Payload.Decoded({
+        kind: Payload.KIND_TRANSACTIONS,
+        noChainId: false,
+        calls: calls,
+        space: 0,
+        nonce: 0,
+        message: "",
+        imageHash: bytes32(0),
+        digest: bytes32(0),
+        parentWallets: new address[](0)
+      }),
+      abi.encode(signature)
+    );
+  }
+
+  function test_ExplicitMode_ValueLimit() public {
+    MockPayableReceiver receiver = new MockPayableReceiver();
+
+    Permissions.EncodedPermission[] memory permissions = new Permissions.EncodedPermission[](1);
+    permissions[0] = Permissions.encodeFunctionCall(address(receiver), MockPayableReceiver.receiveValue.selector);
+
+    // Create session configuration with value limit
+    SessionConfigurationPermissions[] memory sessionPermissions = new SessionConfigurationPermissions[](1);
+    sessionPermissions[0] = SessionConfigurationPermissions({
+      signer: sessionSigner.addr,
+      deadline: 0,
+      permissions: permissions,
+      valueLimit: 1 ether
+    });
+
+    SessionConfiguration memory config = _createSessionConfiguration(sessionPermissions, new address[](0));
+
+    // Create call with value within limit
+    Payload.Call[] memory calls = new Payload.Call[](2);
+    calls[0] = Payload.Call({
+      to: address(receiver),
+      value: 0.5 ether,
+      data: abi.encodeWithSelector(MockPayableReceiver.receiveValue.selector),
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+    // Add incrementLimitUsage call
+    uint256[] memory usageAmounts = new uint256[](1);
+    usageAmounts[0] = 0.5 ether;
+    bytes32[] memory usageHashes = new bytes32[](1);
+    usageHashes[0] =
+      sessionManager.getUsageHash(wallet.addr, sessionSigner.addr, sessionManager.VALUE_TRACKING_ADDRESS());
+    calls[1] = Payload.Call({
+      to: address(sessionManager),
+      value: 0,
+      data: abi.encodeWithSelector(SessionManager.incrementLimitUsage.selector, usageHashes, usageAmounts),
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    (SessionSignature memory signature, bytes32 expectedImageHash) = _createValidSignature(calls, config, 1);
+
+    vm.prank(wallet.addr);
+    bytes32 imageHash = sessionManager.isValidSapientSignature(
+      Payload.Decoded({
+        kind: Payload.KIND_TRANSACTIONS,
+        noChainId: false,
+        calls: calls,
+        space: 0,
+        nonce: 0,
+        message: "",
+        imageHash: bytes32(0),
+        digest: bytes32(0),
+        parentWallets: new address[](0)
+      }),
+      abi.encode(signature)
+    );
+
+    assertEq(imageHash, expectedImageHash);
+  }
+
+  function test_RevertExpiredDeadline() public {
+    // Create session configuration with expired deadline
+    Permissions.EncodedPermission[] memory permissions = new Permissions.EncodedPermission[](1);
+    permissions[0] = Permissions.encodeERC20(address(0x1234), 1000);
+
+    SessionConfigurationPermissions[] memory sessionPermissions = new SessionConfigurationPermissions[](1);
+    sessionPermissions[0] = SessionConfigurationPermissions({
+      signer: sessionSigner.addr,
+      deadline: 1, // Expired deadline
+      permissions: permissions,
+      valueLimit: 0
+    });
+    vm.warp(2); // New timestamp
+
+    SessionConfiguration memory config = _createSessionConfiguration(sessionPermissions, new address[](0));
+
+    Payload.Call[] memory calls =
+      _createERC20Calls(address(0x1234), bytes4(keccak256("transfer(address,uint256)")), 500);
+
+    (SessionSignature memory signature,) = _createValidSignature(calls, config, 2);
+
+    vm.prank(wallet.addr);
+    vm.expectRevert(abi.encodeWithSelector(SessionExpired.selector, wallet.addr, sessionSigner.addr));
+    sessionManager.isValidSapientSignature(
+      Payload.Decoded({
+        kind: Payload.KIND_TRANSACTIONS,
+        noChainId: false,
+        calls: calls,
+        space: 0,
+        nonce: 0,
+        message: "",
+        imageHash: bytes32(0),
+        digest: bytes32(0),
+        parentWallets: new address[](0)
+      }),
+      abi.encode(signature)
+    );
+  }
+
+  function test_RevertExceedsValueLimit() public {
+    MockPayableReceiver receiver = new MockPayableReceiver();
+
+    Permissions.EncodedPermission[] memory permissions = new Permissions.EncodedPermission[](1);
+    permissions[0] = Permissions.encodeFunctionCall(address(receiver), MockPayableReceiver.receiveValue.selector);
+
+    // Create session configuration with value limit
+    SessionConfigurationPermissions[] memory sessionPermissions = new SessionConfigurationPermissions[](1);
+    sessionPermissions[0] = SessionConfigurationPermissions({
+      signer: sessionSigner.addr,
+      deadline: 0,
+      permissions: permissions,
+      valueLimit: 1 ether
+    });
+
+    SessionConfiguration memory config = _createSessionConfiguration(sessionPermissions, new address[](0));
+
+    // Create call exceeding value limit
+    Payload.Call[] memory calls = new Payload.Call[](1);
+    calls[0] = Payload.Call({
+      to: address(receiver),
+      value: 2 ether, // Exceeds limit
+      data: abi.encodeWithSelector(MockPayableReceiver.receiveValue.selector),
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    (SessionSignature memory signature,) = _createValidSignature(calls, config, 1);
+
+    vm.expectRevert(
+      abi.encodeWithSelector(PermissionLimitExceeded.selector, wallet.addr, sessionManager.VALUE_TRACKING_ADDRESS())
+    );
+    vm.prank(wallet.addr);
     sessionManager.isValidSapientSignature(
       Payload.Decoded({
         kind: Payload.KIND_TRANSACTIONS,

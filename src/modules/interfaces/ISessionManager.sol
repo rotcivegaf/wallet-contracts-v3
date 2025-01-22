@@ -46,6 +46,8 @@ struct SessionConfigurationPermissions {
 
 interface ISessionManagerSignals {
 
+  //FIXME Tidy these errors
+
   /// @notice Invalid signature from session signer
   error InvalidSessionSignature();
 
@@ -54,6 +56,9 @@ interface ISessionManagerSignals {
 
   /// @notice Invalid result from implicit mode
   error InvalidImplicitResult();
+
+  /// @notice Invalid value
+  error InvalidValue();
 
   /// @notice Missing required permission for function call
   error MissingPermission(address wallet, address target, bytes4 selector);
