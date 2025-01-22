@@ -9,33 +9,34 @@ using PrimitivesCli for Vm;
 library PrimitivesCli {
 
   // TODO: Move to ENV
-  function root() internal pure returns (string[] memory) {
-    string[] memory r = new string[](2);
-    r[0] = "node";
-    r[1] = "../sequence-core/packages/primitives-cli/dist/index.js";
-    return r;
+  function root() internal pure returns (string memory) {
+    return "node ../sequence-core/packages/primitives-cli/dist/index.js";
   }
 
-  function runRoot(Vm _vm, string[] memory _args) internal returns (bytes memory) {
-    string[] memory r = root();
-    string[] memory inputs = new string[](_args.length + r.length);
+  function shffi(Vm _vm, string memory _command) internal returns (bytes memory) {
+    string[] memory args = new string[](3);
+    args[0] = "sh";
+    args[1] = "-c";
+    args[2] = _command;
+    return _vm.ffi(args);
+  }
 
-    for (uint256 i = 0; i < r.length; i++) {
-      inputs[i] = r[i];
-    }
-    for (uint256 i = 0; i < _args.length; i++) {
-      inputs[i + r.length] = _args[i];
-    }
-
-    return _vm.ffi(inputs);
+  function randomBytes(Vm _vm, uint256 _length) internal returns (bytes memory) {
+    string memory command =
+      string(abi.encodePacked("head -c ", _vm.toString(_length), " /dev/urandom | xxd -p -c ", _vm.toString(_length)));
+    return _vm.shffi(command);
   }
 
   function toPacked(Vm _vm, Payload.Decoded memory _decoded) internal returns (bytes memory) {
-    string[] memory args = new string[](3);
-    args[0] = "payload";
-    args[1] = "to-packed";
-    args[2] = _vm.toString(abi.encode(_decoded));
-    return _vm.runRoot(args);
+    string memory randomId = _vm.toString(randomBytes(_vm, 8));
+    string memory path = string(abi.encodePacked("/tmp/seq-td-", randomId));
+    _vm.writeFile(path, _vm.toString(abi.encode(_decoded)));
+
+    string memory command = string(abi.encodePacked("cat ", path, " | ", root(), " payload to-packed"));
+
+    bytes memory result = _vm.shffi(command);
+    _vm.removeFile(path);
+    return result;
   }
 
 }

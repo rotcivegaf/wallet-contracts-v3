@@ -25,7 +25,7 @@ contract SessionManagerTest is Test {
   }
 
   function test_fromPackedCalls(Payload.Call[] memory _calls, uint256 _space, uint256 _nonce) external {
-    vm.assume(_calls.length < 8);
+    vm.assume(_calls.length < type(uint16).max);
 
     // Convert nonce into legal range
     _nonce = bound(_nonce, 0, type(uint56).max);
