@@ -2,6 +2,7 @@
 src = "src"
 out = "out"
 libs = ["lib"]
+ffi = true
 
 [fmt]
 # Explicitly define all formatting rules
