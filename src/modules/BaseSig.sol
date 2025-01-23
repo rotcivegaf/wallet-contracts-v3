@@ -82,11 +82,12 @@ contract BaseSig {
       if (!_ignoreCheckpointer) {
         // Read the checkpointer data
         bytes memory checkpointerData = _signature[rindex:rindex + checkpointerDataSize];
-        rindex += checkpointerDataSize;
 
         // Call the middleware
         snapshot = ICheckpointer(checkpointer).snapshotFor(address(this), checkpointerData);
       }
+
+      rindex += checkpointerDataSize;
     }
 
     // If signature type is 01 we do a chained signature
@@ -100,8 +101,6 @@ contract BaseSig {
     bytes32 opHash = _payload.hash();
 
     // Recover the checkpoint using the size defined by the flag
-    // we skip over the size of 3 since it will probably not be common
-    // but we still want
     uint256 checkpointSize = (signatureFlag & 0x1c) >> 2;
     (checkpoint, rindex) = _signature.readUintX(rindex, checkpointSize);
 
@@ -190,27 +189,26 @@ contract BaseSig {
         // Signature hash (0x00)
         if (flag == FLAG_SIGNATURE_HASH) {
           // Free bits layout:
-          // - bit 3: v (0 = 27, 1 = 28)
-          // - bits [2..0]: Weight (000 = dynamic, 001 = 1, 010 = 2, 011 = 3, 100 = 4, 101 = 5, 110 = 6, 111 = 7)
+          // - bits [3..0]: Weight (0000 = dynamic, 0001 = 1, ..., 1111 = 15)
+          // We read 64 bytes for an ERC-2098 compact signature (r, yParityAndS).
+          // The top bit of yParityAndS is yParity, the remaining 255 bits are s.
 
-          // Read v
-          uint8 v = uint8((firstByte & 0x10) >> 4) + 27;
-
-          // Read weight
-          uint8 addrWeight = uint8(firstByte & 0x07);
+          uint8 addrWeight = uint8(firstByte & 0x0f);
           if (addrWeight == 0) {
             (addrWeight, rindex) = _signature.readUint8(rindex);
           }
 
-          // Read r, s and v
           bytes32 r;
-          bytes32 s;
-          (r, s,, rindex) = _signature.readRSV(rindex);
+          bytes32 yParityAndS;
+          (r, rindex) = _signature.readBytes32(rindex);
+          (yParityAndS, rindex) = _signature.readBytes32(rindex);
 
-          // Recover signature
+          uint256 yParity = uint256(yParityAndS >> 255);
+          bytes32 s = bytes32(uint256(yParityAndS) & 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);
+          uint8 v = uint8(yParity) + 27;
+
           address addr = ecrecover(_opHash, v, r, s);
 
-          // Add the weight and compute the merkle root
           weight += addrWeight;
           bytes32 node = _leafForAddressAndWeight(addr, addrWeight);
           root = root != bytes32(0) ? LibOptim.fkeccak256(root, node) : node;
@@ -299,9 +297,7 @@ contract BaseSig {
           // Enter a branch of the signature merkle tree
           uint256 nrindex = rindex + size;
 
-          uint256 nweight;
-          bytes32 node;
-          (nweight, node) = recoverBranch(_payload, _opHash, _signature[rindex:nrindex]);
+          (uint256 nweight, bytes32 node) = recoverBranch(_payload, _opHash, _signature[rindex:nrindex]);
 
           weight += nweight;
           root = LibOptim.fkeccak256(root, node);
@@ -332,9 +328,7 @@ contract BaseSig {
           (size, rindex) = _signature.readUint24(rindex);
           uint256 nrindex = rindex + size;
 
-          uint256 internalWeight;
-          bytes32 internalRoot;
-          (internalWeight, internalRoot) = recoverBranch(_payload, _opHash, _signature[rindex:nrindex]);
+          (uint256 internalWeight, bytes32 internalRoot) = recoverBranch(_payload, _opHash, _signature[rindex:nrindex]);
           rindex = nrindex;
 
           if (internalWeight >= internalThreshold) {
@@ -367,27 +361,26 @@ contract BaseSig {
         // Signature ETH Sign (0x07)
         if (flag == FLAG_SIGNATURE_ETH_SIGN) {
           // Free bits layout:
-          // - bit 3: v (0 = 27, 1 = 28)
-          // - bits [2..0]: Weight (000 = dynamic, 001 = 1, 010 = 2, 011 = 3, 100 = 4, 101 = 5, 110 = 6, 111 = 7)
+          // - bits [3..0]: Weight (0000 = dynamic, 0001 = 1, ..., 1111 = 15)
+          // We read 64 bytes for an ERC-2098 compact signature (r, yParityAndS).
+          // The top bit of yParityAndS is yParity, the remaining 255 bits are s.
 
-          // Read v
-          uint8 v = uint8((firstByte & 0x10) >> 4) + 27;
-
-          // Read weight
-          uint8 addrWeight = uint8(firstByte & 0x07);
+          uint8 addrWeight = uint8(firstByte & 0x0f);
           if (addrWeight == 0) {
             (addrWeight, rindex) = _signature.readUint8(rindex);
           }
 
-          // Read r, s and v
           bytes32 r;
-          bytes32 s;
-          (r, s,, rindex) = _signature.readRSV(rindex);
+          bytes32 yParityAndS;
+          (r, rindex) = _signature.readBytes32(rindex);
+          (yParityAndS, rindex) = _signature.readBytes32(rindex);
 
-          // Recover signature
+          uint256 yParity = uint256(yParityAndS >> 255);
+          bytes32 s = bytes32(uint256(yParityAndS) & ((1 << 255) - 1));
+          uint8 v = uint8(yParity) + 27;
+
           address addr = ecrecover(keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", _opHash)), v, r, s);
 
-          // Add the weight and compute the merkle root
           weight += addrWeight;
           bytes32 node = _leafForAddressAndWeight(addr, addrWeight);
           root = root != bytes32(0) ? LibOptim.fkeccak256(root, node) : node;
@@ -430,6 +423,7 @@ contract BaseSig {
           weight += addrWeight;
           bytes32 node = _leafForSapient(addr, addrWeight, sapientImageHash);
           root = root != bytes32(0) ? LibOptim.fkeccak256(root, node) : node;
+          rindex = nrindex;
           continue;
         }
 
@@ -464,6 +458,7 @@ contract BaseSig {
           weight += addrWeight;
           bytes32 node = _leafForSapient(addr, addrWeight, sapientImageHash);
           root = root != bytes32(0) ? LibOptim.fkeccak256(root, node) : node;
+          rindex = nrindex;
           continue;
         }
 

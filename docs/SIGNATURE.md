@@ -136,19 +136,19 @@ This function loops over the remainder of the signature, reading one byte at a t
 
 The contract defines constants:
 
-| Constant Name                    | Value (Decimal) | Purpose                                                                                     |
-| -------------------------------- | --------------- | ------------------------------------------------------------------------------------------- |
-| `FLAG_SIGNATURE_HASH`            | 0               | ECDSA signature with `v,r,s` directly against `_opHash` (a 32-byte typed hash)              |
-| `FLAG_ADDRESS`                   | 1               | Just an address “leaf” (adds that address’s weight, but no actual ECDSA check)              |
-| `FLAG_SIGNATURE_ERC1271`         | 2               | A contract-based signature check using `isValidSignature(opHash, signature)`                |
-| `FLAG_NODE`                      | 3               | Includes a raw 32-byte node hash in the merkle root. No weight added.                       |
-| `FLAG_BRANCH`                    | 4               | Nested branch. The next bytes specify length, then recursion into `recoverBranch`.          |
-| `FLAG_SUBDIGEST`                 | 5               | Hard-coded “accepted subdigest.” If `_opHash` matches the stored 32 bytes, infinite weight. |
-| `FLAG_NESTED`                    | 6               | A nested multi-sig node with an internal threshold plus an external weight.                 |
-| `FLAG_SIGNATURE_ETH_SIGN`        | 7               | ECDSA signature in “Eth_sign” format (`"\x19Ethereum Signed Message:\n32" + opHash`).       |
-| `FLAG_SIGNATURE_EIP712`          | 8               | **Currently unimplemented** placeholder for EIP-712 signature recovery.                     |
-| `FLAG_SIGNATURE_SAPIENT`         | 9               | A specialized “sapient” signature with an `ISapient` contract check.                        |
-| `FLAG_SIGNATURE_SAPIENT_COMPACT` | 10              | A specialized “sapient” signature with `ISapientCompact` and `_opHash` only.                |
+| Constant Name                    | Value (Decimal) | Purpose                                                                                               |
+| -------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------- |
+| `FLAG_SIGNATURE_HASH`            | 0               | ECDSA signature with `r,yParityAndS` (ERC-2098 compact) directly against `_opHash`.                   |
+| `FLAG_ADDRESS`                   | 1               | Just an address “leaf” (adds that address’s weight, but no actual ECDSA check)                        |
+| `FLAG_SIGNATURE_ERC1271`         | 2               | A contract-based signature check using `isValidSignature(opHash, signature)`                          |
+| `FLAG_NODE`                      | 3               | Includes a raw 32-byte node hash in the merkle root. No weight added.                                 |
+| `FLAG_BRANCH`                    | 4               | Nested branch. The next bytes specify length, then recursion into `recoverBranch`.                    |
+| `FLAG_SUBDIGEST`                 | 5               | Hard-coded “accepted subdigest.” If `_opHash` matches the stored 32 bytes, infinite weight.           |
+| `FLAG_NESTED`                    | 6               | A nested multi-sig node with an internal threshold plus an external weight.                           |
+| `FLAG_SIGNATURE_ETH_SIGN`        | 7               | ECDSA signature in “Eth_sign” format (`"\x19Ethereum Signed Message:\n32" + opHash`), using ERC-2098. |
+| `FLAG_SIGNATURE_EIP712`          | 8               | **Currently unimplemented** placeholder for EIP-712 signature recovery.                               |
+| `FLAG_SIGNATURE_SAPIENT`         | 9               | A specialized “sapient” signature with an `ISapient` contract check.                                  |
+| `FLAG_SIGNATURE_SAPIENT_COMPACT` | 10              | A specialized “sapient” signature with `ISapientCompact` and `_opHash` only.                          |
 
 When the parser sees `flag == someValue`, it dispatches to the corresponding block. Each block interprets the lower nibble differently.
 
@@ -169,28 +169,13 @@ Each bullet will show how the bits in the “free nibble” are used.
 
 ### 5.1 **Signature Hash** (`flag = 0`)
 
-- The code attempts standard ECDSA recovery from `_opHash`.
-- The free nibble has the layout:
-  - **Top bit** (bit 3) is used to set `v` to `27` or `28`.
-  - The bottom three bits (bits 2..0) define the signer's weight. If the bottom bits are `0`, the weight is read from the subsequent byte.
-
-Conceptually:
-
-```
-free nibble =  vBit  weightBits
-bits:           [3]  [2 1 0]
-
-if vBit == 0 => v=27
-if vBit == 1 => v=28
-
-if weightBits == 0 => read the weight from next byte
-else => weight = weightBits (1..7)
-```
-
-Then we read `r, s`, and confirm `ecrecover(_opHash, v, r, s)`. The code adds that weight to the running total and merges a leaf of `_leafForAddressAndWeight(recoveredAddress, weight)` into the merkle root.
+- Uses **ERC-2098** to parse the signature in 64 bytes (`r` + `yParityAndS`).
+- The free nibble bits [3..0] define the signer's weight (0 => we read the weight from the next byte, else 1..15).
+- After reading `r` (32 bytes) and `yParityAndS` (32 bytes), the top bit of `yParityAndS` (bit 255) is `yParity` (0 or 1), which is added to 27 to form `v`. The remaining 255 bits are `s`.
+- We then perform `ecrecover(_opHash, v, r, s)`.
 
 **Example**  
-If the sub-signature byte is `0x05`, that is `0000 0101` in binary, so top nibble is `0` => `FLAG_SIGNATURE_HASH`, free nibble is `0x05` => `0101` in binary => that means `vBit=0`, `weightBits=101` => `5 decimal`. No dynamic read for weight. ECDSA with `v=27`, weight=5.
+If the sub-signature byte is `0x05` (`0000 0101` in binary), then top nibble=0 => `FLAG_SIGNATURE_HASH`, free nibble=5 => weight=5. We do **not** read an extra byte for the weight. Next, we read 64 bytes as the compact signature: 32 bytes for `r`, 32 bytes for `yParityAndS`. If the top bit of `yParityAndS` is 0 => `v=27`; if it is 1 => `v=28`. The rest is `s`. Then we do `ecrecover`.
 
 ---
 
@@ -276,13 +261,14 @@ Then read next byte for externalWeight, read next 2 bytes for threshold if neede
 
 ### 5.8 **Signature ETH Sign** (`flag = 7`)
 
-- Similar to `FLAG_SIGNATURE_HASH`, except it recovers via:
+- Similar to `FLAG_SIGNATURE_HASH`, but recovers via:
 
 ```
 ecrecover( keccak256("\x19Ethereum Signed Message:\n32" + _opHash), v, r, s )
 ```
 
-- The free nibble is used for `v` and weight in the same way as for `FLAG_SIGNATURE_HASH`.
+- Uses **ERC-2098**: we read 64 bytes (32 for `r`, 32 for `yParityAndS`), retrieve `yParity` from the top bit, add 27 to form `v`, and use the remainder as `s`.
+- The free nibble bits [3..0] define the weight (0 => dynamic read, else 1..15).
 
 ---
 
@@ -340,7 +326,7 @@ Below is a hypothetical top-level signature that is **not** chained, uses a chec
    - 3-byte checkpointer data size => parse that data
    - 6 bytes => the “checkpoint” number
    - 2 bytes => the threshold
-3. We jump into `recoverBranch`, and the next 1-byte might be `0x02` in hex => top nibble=0 => `FLAG_SIGNATURE_HASH` with free nibble=2 => weight=2, vBit=0 => v=27. Then parse `r, s` from the next 64 bytes. The recovered address is hashed into the merkle root.
+3. We jump into `recoverBranch`, and the next 1-byte might be `0x02` in hex => top nibble=0 => `FLAG_SIGNATURE_HASH` with free nibble=2 => weight=2. Then parse 64 bytes for ERC-2098. We derive `v` from the top bit of the second 32 bytes, do ecrecover, and merge the address in the merkle root.
 
 Finally, the code compares the final computed image hash, checks if we pass threshold vs. weight, checks snapshot logic, and returns `(threshold, weight, imageHash, checkpoint)`.
 
