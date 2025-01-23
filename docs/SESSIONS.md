@@ -73,6 +73,7 @@ enum PermissionType {
     ERC20,           // ERC20 token operations
     ERC721,          // NFT operations
     ERC1155,         // Multi-token operations
+    RULES,           // Calldata rules based permissions
     REMOTE           // Extended permission types
 }
 ```
@@ -105,7 +106,28 @@ An ERC1155 token operation permission is a call to an ERC1155 contract's `transf
 
 The usage of these functions is tracked by the `limitUsage` mapping.
 
-### **4.1.6. Remote Permission**
+### **4.1.6. Calldata Rules Permission**
+
+The calldata rules permission is a set of rules that must be met for a call to be valid. Each rule is validates as follows:
+
+1. Retrieve a `bytes32` value from the calldata at the specified `offset`.
+2. Apply the `mask` to the value.
+3. Compare the value to the `value` using the `operation` defined in the rule.
+
+The operations are defined as follows:
+
+```solidity
+enum ParameterRuleOperation {
+    EQUAL,
+    NOT_EQUAL,
+    GREATER_THAN_OR_EQUAL,
+    LESS_THAN_OR_EQUAL
+}
+```
+
+Using a calldata offset and mask enables any element within the calldata to be validated. This includes things like function selectors, array lengths and tightly packed values.
+
+### **4.1.7. Remote Permission**
 
 Remote permissions are used to offer extendability to the system. An integrator may define a new permission type and implement the `IPermissionValidator` interface to add it to the system. Calls using this permission type will be validated by the associated `IPermissionValidator` implementation.
 

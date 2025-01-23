@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
+import { LibBytes } from "../utils/LibBytes.sol";
 import { IPermissionValidator } from "./interfaces/IPermissionValidator.sol";
 import { Payload } from "./interfaces/ISapient.sol";
 
 library Permissions {
+
+  using LibBytes for bytes;
 
   /// @notice Permission types supported by the system
   enum PermissionType {
@@ -13,6 +16,7 @@ library Permissions {
     ERC20,
     ERC721,
     ERC1155,
+    RULES,
     REMOTE
   }
 
@@ -49,6 +53,27 @@ library Permissions {
     address target;
     uint256 tokenId;
     uint256 limit;
+  }
+
+  /// @notice Permission for rules
+  struct RulesPermission {
+    PermissionType pType;
+    address target;
+    ParameterRule[] rules;
+  }
+
+  enum ParameterRuleOperation {
+    EQUAL,
+    NOT_EQUAL,
+    GREATER_THAN_OR_EQUAL,
+    LESS_THAN_OR_EQUAL
+  }
+
+  struct ParameterRule {
+    ParameterRuleOperation operation;
+    bytes32 value; // Any value encoded as a bytes32
+    uint256 offset; // The offset of the parameter in the call data
+    bytes32 mask; // The mask to apply to the parameter
   }
 
   /// @notice Permission for remote validation through external contract
@@ -122,6 +147,14 @@ library Permissions {
     });
   }
 
+  /// @notice Encodes a rules permission
+  function encodeRules(address _target, ParameterRule[] memory _rules) internal pure returns (EncodedPermission memory) {
+    return EncodedPermission({
+      pType: PermissionType.RULES,
+      data: abi.encode(RulesPermission({ pType: PermissionType.RULES, target: _target, rules: _rules }))
+    });
+  }
+
   /// @notice Validates a permission against a call
   function validatePermission(
     EncodedPermission memory _permission,
@@ -145,6 +178,9 @@ library Permissions {
     } else if (_permission.pType == PermissionType.REMOTE) {
       RemotePermission memory rp = abi.decode(_permission.data, (RemotePermission));
       return validateRemote(rp, _call);
+    } else if (_permission.pType == PermissionType.RULES) {
+      RulesPermission memory rp = abi.decode(_permission.data, (RulesPermission));
+      return validateRules(rp, _call);
     }
     return false;
   }
@@ -244,6 +280,50 @@ library Permissions {
     Payload.Call calldata _call
   ) internal view returns (bool) {
     return IPermissionValidator(_permission.validator).validatePermission(_permission.data, _call);
+  }
+
+  /// @notice Validates a rules permission
+  function validateRules(RulesPermission memory _permission, Payload.Call calldata _call) internal pure returns (bool) {
+    if (_permission.target != _call.to) {
+      return false;
+    }
+
+    // Check each rule
+    for (uint256 i = 0; i < _permission.rules.length; i++) {
+      ParameterRule memory rule = _permission.rules[i];
+
+      // Ensure call data is long enough
+      if (_call.data.length < rule.offset + 32) {
+        return false;
+      }
+
+      // Extract value from calldata at offset
+      bytes32 value = _call.data.readBytes32(rule.offset);
+
+      // Apply mask
+      value = value & rule.mask;
+
+      // Compare based on operation
+      if (rule.operation == ParameterRuleOperation.EQUAL) {
+        if (value != rule.value) {
+          return false;
+        }
+      } else if (rule.operation == ParameterRuleOperation.NOT_EQUAL) {
+        if (value == rule.value) {
+          return false;
+        }
+      } else if (rule.operation == ParameterRuleOperation.GREATER_THAN_OR_EQUAL) {
+        if (uint256(value) < uint256(rule.value)) {
+          return false;
+        }
+      } else if (rule.operation == ParameterRuleOperation.LESS_THAN_OR_EQUAL) {
+        if (uint256(value) > uint256(rule.value)) {
+          return false;
+        }
+      }
+    }
+
+    return true;
   }
 
   /// @notice Gets the usage limit from a permission
