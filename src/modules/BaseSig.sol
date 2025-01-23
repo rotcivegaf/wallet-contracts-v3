@@ -62,11 +62,11 @@ contract BaseSig {
     (uint256 signatureFlag, uint256 rindex) = _signature.readFirstUint8();
 
     // The possible flags are:
-    // - 0000 00XX: signature type (00 = normal, 01 = chained, 10 = no chain id)
-    // - 000X XX00: checkpoint size (00 = 0 bytes, 001 = 1 byte, 010 = 2 bytes...)
-    // - 00X0 0000: threshold size (0 = 1 byte, 1 = 2 bytes)
-    // - 0X00 0000: set if imageHash checkpointer is used
-    // - X000 0000: reserved
+    // - 0000 00XX (bits [1..0]): signature type (00 = normal, 01 = chained, 10 = no chain id)
+    // - 000X XX00 (bits [4..2]): checkpoint size (00 = 0 bytes, 001 = 1 byte, 010 = 2 bytes...)
+    // - 00X0 0000 (bit [5]): threshold size (0 = 1 byte, 1 = 2 bytes)
+    // - 0X00 0000 (bit [6]): set if imageHash checkpointer is used
+    // - X000 0000 (bit [7]): reserved
 
     Snapshot memory snapshot;
     address checkpointer;
@@ -177,21 +177,21 @@ contract BaseSig {
 
       // Iterate until the image is completed
       while (rindex < _signature.length) {
-        // The first byte is half flag (the first 4 bits)
+        // The first byte is half flag (the top nibble)
         // and the second set of 4 bits can freely be used by the part
 
         // Read next item type
         uint256 firstByte;
         (firstByte, rindex) = _signature.readUint8(rindex);
 
-        // The first 4 bits are the flag
+        // The top 4 bits are the flag
         uint256 flag = (firstByte & 0xf0) >> 4;
 
         // Signature hash (0x00)
         if (flag == FLAG_SIGNATURE_HASH) {
           // Free bits layout:
-          // - X000 : v (0 = 27, 1 = 28)
-          // - 0XXX : Weight (000 = dynamic, 001 = 1, 010 = 2, 011 = 3, 100 = 4, 101 = 5, 110 = 6, 111 = 7)
+          // - bit 3: v (0 = 27, 1 = 28)
+          // - bits [2..0]: Weight (000 = dynamic, 001 = 1, 010 = 2, 011 = 3, 100 = 4, 101 = 5, 110 = 6, 111 = 7)
 
           // Read v
           uint8 v = uint8((firstByte & 0x10) >> 4) + 27;
@@ -220,7 +220,7 @@ contract BaseSig {
         // Address (0x01) (without signature)
         if (flag == FLAG_ADDRESS) {
           // Free bits layout:
-          // - XXXX : Weight (0000 = dynamic, 0001 = 1, 0010 = 2, ...)
+          // - bits [3..0]: Weight (0000 = dynamic, 0001 = 1, 0010 = 2, ...)
 
           // Read weight
           uint8 addrWeight = uint8(firstByte & 0x0f);
@@ -310,7 +310,7 @@ contract BaseSig {
           continue;
         }
 
-        // Nested (0x05)
+        // Nested (0x06)
         if (flag == FLAG_NESTED) {
           // Unused free bits:
           // - XX00 : Weight (00 = dynamic, 01 = 1, 10 = 2, 11 = 3)
@@ -347,7 +347,7 @@ contract BaseSig {
           continue;
         }
 
-        // Subdigest (0x06)
+        // Subdigest (0x05)
         if (flag == FLAG_SUBDIGEST) {
           // Free bits left unused
 
@@ -367,8 +367,8 @@ contract BaseSig {
         // Signature ETH Sign (0x07)
         if (flag == FLAG_SIGNATURE_ETH_SIGN) {
           // Free bits layout:
-          // - X000 : v (0 = 27, 1 = 28)
-          // - 0XXX : Weight (000 = dynamic, 001 = 1, 010 = 2, 011 = 3, 100 = 4, 101 = 5, 110 = 6, 111 = 7)
+          // - bit 3: v (0 = 27, 1 = 28)
+          // - bits [2..0]: Weight (000 = dynamic, 001 = 1, 010 = 2, 011 = 3, 100 = 4, 101 = 5, 110 = 6, 111 = 7)
 
           // Read v
           uint8 v = uint8((firstByte & 0x10) >> 4) + 27;
