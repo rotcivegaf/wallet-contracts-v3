@@ -70,8 +70,8 @@ library LibBytesPointer {
 
   function readUintX(
     bytes calldata _data,
-    uint256 _length,
-    uint256 _index
+    uint256 _index,
+    uint256 _length
   ) internal pure returns (uint256 a, uint256 newPointer) {
     assembly {
       let word := calldataload(add(_index, _data.offset))

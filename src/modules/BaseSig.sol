@@ -35,7 +35,7 @@ contract BaseSig {
 
   function _leafForAddressAndWeight(address _addr, uint96 _weight) internal pure returns (bytes32) {
     unchecked {
-      return bytes32(uint256(_weight) << 160 | uint256(uint160(_addr)));
+      return bytes32((uint256(_weight) << 160) | uint256(uint160(_addr)));
     }
   }
 
@@ -98,18 +98,23 @@ contract BaseSig {
     // If the signature type is 10 we do a no chain id signature
     _payload.noChainId = signatureFlag & 0x02 == 0x02;
 
-    bytes32 opHash = _payload.hash();
-
-    // Recover the checkpoint using the size defined by the flag
-    uint256 checkpointSize = (signatureFlag & 0x1c) >> 2;
-    (checkpoint, rindex) = _signature.readUintX(rindex, checkpointSize);
+    {
+      // Recover the checkpoint using the size defined by the flag
+      uint256 checkpointSize = (signatureFlag & 0x1c) >> 2;
+      (checkpoint, rindex) = _signature.readUintX(rindex, checkpointSize);
+    }
 
     // Recover the threshold, using the flag for the size
-    uint256 thresholdSize = ((signatureFlag & 0x20) >> 5) + 1;
-    (threshold, rindex) = _signature.readUintX(rindex, thresholdSize);
+    {
+      uint256 thresholdSize = ((signatureFlag & 0x20) >> 5) + 1;
+      (threshold, rindex) = _signature.readUintX(rindex, thresholdSize);
+    }
 
     // Recover the tree
-    (weight, imageHash) = recoverBranch(_payload, opHash, _signature);
+    {
+      bytes32 opHash = _payload.hash();
+      (weight, imageHash) = recoverBranch(_payload, opHash, _signature[rindex:]);
+    }
 
     imageHash = LibOptim.fkeccak256(imageHash, bytes32(threshold));
     imageHash = LibOptim.fkeccak256(imageHash, bytes32(checkpoint));
@@ -409,9 +414,11 @@ contract BaseSig {
           (addr, rindex) = _signature.readAddress(rindex);
 
           // Read signature size
-          uint256 sizeSize = uint8(firstByte & 0x0c) >> 2;
           uint256 size;
-          (size, rindex) = _signature.readUintX(rindex, sizeSize);
+          {
+            uint256 sizeSize = uint8(firstByte & 0x0c) >> 2;
+            (size, rindex) = _signature.readUintX(rindex, sizeSize);
+          }
 
           // Read dynamic size signature
           uint256 nrindex = rindex + size;

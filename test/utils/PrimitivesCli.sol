@@ -27,7 +27,7 @@ library PrimitivesCli {
     return _vm.shffi(command);
   }
 
-  function toPacked(Vm _vm, Payload.Decoded memory _decoded) internal returns (bytes memory) {
+  function toPackedPayload(Vm _vm, Payload.Decoded memory _decoded) internal returns (bytes memory) {
     string memory randomId = _vm.toString(randomBytes(_vm, 8));
     string memory path = string(abi.encodePacked("/tmp/seq-td-", randomId));
     _vm.writeFile(path, _vm.toString(abi.encode(_decoded)));
@@ -37,6 +37,25 @@ library PrimitivesCli {
     bytes memory result = _vm.shffi(command);
     _vm.removeFile(path);
     return result;
+  }
+
+  function newConfig(Vm _vm, uint16 _threshold, uint256 _checkpoint) internal returns (string memory) {
+    string memory command = string(
+      abi.encodePacked(
+        root(), " config new --threshold ", _vm.toString(_threshold), " --checkpoint ", _vm.toString(_checkpoint)
+      )
+    );
+    return string(_vm.shffi(command));
+  }
+
+  function toEncodedConfig(Vm _vm, string memory _config) internal returns (bytes memory) {
+    string memory command = string(abi.encodePacked(root(), " config encode '", _config, "'"));
+    return _vm.shffi(command);
+  }
+
+  function getImageHash(Vm _vm, string memory _config) internal returns (bytes32) {
+    string memory command = string(abi.encodePacked(root(), " config image-hash '", _config, "'"));
+    return bytes32(_vm.shffi(command));
   }
 
 }

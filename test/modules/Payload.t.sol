@@ -44,7 +44,7 @@ contract SessionManagerTest is Test {
     input.space = _space;
     input.nonce = _nonce;
 
-    bytes memory packed = PrimitivesCli.toPacked(vm, input);
+    bytes memory packed = PrimitivesCli.toPackedPayload(vm, input);
     console.logBytes(packed);
 
     Payload.Decoded memory output = payloadImp.fromPackedCalls(packed);
