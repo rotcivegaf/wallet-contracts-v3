@@ -32,7 +32,7 @@ library Payload {
   );
 
   bytes32 private constant CALLS_TYPEHASH = keccak256(
-    "Calls(Call[] calls,uint256 nonce,address[] wallets)Call(address to,uint256 value,bytes data,uint256 gasLimit,bool delegateCall,bool onlyFallback,uint256 behaviorOnError)"
+    "Calls(Call[] calls,uint256 space,uint256 nonce,address[] wallets)Call(address to,uint256 value,bytes data,uint256 gasLimit,bool delegateCall,bool onlyFallback,uint256 behaviorOnError)"
   );
 
   bytes32 private constant MESSAGE_TYPEHASH = keccak256("Message(bytes message,address[] wallets)");
@@ -227,8 +227,8 @@ library Payload {
     if (_decoded.kind == KIND_TRANSACTIONS) {
       bytes32 callsHash = _hashCalls(_decoded.calls);
       // The top-level struct for Calls might be something like:
-      // Calls(bytes32 callsHash,uint256 nonce,bytes32 walletsHash)
-      return keccak256(abi.encode(CALLS_TYPEHASH, callsHash, _decoded.nonce, walletsHash));
+      // Calls(bytes32 callsHash,uint256 space,uint256 nonce,bytes32 walletsHash)
+      return keccak256(abi.encode(CALLS_TYPEHASH, callsHash, _decoded.space, _decoded.nonce, walletsHash));
     } else if (_decoded.kind == KIND_MESSAGE) {
       // If you define your top-level as: Message(bytes32 messageHash,bytes32 walletsHash)
       return keccak256(abi.encode(MESSAGE_TYPEHASH, keccak256(_decoded.message), walletsHash));
