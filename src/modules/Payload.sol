@@ -32,7 +32,7 @@ library Payload {
   );
 
   bytes32 private constant CALLS_TYPEHASH = keccak256(
-    "Calls(Call[],address[] wallets)Call(address to,uint256 value,bytes data,uint256 gasLimit,bool delegateCall,bool onlyFallback,uint256 behaviorOnError)"
+    "Calls(Call[] calls,uint256 nonce,address[] wallets)Call(address to,uint256 value,bytes data,uint256 gasLimit,bool delegateCall,bool onlyFallback,uint256 behaviorOnError)"
   );
 
   bytes32 private constant MESSAGE_TYPEHASH = keccak256("Message(bytes message,address[] wallets)");
