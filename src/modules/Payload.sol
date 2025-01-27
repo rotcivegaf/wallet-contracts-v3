@@ -214,7 +214,7 @@ library Payload {
     bytes memory encoded;
     for (uint256 i = 0; i < wallets.length; i++) {
       // We can encode each address as a full 32 bytes
-      encoded = abi.encodePacked(encoded, wallets[i]);
+      encoded = abi.encode(encoded, wallets[i]);
     }
     return keccak256(encoded);
   }
