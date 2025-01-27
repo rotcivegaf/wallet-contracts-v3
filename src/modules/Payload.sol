@@ -119,7 +119,7 @@ library Payload {
 
     if (nonceSize > 0) {
       // Read the nonce
-      (_decoded.nonce, pointer) = packed.readUintX(nonceSize, pointer);
+      (_decoded.nonce, pointer) = packed.readUintX(pointer, nonceSize);
     }
 
     uint256 numCalls;
