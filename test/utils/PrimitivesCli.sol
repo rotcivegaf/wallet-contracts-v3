@@ -39,10 +39,21 @@ library PrimitivesCli {
     return result;
   }
 
-  function newConfig(Vm _vm, uint16 _threshold, uint256 _checkpoint) internal returns (string memory) {
+  function newConfig(
+    Vm _vm,
+    uint16 _threshold,
+    uint256 _checkpoint,
+    string memory _elements
+  ) internal returns (string memory) {
     string memory command = string(
       abi.encodePacked(
-        root(), " config new --threshold ", _vm.toString(_threshold), " --checkpoint ", _vm.toString(_checkpoint)
+        root(),
+        " config new --threshold ",
+        _vm.toString(_threshold),
+        " --checkpoint ",
+        _vm.toString(_checkpoint),
+        " ",
+        _elements
       )
     );
     return string(_vm.shffi(command));
@@ -50,6 +61,11 @@ library PrimitivesCli {
 
   function toEncodedConfig(Vm _vm, string memory _config) internal returns (bytes memory) {
     string memory command = string(abi.encodePacked(root(), " config encode '", _config, "'"));
+    return _vm.shffi(command);
+  }
+
+  function toEncodedSignature(Vm _vm, string memory _config, string memory _elements) internal returns (bytes memory) {
+    string memory command = string(abi.encodePacked(root(), " signature encode '", _config, "' ", _elements));
     return _vm.shffi(command);
   }
 
