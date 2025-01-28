@@ -4,7 +4,9 @@ pragma solidity ^0.8.27;
 import { LibBytes } from "../../utils/LibBytes.sol";
 import { LibBytesPointer } from "../../utils/LibBytesPointer.sol";
 import { Attestation, LibAttestation } from "../Attestation.sol";
-import { Permissions } from "../Permissions.sol";
+
+import { PermissionValidator } from "../PermissionValidator.sol";
+import { Permission, UsageLimit } from "../interfaces/IPermission.sol";
 import { ISapient, Payload } from "../interfaces/ISapient.sol";
 import {
   ISessionManager,
@@ -12,7 +14,6 @@ import {
   SessionConfigurationPermissions,
   SessionSignature
 } from "../interfaces/ISessionManager.sol";
-
 import { ISignalsImplicitMode } from "../interfaces/ISignalsImplicitMode.sol";
 
 using LibBytesPointer for bytes;
@@ -22,30 +23,19 @@ using LibAttestation for Attestation;
 //FIXME Find a way to use permissions across multiple sessions
 // 1. Combine permissions from all available sessions? No, only "used" sessions
 
-contract SessionManager is ISessionManager {
-
-  // Track usage per wallet/session/target
-  mapping(bytes32 => uint256) private limitUsage;
+contract SessionManager is PermissionValidator, ISessionManager {
 
   // Special address used for tracking native token value limits
   address public constant VALUE_TRACKING_ADDRESS = address(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
 
   /// @notice Increments the usage counter for multiple limit/session/target combinations
-  /// @param limitUsageHashes Array of hashes representing wallet/session/target combinations
-  /// @param usageAmounts Array of amounts to increment each usage counter by
-  function incrementLimitUsage(bytes32[] calldata limitUsageHashes, uint256[] calldata usageAmounts) external {
-    for (uint256 i = 0; i < limitUsageHashes.length; i++) {
-      limitUsage[limitUsageHashes[i]] += usageAmounts[i];
+  /// @param limits Array of limit/session/target combinations
+  function incrementUsageLimit(
+    UsageLimit[] calldata limits
+  ) external {
+    for (uint256 i = 0; i < limits.length; i++) {
+      limitUsage[limits[i].usageHash] += limits[i].usageAmount;
     }
-  }
-
-  /// @notice Generates a unique hash for tracking usage limits
-  /// @param wallet The user's wallet address
-  /// @param sessionAddress The session contract address
-  /// @param targetAddress The target contract being called
-  /// @return A unique hash combining the three parameters
-  function getUsageHash(address wallet, address sessionAddress, address targetAddress) public pure returns (bytes32) {
-    return keccak256(abi.encodePacked(wallet, sessionAddress, targetAddress));
   }
 
   /// @notice Validates a Sapient signature and returns an image hash
@@ -107,16 +97,16 @@ contract SessionManager is ISessionManager {
   /// @notice Validates a session in explicit mode, checking permissions and usage limits
   /// @param wallet The user's wallet address
   /// @param signature The session signature data
-  /// @param _payload The decoded payload containing calls
+  /// @param payload The decoded payload containing calls
   /// @param recoveredPayloadSigner The address recovered from the payload signature
   function _validateExplicitMode(
     address wallet,
     SessionSignature memory signature,
-    Payload.Decoded calldata _payload,
+    Payload.Decoded calldata payload,
     address recoveredPayloadSigner
   ) internal view {
     // Get permissions for the signer
-    (SessionConfigurationPermissions memory signerPermissions, Permissions.EncodedPermission[] memory permissions) =
+    (SessionConfigurationPermissions memory signerPermissions, Permission[] memory permissions) =
       _findSignerPermissions(signature.sessionConfiguration.sessionPermissions, recoveredPayloadSigner);
 
     // Check if session has expired
@@ -125,31 +115,25 @@ contract SessionManager is ISessionManager {
     }
 
     // Validate calls and track usage
-    (uint256 totalValueUsed, uint256[] memory totalUsage) =
-      _validateCallsAndTrackUsage(wallet, _payload, permissions, signature.permissionIdxPerCall);
+    bytes32 limitHashPrefix = keccak256(abi.encode(wallet, recoveredPayloadSigner));
+    (uint256 totalValueUsed, UsageLimit[] memory limits) =
+      _validateCallsAndTrackUsage(limitHashPrefix, payload, permissions, signature.permissionIdxPerCall);
 
     // Verify total value is within limit
     if (totalValueUsed > 0) {
       if (totalValueUsed > signerPermissions.valueLimit) {
-        revert PermissionLimitExceeded(wallet, VALUE_TRACKING_ADDRESS);
+        revert UsageLimitExceeded(wallet, VALUE_TRACKING_ADDRESS);
       }
     }
 
     // Verify limit usage increment call
-    _verifyLimitUsageIncrement(wallet, _payload, permissions, totalUsage, totalValueUsed, recoveredPayloadSigner);
+    _verifyLimitUsageIncrement(payload, limits);
   }
 
   function _findSignerPermissions(
     SessionConfigurationPermissions[] memory sessionPermissions,
     address recoveredPayloadSigner
-  )
-    private
-    pure
-    returns (
-      SessionConfigurationPermissions memory signerPermissions,
-      Permissions.EncodedPermission[] memory permissions
-    )
-  {
+  ) private pure returns (SessionConfigurationPermissions memory signerPermissions, Permission[] memory permissions) {
     uint256 left = 0;
     uint256 right = sessionPermissions.length - 1;
 
@@ -167,99 +151,102 @@ contract SessionManager is ISessionManager {
     revert InvalidSessionSignature();
   }
 
-  function _validateCallsAndTrackUsage(
-    address wallet,
-    Payload.Decoded calldata _payload,
-    Permissions.EncodedPermission[] memory permissions,
-    uint8[] memory permissionIdxPerCall
-  ) private view returns (uint256 totalValueUsed, uint256[] memory totalUsage) {
-    totalUsage = new uint256[](permissions.length);
-    totalValueUsed = 0;
+  struct ValidateCallsAndTrackUsageParams {
+    UsageLimit[][] allLimits;
+    uint256 limitIndex;
+    uint256 validArrays;
+    uint256 i;
+    uint256 j;
+    uint256 permissionIdx;
+  }
 
-    for (uint256 i = 0; i < _payload.calls.length; i++) {
-      if (_payload.calls[i].delegateCall) {
+  //FIXME This function has stack too deep issues
+  function _validateCallsAndTrackUsage(
+    bytes32 limitHashPrefix,
+    Payload.Decoded calldata payload,
+    Permission[] memory permissions,
+    uint8[] memory permissionIdxPerCall
+  ) private view returns (uint256 totalValueUsed, UsageLimit[] memory limits) {
+    // Create arrays to store all usage limits
+    ValidateCallsAndTrackUsageParams memory params = ValidateCallsAndTrackUsageParams({
+      allLimits: new UsageLimit[][](payload.calls.length + 1),
+      limitIndex: 0,
+      validArrays: 0,
+      i: 0,
+      j: 0,
+      permissionIdx: 0
+    });
+
+    for (params.i = 0; params.i < payload.calls.length; params.i++) {
+      Payload.Call calldata call = payload.calls[params.i];
+      if (call.delegateCall) {
         revert InvalidDelegateCall();
       }
 
-      if (_payload.calls[i].to == address(this)) {
-        // No validation for calls to this contract
+      if (call.to == address(this)) {
         continue;
       }
 
-      if (_payload.calls[i].value > 0) {
-        uint256 newTotal = totalValueUsed + _payload.calls[i].value;
-        totalValueUsed = newTotal;
+      if (call.value > 0) {
+        totalValueUsed += call.value;
       }
 
-      uint256 permissionIdx = permissionIdxPerCall[i];
-      if (permissionIdx >= permissions.length) {
-        revert MissingPermission(wallet, _payload.calls[i].to, bytes4(_payload.calls[i].data));
+      params.permissionIdx = permissionIdxPerCall[params.i];
+      if (params.permissionIdx >= permissions.length) {
+        revert MissingPermission(call.to, bytes4(call.data));
       }
 
-      Permissions.EncodedPermission memory permission = permissions[permissionIdx];
-      if (!Permissions.validatePermission(permission, _payload.calls[i])) {
-        revert MissingPermission(wallet, _payload.calls[i].to, bytes4(_payload.calls[i].data));
+      (bool isValid, UsageLimit[] memory usageLimits) =
+        validatePermission(permissions[params.permissionIdx], call, limitHashPrefix);
+      if (!isValid) {
+        revert InvalidPermission(call.to, bytes4(call.data));
       }
 
-      if (_hasLimit(permission.pType)) {
-        uint256 usageAmount = Permissions.getUsageAmount(permission, _payload.calls[i]);
-        uint256 newUsage = totalUsage[permissionIdx] + usageAmount;
-        totalUsage[permissionIdx] = newUsage;
+      if (usageLimits.length > 0) {
+        params.allLimits[params.validArrays] = usageLimits;
+        params.limitIndex += usageLimits.length;
+        params.validArrays++;
       }
     }
+
+    // Create final arrays of exact size needed
+    if (totalValueUsed == 0) {
+      limits = new UsageLimit[](params.limitIndex);
+    } else {
+      limits = new UsageLimit[](params.limitIndex + 1);
+      // Add the value tracking hash to the end
+      limits[params.limitIndex] = UsageLimit({
+        usageHash: keccak256(abi.encode(limitHashPrefix, VALUE_TRACKING_ADDRESS)),
+        usageAmount: totalValueUsed
+      });
+    }
+
+    // Flatten arrays
+    params.limitIndex = 0;
+    for (params.i = 0; params.i < params.validArrays; params.i++) {
+      UsageLimit[] memory subLimits = params.allLimits[params.i];
+      for (params.j = 0; params.j < subLimits.length; params.j++) {
+        limits[params.limitIndex] = subLimits[params.j];
+        params.limitIndex++;
+      }
+    }
+
+    return (totalValueUsed, limits);
   }
 
-  function _verifyLimitUsageIncrement(
-    address wallet,
-    Payload.Decoded calldata _payload,
-    Permissions.EncodedPermission[] memory permissions,
-    uint256[] memory totalUsage,
-    uint256 totalValueUsed,
-    address recoveredPayloadSigner
-  ) private view {
-    uint256 limitUsageCount = 0;
-    bytes32[] memory expectedLimitUsageHashes = new bytes32[](permissions.length + (totalValueUsed > 0 ? 1 : 0));
-    uint256[] memory expectedUsageAmounts = new uint256[](permissions.length + (totalValueUsed > 0 ? 1 : 0));
-
-    if (totalValueUsed > 0) {
-      expectedLimitUsageHashes[limitUsageCount] = getUsageHash(wallet, recoveredPayloadSigner, VALUE_TRACKING_ADDRESS);
-      expectedUsageAmounts[limitUsageCount] = totalValueUsed;
-      limitUsageCount++;
-    }
-
-    for (uint256 i = 0; i < totalUsage.length; i++) {
-      if (totalUsage[i] > 0) {
-        Permissions.EncodedPermission memory permission = permissions[i];
-        uint256 limit = Permissions.getLimit(permission);
-        if (limit > 0 && totalUsage[i] > limit) {
-          revert PermissionLimitExceeded(wallet, _payload.calls[0].to);
-        }
-        expectedLimitUsageHashes[limitUsageCount] = getUsageHash(wallet, recoveredPayloadSigner, _payload.calls[i].to);
-        expectedUsageAmounts[limitUsageCount] = totalUsage[i];
-        limitUsageCount++;
-      }
-    }
-
-    if (limitUsageCount != 0) {
-      // Fix the array length
-      assembly {
-        mstore(expectedLimitUsageHashes, limitUsageCount)
-        mstore(expectedUsageAmounts, limitUsageCount)
-      }
-
+  function _verifyLimitUsageIncrement(Payload.Decoded calldata _payload, UsageLimit[] memory limits) private view {
+    if (limits.length > 0) {
       Payload.Call memory lastCall = _payload.calls[_payload.calls.length - 1];
+      if (lastCall.to != address(this)) {
+        revert MissingLimitUsageIncrement();
+      }
       if (lastCall.behaviorOnError != Payload.BEHAVIOR_REVERT_ON_ERROR) {
         revert InvalidLimitUsageIncrement();
       }
 
-      bytes32 expectedDataHash = keccak256(
-        abi.encodeWithSelector(this.incrementLimitUsage.selector, expectedLimitUsageHashes, expectedUsageAmounts)
-      );
+      bytes memory expectedData = abi.encodeWithSelector(this.incrementUsageLimit.selector, limits);
+      bytes32 expectedDataHash = keccak256(expectedData);
       bytes32 actualDataHash = keccak256(lastCall.data);
-
-      if (lastCall.to != address(this)) {
-        revert MissingLimitUsageIncrement();
-      }
       if (actualDataHash != expectedDataHash) {
         revert InvalidLimitUsageIncrement();
       }
@@ -336,16 +323,6 @@ contract SessionManager is ISessionManager {
     }
 
     return false;
-  }
-
-  /// @notice Determines if a permission type has a usage limit
-  /// @param pType The permission type to check
-  /// @return bool True if the permission type has a limit, false otherwise
-  function _hasLimit(
-    Permissions.PermissionType pType
-  ) internal pure returns (bool) {
-    return pType == Permissions.PermissionType.ERC20 || pType == Permissions.PermissionType.ERC1155
-      || pType == Permissions.PermissionType.NATIVE;
   }
 
   /// @notice Returns true if the contract implements the given interface

@@ -2,7 +2,9 @@
 pragma solidity ^0.8.27;
 
 import { Attestation } from "../Attestation.sol";
-import { Permissions } from "../Permissions.sol";
+
+import { PermissionValidator } from "../PermissionValidator.sol";
+import { Permission, UsageLimit } from "./IPermission.sol";
 import { ISapient, Payload } from "./ISapient.sol";
 
 /// @notice Represents a signature for a session, containing all necessary components for validation
@@ -41,7 +43,7 @@ struct SessionConfigurationPermissions {
   /// @notice Deadline for the session. (0 = no deadline)
   uint256 deadline;
   /// @notice Array of encoded permissions granted to this signer
-  Permissions.EncodedPermission[] permissions;
+  Permission[] permissions;
 }
 
 interface ISessionManagerSignals {
@@ -61,19 +63,22 @@ interface ISessionManagerSignals {
   error InvalidValue();
 
   /// @notice Missing required permission for function call
-  error MissingPermission(address wallet, address target, bytes4 selector);
+  error MissingPermission(address target, bytes4 selector);
 
-  /// @notice Address is blacklisted
-  error BlacklistedAddress(address wallet, address target);
+  /// @notice Invalid permission
+  error InvalidPermission(address target, bytes4 selector);
 
   /// @notice Permission limit exceeded
-  error PermissionLimitExceeded(address wallet, address target);
+  error UsageLimitExceeded(address wallet, address target);
 
   /// @notice Invalid limit usage increment
   error InvalidLimitUsageIncrement();
 
   /// @notice Missing limit usage increment
   error MissingLimitUsageIncrement();
+
+  /// @notice Address is blacklisted
+  error BlacklistedAddress(address wallet, address target);
 
   /// @notice Invalid delegate call
   error InvalidDelegateCall();
@@ -86,10 +91,9 @@ interface ISessionManagerSignals {
 interface ISessionManager is ISapient, ISessionManagerSignals {
 
   /// @notice Increment usage for a caller's given session and target
-  /// @param limitUsageHashes Array of hashes of the usage tracking keys, computed as keccak256(abi.encode(wallet, sessionAddr, targetAddr))
-  ///                       where wallet is the user's wallet address, sessionAddr is the session signer address,
-  ///                       and targetAddr is the target contract address being called
-  /// @param usageAmounts Array of amounts to increment the usage counter by for this wallet/session/target combination
-  function incrementLimitUsage(bytes32[] calldata limitUsageHashes, uint256[] calldata usageAmounts) external;
+  /// @param limits Array of limit/session/target combinations
+  function incrementUsageLimit(
+    UsageLimit[] calldata limits
+  ) external;
 
 }
