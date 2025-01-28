@@ -9,30 +9,25 @@ using LibBytesPointer for bytes;
 using LibOptim for bytes;
 
 struct Attestation {
-  address _approvedSigner;
-  bytes4 _identityType;
-  bytes32 _issuerHash;
-  bytes32 _audienceHash;
-  bytes _authData;
-  bytes _applicationData;
+  address approvedSigner;
+  bytes4 identityType;
+  bytes32 issuerHash;
+  bytes32 audienceHash;
+  bytes authData;
+  bytes applicationData;
 }
 
 library LibAttestation {
 
   function toHash(
-    Attestation memory _attestation
+    Attestation memory attestation
   ) internal pure returns (bytes32) {
-    return keccak256(abi.encode(_attestation));
+    return keccak256(abi.encode(attestation));
   }
 
-  function generateImplicitRequestMagic(
-    Attestation memory _attestation,
-    address _wallet
-  ) internal pure returns (bytes32) {
+  function generateImplicitRequestMagic(Attestation memory attestation, address wallet) internal pure returns (bytes32) {
     return keccak256(
-      abi.encodePacked(
-        ACCEPT_IMPLICIT_REQUEST_MAGIC_PREFIX, _wallet, _attestation._audienceHash, _attestation._issuerHash
-      )
+      abi.encodePacked(ACCEPT_IMPLICIT_REQUEST_MAGIC_PREFIX, wallet, attestation.audienceHash, attestation.issuerHash)
     );
   }
 

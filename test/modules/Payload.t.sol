@@ -16,7 +16,7 @@ contract PayloadImp {
 
 }
 
-contract SessionManagerTest is Test {
+contract PayloadTest is Test {
 
   PayloadImp public payloadImp;
 

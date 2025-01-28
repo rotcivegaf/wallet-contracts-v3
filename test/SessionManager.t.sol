@@ -8,9 +8,9 @@ import { ISapient, Payload } from "../src/modules/interfaces/ISapient.sol";
 import {
   ISessionManager,
   ISessionManagerSignals,
-  SessionConfiguration,
-  SessionConfigurationPermissions,
-  SessionSignature
+  SessionManagerConfiguration,
+  SessionManagerSignature,
+  SessionPermissions
 } from "../src/modules/interfaces/ISessionManager.sol";
 import { ISignalsImplicitMode } from "../src/modules/interfaces/ISignalsImplicitMode.sol";
 import { SessionManager } from "../src/modules/sapient/SessionManager.sol";
@@ -48,8 +48,8 @@ contract SessionManagerTest is Test, ISessionManagerSignals {
     address[] memory blacklist = new address[](1);
     blacklist[0] = address(0xdead);
 
-    SessionConfiguration memory config =
-      _createSessionConfiguration(new SessionConfigurationPermissions[](0), blacklist);
+    SessionManagerConfiguration memory config =
+      _createSessionManagerConfiguration(new SessionPermissions[](0), blacklist);
 
     Payload.Call[] memory calls = new Payload.Call[](1);
     calls[0] = Payload.Call({
@@ -64,7 +64,7 @@ contract SessionManagerTest is Test, ISessionManagerSignals {
       behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
     });
 
-    (SessionSignature memory signature, bytes32 expectedImageHash) = _createValidSignature(calls, config, 1);
+    (SessionManagerSignature memory signature, bytes32 expectedImageHash) = _createValidSignature(calls, config, 1);
     signature.isImplicit = true;
 
     vm.prank(wallet.addr);
@@ -90,20 +90,16 @@ contract SessionManagerTest is Test, ISessionManagerSignals {
     Permission[] memory permissions = new Permission[](1);
     permissions[0] = Permission({ target: address(0x1234), rules: new ParameterRule[](1) });
 
-    SessionConfigurationPermissions[] memory sessionPermissions = new SessionConfigurationPermissions[](1);
-    sessionPermissions[0] = SessionConfigurationPermissions({
-      signer: sessionSigner.addr,
-      deadline: 0,
-      permissions: permissions,
-      valueLimit: 0
-    });
+    SessionPermissions[] memory sessionPermissions = new SessionPermissions[](1);
+    sessionPermissions[0] =
+      SessionPermissions({ signer: sessionSigner.addr, deadline: 0, permissions: permissions, valueLimit: 0 });
 
-    SessionConfiguration memory config = _createSessionConfiguration(sessionPermissions, new address[](0));
+    SessionManagerConfiguration memory config = _createSessionManagerConfiguration(sessionPermissions, new address[](0));
 
     Payload.Call[] memory calls =
       _createERC20Calls(address(0x1234), bytes4(keccak256("transfer(address,uint256)")), 500);
 
-    (SessionSignature memory signature,) = _createValidSignature(calls, config, 2);
+    (SessionManagerSignature memory signature,) = _createValidSignature(calls, config, 2);
     // Corrupt the session signature
     signature.sessionSignature = bytes("invalid");
 
@@ -129,8 +125,8 @@ contract SessionManagerTest is Test, ISessionManagerSignals {
     address[] memory blacklist = new address[](1);
     blacklist[0] = address(mockImplicit);
 
-    SessionConfiguration memory config =
-      _createSessionConfiguration(new SessionConfigurationPermissions[](0), blacklist);
+    SessionManagerConfiguration memory config =
+      _createSessionManagerConfiguration(new SessionPermissions[](0), blacklist);
 
     Payload.Call[] memory calls = new Payload.Call[](1);
     calls[0] = Payload.Call({
@@ -145,11 +141,11 @@ contract SessionManagerTest is Test, ISessionManagerSignals {
       behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
     });
 
-    (SessionSignature memory signature,) = _createValidSignature(calls, config, 1);
+    (SessionManagerSignature memory signature,) = _createValidSignature(calls, config, 1);
     signature.isImplicit = true;
 
     vm.prank(wallet.addr);
-    vm.expectRevert(abi.encodeWithSelector(BlacklistedAddress.selector, wallet.addr, address(mockImplicit)));
+    vm.expectRevert(abi.encodeWithSelector(BlacklistedAddress.selector, address(mockImplicit)));
     sessionManager.isValidSapientSignature(
       Payload.Decoded({
         kind: Payload.KIND_TRANSACTIONS,
@@ -169,7 +165,6 @@ contract SessionManagerTest is Test, ISessionManagerSignals {
   function test_GetImageHash(
     address globalSignerAddr,
     address signerAddr,
-    bytes memory permissionData,
     address[] memory blacklist,
     uint256 deadline,
     uint256 valueLimit
@@ -187,16 +182,12 @@ contract SessionManagerTest is Test, ISessionManagerSignals {
 
     permissions[0] = Permission({ target: address(0x1234), rules: rules });
 
-    SessionConfigurationPermissions[] memory sessionPermissions = new SessionConfigurationPermissions[](1);
-    sessionPermissions[0] = SessionConfigurationPermissions({
-      signer: signerAddr,
-      permissions: permissions,
-      valueLimit: valueLimit,
-      deadline: deadline
-    });
+    SessionPermissions[] memory sessionPermissions = new SessionPermissions[](1);
+    sessionPermissions[0] =
+      SessionPermissions({ signer: signerAddr, permissions: permissions, valueLimit: valueLimit, deadline: deadline });
 
     // Create configuration
-    SessionConfiguration memory config = _createSessionConfiguration(sessionPermissions, blacklist);
+    SessionManagerConfiguration memory config = _createSessionManagerConfiguration(sessionPermissions, blacklist);
 
     // Calculate expected hash manually
     bytes32 expectedHash = keccak256(abi.encode(globalSignerAddr, config));
@@ -216,10 +207,8 @@ contract SessionManagerTest is Test, ISessionManagerSignals {
     blacklist[0] = blacklistedAddr;
 
     // Create session configuration for implicit mode
-    SessionConfiguration memory config = SessionConfiguration({
-      sessionPermissions: new SessionConfigurationPermissions[](0),
-      implicitBlacklist: blacklist
-    });
+    SessionManagerConfiguration memory config =
+      SessionManagerConfiguration({ sessionPermissions: new SessionPermissions[](0), implicitBlacklist: blacklist });
 
     // Create call to blacklisted address
     Payload.Call[] memory calls = new Payload.Call[](1);
@@ -234,12 +223,12 @@ contract SessionManagerTest is Test, ISessionManagerSignals {
     });
 
     // Create implicit mode signature
-    (SessionSignature memory signature,) = _createValidSignature(calls, config, 1);
+    (SessionManagerSignature memory signature,) = _createValidSignature(calls, config, 1);
     signature.isImplicit = true;
 
     // Expect revert when trying to call blacklisted address
     vm.prank(wallet.addr);
-    vm.expectRevert(abi.encodeWithSelector(BlacklistedAddress.selector, wallet.addr, blacklistedAddr));
+    vm.expectRevert(abi.encodeWithSelector(BlacklistedAddress.selector, blacklistedAddr));
     sessionManager.isValidSapientSignature(
       Payload.Decoded({
         kind: Payload.KIND_TRANSACTIONS,
@@ -266,15 +255,11 @@ contract SessionManagerTest is Test, ISessionManagerSignals {
     permissions[0] = Permission({ target: address(receiver), rules: rules });
 
     // Create session configuration with value limit
-    SessionConfigurationPermissions[] memory sessionPermissions = new SessionConfigurationPermissions[](1);
-    sessionPermissions[0] = SessionConfigurationPermissions({
-      signer: sessionSigner.addr,
-      deadline: 0,
-      permissions: permissions,
-      valueLimit: 1 ether
-    });
+    SessionPermissions[] memory sessionPermissions = new SessionPermissions[](1);
+    sessionPermissions[0] =
+      SessionPermissions({ signer: sessionSigner.addr, deadline: 0, permissions: permissions, valueLimit: 1 ether });
 
-    SessionConfiguration memory config = _createSessionConfiguration(sessionPermissions, new address[](0));
+    SessionManagerConfiguration memory config = _createSessionManagerConfiguration(sessionPermissions, new address[](0));
 
     // Create call with value within limit
     Payload.Call[] memory calls = new Payload.Call[](2);
@@ -301,7 +286,7 @@ contract SessionManagerTest is Test, ISessionManagerSignals {
       behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
     });
 
-    (SessionSignature memory signature, bytes32 expectedImageHash) = _createValidSignature(calls, config, 1);
+    (SessionManagerSignature memory signature, bytes32 expectedImageHash) = _createValidSignature(calls, config, 1);
 
     vm.prank(wallet.addr);
     bytes32 imageHash = sessionManager.isValidSapientSignature(
@@ -337,8 +322,8 @@ contract SessionManagerTest is Test, ISessionManagerSignals {
 
     permissions[0] = Permission({ target: address(0x1234), rules: rules });
 
-    SessionConfigurationPermissions[] memory sessionPermissions = new SessionConfigurationPermissions[](1);
-    sessionPermissions[0] = SessionConfigurationPermissions({
+    SessionPermissions[] memory sessionPermissions = new SessionPermissions[](1);
+    sessionPermissions[0] = SessionPermissions({
       signer: sessionSigner.addr,
       deadline: 1, // Expired deadline
       permissions: permissions,
@@ -346,15 +331,15 @@ contract SessionManagerTest is Test, ISessionManagerSignals {
     });
     vm.warp(2); // New timestamp
 
-    SessionConfiguration memory config = _createSessionConfiguration(sessionPermissions, new address[](0));
+    SessionManagerConfiguration memory config = _createSessionManagerConfiguration(sessionPermissions, new address[](0));
 
     Payload.Call[] memory calls =
       _createERC20Calls(address(0x1234), bytes4(keccak256("transfer(address,uint256)")), 500);
 
-    (SessionSignature memory signature,) = _createValidSignature(calls, config, 2);
+    (SessionManagerSignature memory signature,) = _createValidSignature(calls, config, 2);
 
     vm.prank(wallet.addr);
-    vm.expectRevert(abi.encodeWithSelector(SessionExpired.selector, wallet.addr, sessionSigner.addr));
+    vm.expectRevert(abi.encodeWithSelector(SessionExpired.selector, sessionSigner.addr, sessionPermissions[0].deadline));
     sessionManager.isValidSapientSignature(
       Payload.Decoded({
         kind: Payload.KIND_TRANSACTIONS,
@@ -381,15 +366,11 @@ contract SessionManagerTest is Test, ISessionManagerSignals {
     permissions[0] = Permission({ target: address(receiver), rules: rules });
 
     // Create session configuration with value limit
-    SessionConfigurationPermissions[] memory sessionPermissions = new SessionConfigurationPermissions[](1);
-    sessionPermissions[0] = SessionConfigurationPermissions({
-      signer: sessionSigner.addr,
-      deadline: 0,
-      permissions: permissions,
-      valueLimit: 1 ether
-    });
+    SessionPermissions[] memory sessionPermissions = new SessionPermissions[](1);
+    sessionPermissions[0] =
+      SessionPermissions({ signer: sessionSigner.addr, deadline: 0, permissions: permissions, valueLimit: 1 ether });
 
-    SessionConfiguration memory config = _createSessionConfiguration(sessionPermissions, new address[](0));
+    SessionManagerConfiguration memory config = _createSessionManagerConfiguration(sessionPermissions, new address[](0));
 
     // Create call exceeding value limit
     Payload.Call[] memory calls = new Payload.Call[](1);
@@ -403,11 +384,9 @@ contract SessionManagerTest is Test, ISessionManagerSignals {
       behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
     });
 
-    (SessionSignature memory signature,) = _createValidSignature(calls, config, 1);
+    (SessionManagerSignature memory signature,) = _createValidSignature(calls, config, 1);
 
-    vm.expectRevert(
-      abi.encodeWithSelector(UsageLimitExceeded.selector, wallet.addr, sessionManager.VALUE_TRACKING_ADDRESS())
-    );
+    vm.expectRevert(abi.encodeWithSelector(InvalidValue.selector));
     vm.prank(wallet.addr);
     sessionManager.isValidSapientSignature(
       Payload.Decoded({
@@ -491,16 +470,16 @@ contract SessionManagerTest is Test, ISessionManagerSignals {
     return keccak256(abi.encode(limitHashPrefix, permission));
   }
 
-  function _getUsageHashNative(address wallet, address signer) internal view returns (bytes32) {
-    bytes32 limitHashPrefix = keccak256(abi.encode(wallet, signer));
+  function _getUsageHashNative(address wallet_, address signer) internal view returns (bytes32) {
+    bytes32 limitHashPrefix = keccak256(abi.encode(wallet_, signer));
     return keccak256(abi.encode(limitHashPrefix, sessionManager.VALUE_TRACKING_ADDRESS()));
   }
 
   function _createValidSignature(
     Payload.Call[] memory calls,
-    SessionConfiguration memory config,
+    SessionManagerConfiguration memory config,
     uint256 numCalls
-  ) internal view returns (SessionSignature memory signature, bytes32 expectedImageHash) {
+  ) internal view returns (SessionManagerSignature memory signature, bytes32 expectedImageHash) {
     Payload.Decoded memory payload = Payload.Decoded({
       kind: Payload.KIND_TRANSACTIONS,
       noChainId: false,
@@ -515,12 +494,12 @@ contract SessionManagerTest is Test, ISessionManagerSignals {
 
     // Create attestation with the stored sessionSigner
     Attestation memory attestation = Attestation({
-      _approvedSigner: sessionSigner.addr,
-      _identityType: bytes4(0),
-      _issuerHash: bytes32(0),
-      _audienceHash: bytes32(0),
-      _authData: "",
-      _applicationData: ""
+      approvedSigner: sessionSigner.addr,
+      identityType: bytes4(0),
+      issuerHash: bytes32(0),
+      audienceHash: bytes32(0),
+      authData: "",
+      applicationData: ""
     });
 
     bytes32 payloadHash = keccak256(abi.encode(payload));
@@ -528,9 +507,9 @@ contract SessionManagerTest is Test, ISessionManagerSignals {
     bytes32 attestationHash = attestation.toHash();
     bytes memory globalSig = _signMessage(attestationHash, globalSigner.privateKey);
 
-    signature = SessionSignature({
+    signature = SessionManagerSignature({
       isImplicit: false,
-      sessionConfiguration: config,
+      configuration: config,
       attestation: attestation,
       globalSignature: globalSig,
       sessionSignature: sessionSig,
@@ -544,11 +523,11 @@ contract SessionManagerTest is Test, ISessionManagerSignals {
     expectedImageHash = keccak256(abi.encode(globalSigner.addr, config));
   }
 
-  function _createSessionConfiguration(
-    SessionConfigurationPermissions[] memory _permissions,
+  function _createSessionManagerConfiguration(
+    SessionPermissions[] memory _permissions,
     address[] memory _blacklist
-  ) internal pure returns (SessionConfiguration memory) {
-    return SessionConfiguration({ sessionPermissions: _permissions, implicitBlacklist: _blacklist });
+  ) internal pure returns (SessionManagerConfiguration memory) {
+    return SessionManagerConfiguration({ sessionPermissions: _permissions, implicitBlacklist: _blacklist });
   }
 
   function _signMessage(bytes32 message, uint256 privateKey) internal pure returns (bytes memory) {
@@ -558,12 +537,12 @@ contract SessionManagerTest is Test, ISessionManagerSignals {
 
   // Add this helper function to sort session permissions
   function _sortSessionPermissions(
-    SessionConfigurationPermissions[] memory permissions
+    SessionPermissions[] memory permissions
   ) internal pure {
     for (uint256 i = 0; i < permissions.length - 1; i++) {
       for (uint256 j = 0; j < permissions.length - i - 1; j++) {
         if (permissions[j].signer > permissions[j + 1].signer) {
-          SessionConfigurationPermissions memory temp = permissions[j];
+          SessionPermissions memory temp = permissions[j];
           permissions[j] = permissions[j + 1];
           permissions[j + 1] = temp;
         }
