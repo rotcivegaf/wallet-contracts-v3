@@ -90,7 +90,7 @@ contract BaseSig {
 
     // If signature type is 01 we do a chained signature
     if (signatureFlag & 0x01 == 0x01) {
-      return recoverChained(_payload, snapshot, _signature);
+      return recoverChained(_payload, snapshot, _signature[rindex:]);
     }
 
     // If the signature type is 10 we do a no chain id signature
