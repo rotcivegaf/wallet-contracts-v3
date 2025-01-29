@@ -3,6 +3,8 @@ pragma solidity ^0.8.27;
 
 import { BaseSig } from "../../src/modules/BaseSig.sol";
 import { Payload } from "../../src/modules/Payload.sol";
+
+import { ISapient, ISapientCompact } from "../../src/modules/interfaces/ISapient.sol";
 import { PrimitivesCli } from "../utils/PrimitivesCli.sol";
 
 import { AdvTest } from "../utils/TestUtils.sol";
@@ -197,6 +199,106 @@ contract SessionManagerTest is AdvTest {
 
       string memory se =
         string(abi.encodePacked("--signature ", vm.toString(_signer), ":erc1271:", vm.toString(_signature)));
+
+      if (_payload.noChainId) {
+        se = string(abi.encodePacked(se, " --no-chain-id"));
+      }
+
+      encodedSignature = PrimitivesCli.toEncodedSignature(vm, config, se);
+    }
+
+    (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint) =
+      baseSigImp.recoverPub(_payload, encodedSignature, true);
+
+    assertEq(threshold, _threshold);
+    assertEq(imageHash, PrimitivesCli.getImageHash(vm, config));
+    assertEq(checkpoint, _checkpoint);
+    assertEq(weight, _weight);
+  }
+
+  function test_recover_one_sapient_signer(
+    AddressWeightPair[] calldata _prefix,
+    AddressWeightPair[] calldata _suffix,
+    Payload.Decoded memory _payload,
+    uint16 _threshold,
+    uint56 _checkpoint,
+    uint8 _weight,
+    address _signer,
+    bytes calldata _signature,
+    bytes32 _sapientImageHash,
+    bool _isCompact
+  ) external {
+    assumeNotPrecompile2(_signer);
+
+    vm.assume(_prefix.length < 300);
+    vm.assume(_suffix.length < 300);
+
+    // The signer should not be in the prefix or suffix
+    // or we may end up with more weight than expected
+    for (uint256 i = 0; i < _prefix.length; i++) {
+      vm.assume(_prefix[i].addr != _signer);
+    }
+    for (uint256 i = 0; i < _suffix.length; i++) {
+      vm.assume(_suffix[i].addr != _signer);
+    }
+
+    boundToLegalPayload(_payload);
+
+    string memory config;
+
+    {
+      string memory ce;
+      for (uint256 i = 0; i < _prefix.length; i++) {
+        ce = string(
+          abi.encodePacked(ce, "signer:", vm.toString(_prefix[i].addr), ":", vm.toString(_prefix[i].weight), " ")
+        );
+      }
+
+      ce = string(
+        abi.encodePacked(
+          ce, "sapient:", vm.toString(_sapientImageHash), ":", vm.toString(_signer), ":", vm.toString(_weight)
+        )
+      );
+
+      for (uint256 i = 0; i < _suffix.length; i++) {
+        ce = string(abi.encodePacked(ce, " signer:", vm.toString(_suffix[i].addr), ":", vm.toString(_suffix[i].weight)));
+      }
+
+      config = PrimitivesCli.newConfig(vm, _threshold, _checkpoint, ce);
+    }
+
+    bytes memory encodedSignature;
+    {
+      string memory st;
+
+      if (_isCompact) {
+        st = ":sapient_compact:";
+        bytes32 payloadHash = Payload.hashFor(_payload, address(baseSigImp));
+
+        vm.mockCall(
+          address(_signer),
+          abi.encodeWithSelector(ISapientCompact.isValidSapientSignatureCompact.selector, payloadHash, _signature),
+          abi.encode(_sapientImageHash)
+        );
+
+        vm.expectCall(
+          address(_signer),
+          abi.encodeWithSelector(ISapientCompact.isValidSapientSignatureCompact.selector, payloadHash, _signature)
+        );
+      } else {
+        st = ":sapient:";
+        vm.mockCall(
+          address(_signer),
+          abi.encodeWithSelector(ISapient.isValidSapientSignature.selector, _payload, _signature),
+          abi.encode(_sapientImageHash)
+        );
+
+        vm.expectCall(
+          address(_signer), abi.encodeWithSelector(ISapient.isValidSapientSignature.selector, _payload, _signature)
+        );
+      }
+
+      string memory se = string(abi.encodePacked("--signature ", vm.toString(_signer), st, vm.toString(_signature)));
 
       if (_payload.noChainId) {
         se = string(abi.encodePacked(se, " --no-chain-id"));
