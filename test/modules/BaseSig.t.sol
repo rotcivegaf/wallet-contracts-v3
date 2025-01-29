@@ -23,7 +23,7 @@ contract BaseSigImp is BaseSig {
 
 }
 
-contract SessionManagerTest is AdvTest {
+contract BaseSigTest is AdvTest {
 
   BaseSigImp public baseSigImp;
 
