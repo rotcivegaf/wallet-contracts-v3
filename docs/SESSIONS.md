@@ -56,68 +56,26 @@ Calls made via implicit mode are not allowed to transfer value.
 
 Explicit mode provides granular control through specific permissions. These permissions are encoded into the session configuration. In order to use this mode, the wallet must sign a transaction to update the configuration of the wallet to include the sessions with the given permissions. This is done interactively and requires the wallet to be unlocked.
 
-Each session signer has a set of encoded permissions as defined below. Each call in the payload is validated against the permissions of the session signer. The session signer also has an optional deadline outside of which the call is not valid.
+Each session signer has a set of encoded permissions defined by rules. Each call in the payload is validated against the permissions of the session signer. The session signer also has an optional deadline outside of which the call is not valid.
 
-//TODO Payload level permissions
+## **4.1. Rules-Based Permissions**
 
-Permissions with limits are validated against the actual usage of the call. Additionally, the session signer has an optional value limit. When using these limits, the session manager ensure the payload includes a call to `incrementUsage` to update the usage counters for each permission that is used.
+The permission system uses a flexible rules-based approach where each permission consists of:
 
-## **4.1. Permission Types**
+1. A target contract address
+2. An array of parameter rules that validate the calldata
 
-The system defines several permission types through the `Permissions` library:
+Each parameter rule validates as follows:
 
-```solidity
-enum PermissionType {
-    FUNCTION_CALL,   // Basic function calls
-    NATIVE,          // Native token transfers
-    ERC20,           // ERC20 token operations
-    ERC721,          // NFT operations
-    ERC1155,         // Multi-token operations
-    RULES,           // Calldata rules based permissions
-    REMOTE           // Extended permission types
-}
-```
+1. Retrieve a `bytes32` value from the calldata at the specified `offset`
+2. Apply the `mask` to the value
+3. Compare the value to the `value` using the specified `operation`
+4. Optionally track cumulative usage for the rule
 
-Each permission type has its own structure and validation rules.
-
-### **4.1.1. Function Call**
-
-A function call permission is a simple call to a target contract with a specific function selector.
-
-### **4.1.2. Native Token Transfer**
-
-A native token transfer permission is a simple call to transfer native tokens to a target address. This permission does not allow calldata to be included in the call.
-
-### **4.1.3. ERC20 Token Operations**
-
-An ERC20 token operation permission is a call to an ERC20 contract's `transfer`, `transferFrom` and `approve` functions.
-
-The usage of these functions is tracked by the `limitUsage` mapping.
-
-### **4.1.4. ERC721 Token Operations**
-
-An ERC721 token operation permission is a call to an ERC721 contract's `transferFrom`, `safeTransferFrom`, `safeTransferFrom` and `approve` functions.
-
-The usage of these functions is tracked by the `limitUsage` mapping.
-
-### **4.1.5. ERC1155 Token Operations**
-
-An ERC1155 token operation permission is a call to an ERC1155 contract's `transferFrom`, `safeTransferFrom`, `safeTransferFrom` and `approve` functions.
-
-The usage of these functions is tracked by the `limitUsage` mapping.
-
-### **4.1.6. Calldata Rules Permission**
-
-The calldata rules permission is a set of rules that must be met for a call to be valid. Each rule is validates as follows:
-
-1. Retrieve a `bytes32` value from the calldata at the specified `offset`.
-2. Apply the `mask` to the value.
-3. Compare the value to the `value` using the `operation` defined in the rule.
-
-The operations are defined as follows:
+The operations available for comparison are:
 
 ```solidity
-enum ParameterRuleOperation {
+enum ParameterOperation {
     EQUAL,
     NOT_EQUAL,
     GREATER_THAN_OR_EQUAL,
@@ -125,42 +83,47 @@ enum ParameterRuleOperation {
 }
 ```
 
-Using a calldata offset and mask enables any element within the calldata to be validated. This includes things like function selectors, array lengths and tightly packed values.
+Using a calldata offset and mask enables validation of any element within the calldata. This includes:
 
-### **4.1.7. Remote Permission**
+- Function selectors
+- Parameter values
+- Array lengths
+- Tightly packed values
+- Token amounts
+- Token IDs
 
-Remote permissions are used to offer extendability to the system. An integrator may define a new permission type and implement the `IPermissionValidator` interface to add it to the system. Calls using this permission type will be validated by the associated `IPermissionValidator` implementation.
+### **4.1.1 Cumulative Usage Tracking**
 
-## **4.2. Limit Usage Tracking**
+Rules can be marked as cumulative to track usage of a specific parameter across multiple calls. For these rules:
 
-The system tracks usage through:
+1. The current value is added to previous usage
+2. The total is compared against the rule's value limit
+3. Usage is tracked per wallet-session-permission combination
 
-1. **Usage hash generation**:
+When a transaction includes any cumulative rules, it **must** include a call to `incrementUsageLimit` as the last operation in the payload. This requirement ensures atomic updates to usage tracking. Specifically:
 
-   ```solidity
-   function getUsageHash(
-       address wallet,
-       address sessionAddress,
-       address targetAddress
-   ) public pure returns (bytes32)
-   ```
+1. The last call in the payload must be to the SessionManager contract
+2. It must call the `incrementUsageLimit` function
+3. The call must use `BEHAVIOR_REVERT_ON_ERROR`
+4. The call must include all usage limits from the transaction
 
-   A hash of the wallet, session signer and target address is used to track usage of each permission.
-   Rotating the session signer resulted in a refreshed limit usage.
+For example, if a transaction includes transfers that use cumulative rules, the payload would look like:
 
-2. **Per target counters**:
+```solidity
+calls = [
+    // Transfer operations
+    transferCall1,
+    transferCall2,
+    // Required final call
+    {
+        to: sessionManager,
+        data: incrementUsageLimit(usageLimits),
+        behaviorOnError: BEHAVIOR_REVERT_ON_ERROR
+    }
+]
+```
 
-   ```solidity
-   mapping(bytes32 => uint256) private limitUsage;
-   ```
-
-   The `limitUsage` mapping is compared against the usage amount in the payload and the limit approved by the associated permission.
-
-3. **Limit updates**:
-   ```solidity
-   function incrementLimitUsage(bytes32[] calldata limitUsageHashes, uint256[] calldata usageAmounts) external;
-   ```
-   The session manager checks that the wallet has called `incrementUsage` with the correct values for each permission that is used.
+If this call is missing or incorrect, the transaction will revert.
 
 ---
 
