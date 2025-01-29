@@ -46,30 +46,67 @@ contract SessionManagerTest is AdvTest {
     assertEq(checkpoint, _checkpoint);
   }
 
+  struct AddressWeightPair {
+    address addr;
+    uint8 weight;
+  }
+
   function test_recover_one_signer(
+    AddressWeightPair[] calldata _prefix,
+    AddressWeightPair[] calldata _suffix,
     Payload.Decoded memory _payload,
     uint16 _threshold,
     uint56 _checkpoint,
     uint8 _weight,
-    uint256 _pk
+    uint256 _pk,
+    bool _useEthSign
   ) external {
+    vm.assume(_prefix.length < 300);
+    vm.assume(_suffix.length < 300);
+
     boundToLegalPayload(_payload);
     _pk = boundPk(_pk);
 
     address signer = vm.addr(_pk);
-
     string memory config;
+
     {
-      string memory ce = string(abi.encodePacked("signer:", vm.toString(signer), ":", vm.toString(_weight)));
+      string memory ce;
+      for (uint256 i = 0; i < _prefix.length; i++) {
+        ce = string(
+          abi.encodePacked(ce, "signer:", vm.toString(_prefix[i].addr), ":", vm.toString(_prefix[i].weight), " ")
+        );
+      }
+
+      ce = string(abi.encodePacked(ce, "signer:", vm.toString(signer), ":", vm.toString(_weight)));
+
+      for (uint256 i = 0; i < _suffix.length; i++) {
+        ce = string(abi.encodePacked(ce, " signer:", vm.toString(_suffix[i].addr), ":", vm.toString(_suffix[i].weight)));
+      }
+
       config = PrimitivesCli.newConfig(vm, _threshold, _checkpoint, ce);
     }
 
     bytes memory encodedSignature;
     {
-      (uint8 v, bytes32 r, bytes32 s) = vm.sign(_pk, Payload.hashFor(_payload, address(baseSigImp)));
+      bytes32 payloadHash = Payload.hashFor(_payload, address(baseSigImp));
+
+      if (_useEthSign) {
+        payloadHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", payloadHash));
+      }
+
+      (uint8 v, bytes32 r, bytes32 s) = vm.sign(_pk, payloadHash);
+
+      string memory signatureType;
+      if (_useEthSign) {
+        signatureType = ":eth_sign:";
+      } else {
+        signatureType = ":hash:";
+      }
+
       string memory se = string(
         abi.encodePacked(
-          "--signature ", vm.toString(signer), ":hash:", vm.toString(r), ":", vm.toString(s), ":", vm.toString(v)
+          "--signature ", vm.toString(signer), signatureType, vm.toString(r), ":", vm.toString(s), ":", vm.toString(v)
         )
       );
 
