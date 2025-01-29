@@ -47,16 +47,13 @@ contract SessionManagerTest is AdvTest {
   }
 
   function test_recover_one_signer(
-    // Payload.Decoded memory _payload,
+    Payload.Decoded memory _payload,
     uint16 _threshold,
     uint56 _checkpoint,
     uint8 _weight,
     uint256 _pk
   ) external {
-    Payload.Decoded memory _payload;
-    _payload.kind = Payload.KIND_CONFIG_UPDATE;
-    _payload.imageHash = bytes32(0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef);
-
+    boundToLegalPayload(_payload);
     _pk = boundPk(_pk);
 
     address signer = vm.addr(_pk);
@@ -75,6 +72,10 @@ contract SessionManagerTest is AdvTest {
           "--signature ", vm.toString(signer), ":hash:", vm.toString(r), ":", vm.toString(s), ":", vm.toString(v)
         )
       );
+
+      if (_payload.noChainId) {
+        se = string(abi.encodePacked(se, " --no-chain-id"));
+      }
 
       encodedSignature = PrimitivesCli.toEncodedSignature(vm, config, se);
     }
