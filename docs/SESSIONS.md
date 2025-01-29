@@ -172,4 +172,73 @@ In all cases, the **Session Manager** will block uses of delegate calls.
 
 ## **6. Signature Format**
 
-//TODO
+The session signature is encoded as a compact byte array containing all necessary components for validation. The components are encoded sequentially as follows:
+
+### **6.1 Basic Structure**
+
+1. Session Signature (64 bytes) - Compact ERC-2098 format
+
+   - r (32 bytes): Signature component
+   - sv (32 bytes): Combined s-value and v-parity bit
+
+2. Attestation (variable length)
+
+   - approvedSigner (20 bytes): Address of the approved signer
+   - identityType (4 bytes): Type of identity
+   - issuerHash (32 bytes): Hash of the issuer
+   - audienceHash (32 bytes): Hash of the audience
+   - authData (variable):
+     - length (3 bytes): Length of auth data
+     - data (variable): Authentication data
+   - applicationData (variable):
+     - length (3 bytes): Length of application data
+     - data (variable): Application-specific data
+
+3. Global Signer Signature (64 bytes) - Compact ERC-2098 format
+
+   - r (32 bytes): Signature component
+   - sv (32 bytes): Combined s-value and v-parity bit
+
+4. Encoded Permissions Tree
+
+   - length (3 bytes): Length of encoded permissions data
+   - data (variable): Encoded permissions tree containing:
+     - Flag (4 bits): Indicates node type (0=Permissions, 1=Node, 2=Branch)
+     - Extra (4 bits): Reserved for future use
+     - Node-specific data (variable)
+
+5. Implicit Blacklist
+
+   - length (3 bytes): Number of blacklisted addresses
+   - addresses (20 bytes each): Array of blacklisted addresses
+
+6. Permission Indices
+   - length (3 bytes): Number of permission indices
+   - indices (1 byte each): Array of permission indices per call
+
+### **6.2 Example**
+
+```
+[Session Sig (r,sv)][Attestation][Global Sig (r,sv)][Permissions len][Permissions data][Blacklist len][Blacklist addrs][Indices len][Indices]
+```
+
+### **6.3 Decoding**
+
+The signature is decoded sequentially using pointer arithmetic, advancing the pointer after reading each component. This format allows for efficient reading of components without requiring ABI decoding.
+
+The decoded components are used to:
+
+1. Recover the session signer from the payload signature and verify it matches the attestation's approved signer
+2. Verify the global signer's attestation using the attestation hash
+3. Recover the permissions tree and find the signer's permissions
+4. Set implicit mode if no permissions are found
+
+### **6.4 Permissions Tree Structure**
+
+The permissions tree is encoded as a series of nodes, each starting with a flag byte:
+
+- **Permissions Node (0x0-)**: Contains signer address, value limit, deadline, and permissions array
+- **Hash Node (0x1-)**: Contains a pre-computed hash
+- **Branch Node (0x2-)**: Contains a nested permissions tree
+
+Each node contributes to the final permissions root through sequential hashing.
