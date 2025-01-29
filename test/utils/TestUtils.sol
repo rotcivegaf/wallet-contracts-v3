@@ -32,4 +32,12 @@ contract AdvTest is Test {
     }
   }
 
+  function assumeNotPrecompile2(
+    address _addr
+  ) internal view {
+    assumeNotPrecompile(_addr);
+    vm.assume(_addr.code.length == 0);
+    vm.assume(_addr != address(0x000000000000000000636F6e736F6c652e6c6f67));
+  }
+
 }

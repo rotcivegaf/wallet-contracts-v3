@@ -68,6 +68,16 @@ contract SessionManagerTest is AdvTest {
     _pk = boundPk(_pk);
 
     address signer = vm.addr(_pk);
+
+    // The signer should not be in the prefix or suffix
+    // or we may end up with more weight than expected
+    for (uint256 i = 0; i < _prefix.length; i++) {
+      vm.assume(_prefix[i].addr != signer);
+    }
+    for (uint256 i = 0; i < _suffix.length; i++) {
+      vm.assume(_suffix[i].addr != signer);
+    }
+
     string memory config;
 
     {
@@ -109,6 +119,84 @@ contract SessionManagerTest is AdvTest {
           "--signature ", vm.toString(signer), signatureType, vm.toString(r), ":", vm.toString(s), ":", vm.toString(v)
         )
       );
+
+      if (_payload.noChainId) {
+        se = string(abi.encodePacked(se, " --no-chain-id"));
+      }
+
+      encodedSignature = PrimitivesCli.toEncodedSignature(vm, config, se);
+    }
+
+    (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint) =
+      baseSigImp.recoverPub(_payload, encodedSignature, true);
+
+    assertEq(threshold, _threshold);
+    assertEq(imageHash, PrimitivesCli.getImageHash(vm, config));
+    assertEq(checkpoint, _checkpoint);
+    assertEq(weight, _weight);
+  }
+
+  function test_recover_one_1271_signer(
+    AddressWeightPair[] calldata _prefix,
+    AddressWeightPair[] calldata _suffix,
+    Payload.Decoded memory _payload,
+    uint16 _threshold,
+    uint56 _checkpoint,
+    uint8 _weight,
+    address _signer,
+    bytes calldata _signature
+  ) external {
+    assumeNotPrecompile2(_signer);
+
+    vm.assume(_prefix.length < 300);
+    vm.assume(_suffix.length < 300);
+
+    // The signer should not be in the prefix or suffix
+    // or we may end up with more weight than expected
+    for (uint256 i = 0; i < _prefix.length; i++) {
+      vm.assume(_prefix[i].addr != _signer);
+    }
+    for (uint256 i = 0; i < _suffix.length; i++) {
+      vm.assume(_suffix[i].addr != _signer);
+    }
+
+    boundToLegalPayload(_payload);
+
+    string memory config;
+
+    {
+      string memory ce;
+      for (uint256 i = 0; i < _prefix.length; i++) {
+        ce = string(
+          abi.encodePacked(ce, "signer:", vm.toString(_prefix[i].addr), ":", vm.toString(_prefix[i].weight), " ")
+        );
+      }
+
+      ce = string(abi.encodePacked(ce, "signer:", vm.toString(_signer), ":", vm.toString(_weight)));
+
+      for (uint256 i = 0; i < _suffix.length; i++) {
+        ce = string(abi.encodePacked(ce, " signer:", vm.toString(_suffix[i].addr), ":", vm.toString(_suffix[i].weight)));
+      }
+
+      config = PrimitivesCli.newConfig(vm, _threshold, _checkpoint, ce);
+    }
+
+    bytes memory encodedSignature;
+    {
+      bytes32 payloadHash = Payload.hashFor(_payload, address(baseSigImp));
+
+      vm.mockCall(
+        address(_signer),
+        abi.encodeWithSignature("isValidSignature(bytes32,bytes)", payloadHash, _signature),
+        abi.encode(bytes4(0x20c13b0b))
+      );
+
+      vm.expectCall(
+        address(_signer), abi.encodeWithSignature("isValidSignature(bytes32,bytes)", payloadHash, _signature)
+      );
+
+      string memory se =
+        string(abi.encodePacked("--signature ", vm.toString(_signer), ":erc1271:", vm.toString(_signature)));
 
       if (_payload.noChainId) {
         se = string(abi.encodePacked(se, " --no-chain-id"));

@@ -153,6 +153,8 @@ contract BaseSig {
         revert LowWeightChainedSignature(_signature[rindex:nrindex], threshold, weight);
       }
 
+      rindex = nrindex;
+
       if (_snapshot.imageHash == imageHash) {
         _snapshot.imageHash = bytes32(0);
       }
@@ -260,7 +262,6 @@ contract BaseSig {
           // Read signature size
           uint256 sizeSize = uint8(firstByte & 0x0c) >> 2;
           uint256 size;
-
           (size, rindex) = _signature.readUintX(rindex, sizeSize);
 
           // Read dynamic size signature
@@ -270,7 +271,7 @@ contract BaseSig {
           if (IERC1271(addr).isValidSignature(_opHash, _signature[rindex:nrindex]) != IERC1271_MAGIC_VALUE) {
             revert InvalidNestedSignature(_payload, _opHash, addr, _signature);
           }
-
+          rindex = nrindex;
           // Add the weight and compute the merkle root
           weight += addrWeight;
           bytes32 node = _leafForAddressAndWeight(addr, addrWeight);
@@ -303,6 +304,7 @@ contract BaseSig {
           uint256 nrindex = rindex + size;
 
           (uint256 nweight, bytes32 node) = recoverBranch(_payload, _opHash, _signature[rindex:nrindex]);
+          rindex = nrindex;
 
           weight += nweight;
           root = LibOptim.fkeccak256(root, node);
@@ -425,6 +427,7 @@ contract BaseSig {
 
           // Call the ERC1271 contract to check if the signature is valid
           bytes32 sapientImageHash = ISapient(addr).isValidSapientSignature(_payload, _signature[rindex:nrindex]);
+          rindex = nrindex;
 
           // Add the weight and compute the merkle root
           weight += addrWeight;
@@ -460,7 +463,7 @@ contract BaseSig {
           // Call the Sapient contract to check if the signature is valid
           bytes32 sapientImageHash =
             ISapientCompact(addr).isValidSapientSignatureCompact(_opHash, _signature[rindex:nrindex]);
-
+          rindex = nrindex;
           // Add the weight and compute the merkle root
           weight += addrWeight;
           bytes32 node = _leafForSapient(addr, addrWeight, sapientImageHash);
