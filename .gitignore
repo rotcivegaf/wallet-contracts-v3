@@ -10,6 +10,7 @@ out/
 # Dotenv file
 .env
 .env.*
+!.env.sample
 
 # Node modules
 node_modules/

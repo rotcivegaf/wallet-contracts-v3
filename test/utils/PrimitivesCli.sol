@@ -8,9 +8,10 @@ using PrimitivesCli for Vm;
 
 library PrimitivesCli {
 
-  // TODO: Move to ENV
-  function root() internal pure returns (string memory) {
-    return "node ../sequence-core/packages/primitives-cli/dist/index.js";
+  function root(
+    Vm _vm
+  ) internal view returns (string memory) {
+    return _vm.envString("SEQ_SDK_CMD");
   }
 
   function shffi(Vm _vm, string memory _command) internal returns (bytes memory) {
@@ -32,7 +33,7 @@ library PrimitivesCli {
     string memory path = string(abi.encodePacked("/tmp/seq-td-", randomId));
     _vm.writeFile(path, _vm.toString(abi.encode(_decoded)));
 
-    string memory command = string(abi.encodePacked("cat ", path, " | ", root(), " payload to-packed"));
+    string memory command = string(abi.encodePacked("cat ", path, " | ", _vm.root(), " payload to-packed"));
 
     bytes memory result = _vm.shffi(command);
     _vm.removeFile(path);
@@ -47,7 +48,7 @@ library PrimitivesCli {
   ) internal returns (string memory) {
     string memory command = string(
       abi.encodePacked(
-        root(),
+        _vm.root(),
         " config new --threshold ",
         _vm.toString(_threshold),
         " --checkpoint ",
@@ -60,17 +61,17 @@ library PrimitivesCli {
   }
 
   function toEncodedConfig(Vm _vm, string memory _config) internal returns (bytes memory) {
-    string memory command = string(abi.encodePacked(root(), " config encode '", _config, "'"));
+    string memory command = string(abi.encodePacked(_vm.root(), " config encode '", _config, "'"));
     return _vm.shffi(command);
   }
 
   function toEncodedSignature(Vm _vm, string memory _config, string memory _elements) internal returns (bytes memory) {
-    string memory command = string(abi.encodePacked(root(), " signature encode '", _config, "' ", _elements));
+    string memory command = string(abi.encodePacked(_vm.root(), " signature encode '", _config, "' ", _elements));
     return _vm.shffi(command);
   }
 
   function getImageHash(Vm _vm, string memory _config) internal returns (bytes32) {
-    string memory command = string(abi.encodePacked(root(), " config image-hash '", _config, "'"));
+    string memory command = string(abi.encodePacked(_vm.root(), " config image-hash '", _config, "'"));
     return bytes32(_vm.shffi(command));
   }
 
