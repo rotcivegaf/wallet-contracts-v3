@@ -6,16 +6,12 @@ import "forge-std/Test.sol";
 
 contract AdvTest is Test {
 
-  function boundPk(
-    uint256 _a
-  ) internal pure returns (uint256) {
+  function boundPk(uint256 _a) internal pure returns (uint256) {
     _a = bound(_a, 1, 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364139);
     return _a;
   }
 
-  function boundToLegalPayload(
-    Payload.Decoded memory _payload
-  ) internal pure {
+  function boundToLegalPayload(Payload.Decoded memory _payload) internal pure {
     _payload.kind = uint8(bound(_payload.kind, uint8(0), uint8(Payload.KIND_DIGEST)));
 
     if (_payload.kind == Payload.KIND_TRANSACTIONS) {
@@ -32,9 +28,7 @@ contract AdvTest is Test {
     }
   }
 
-  function assumeNotPrecompile2(
-    address _addr
-  ) internal view {
+  function assumeNotPrecompile2(address _addr) internal view {
     assumeNotPrecompile(_addr);
     vm.assume(_addr.code.length == 0);
     vm.assume(_addr != address(0x000000000000000000636F6e736F6c652e6c6f67));

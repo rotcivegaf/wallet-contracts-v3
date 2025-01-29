@@ -8,9 +8,7 @@ import { console } from "forge-std/console.sol";
 
 contract PayloadImp {
 
-  function fromPackedCalls(
-    bytes calldata packed
-  ) external view returns (Payload.Decoded memory) {
+  function fromPackedCalls(bytes calldata packed) external view returns (Payload.Decoded memory) {
     return Payload.fromPackedCalls(packed);
   }
 

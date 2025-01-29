@@ -178,9 +178,7 @@ contract SessionSig {
     return (root, permissions);
   }
 
-  function _leafForPermissions(
-    SessionPermissions memory permissions
-  ) internal pure returns (bytes32) {
+  function _leafForPermissions(SessionPermissions memory permissions) internal pure returns (bytes32) {
     return keccak256(
       abi.encode(
         "Session permissions leaf:\n",

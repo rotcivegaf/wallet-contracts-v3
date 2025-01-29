@@ -78,8 +78,6 @@ interface ISessionManager is ISapient, ISessionManagerSignals {
 
   /// @notice Increment usage for a caller's given session and target
   /// @param limits Array of limit/session/target combinations
-  function incrementUsageLimit(
-    UsageLimit[] calldata limits
-  ) external;
+  function incrementUsageLimit(UsageLimit[] calldata limits) external;
 
 }

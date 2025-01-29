@@ -41,9 +41,7 @@ library LibBytes {
    * @param data The input data.
    * @return a The first uint16 value in the input data.
    */
-  function readFirstUint16(
-    bytes calldata data
-  ) internal pure returns (uint16 a) {
+  function readFirstUint16(bytes calldata data) internal pure returns (uint16 a) {
     assembly {
       let word := calldataload(data.offset)
       a := shr(240, word)

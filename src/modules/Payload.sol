@@ -76,30 +76,22 @@ library Payload {
     address[] parentWallets;
   }
 
-  function fromMessage(
-    bytes memory message
-  ) internal pure returns (Decoded memory _decoded) {
+  function fromMessage(bytes memory message) internal pure returns (Decoded memory _decoded) {
     _decoded.kind = KIND_MESSAGE;
     _decoded.message = message;
   }
 
-  function fromConfigUpdate(
-    bytes32 imageHash
-  ) internal pure returns (Decoded memory _decoded) {
+  function fromConfigUpdate(bytes32 imageHash) internal pure returns (Decoded memory _decoded) {
     _decoded.kind = KIND_CONFIG_UPDATE;
     _decoded.imageHash = imageHash;
   }
 
-  function fromDigest(
-    bytes32 digest
-  ) internal pure returns (Decoded memory _decoded) {
+  function fromDigest(bytes32 digest) internal pure returns (Decoded memory _decoded) {
     _decoded.kind = KIND_DIGEST;
     _decoded.digest = digest;
   }
 
-  function fromPackedCalls(
-    bytes calldata packed
-  ) internal view returns (Decoded memory _decoded) {
+  function fromPackedCalls(bytes calldata packed) internal view returns (Decoded memory _decoded) {
     _decoded.kind = KIND_TRANSACTIONS;
 
     // Read the global flag
@@ -181,9 +173,7 @@ library Payload {
     }
   }
 
-  function _hashCall(
-    Call memory c
-  ) internal pure returns (bytes32) {
+  function _hashCall(Call memory c) internal pure returns (bytes32) {
     return keccak256(
       abi.encode(
         CALL_TYPEHASH, c.to, c.value, keccak256(c.data), c.gasLimit, c.delegateCall, c.onlyFallback, c.behaviorOnError
@@ -191,9 +181,7 @@ library Payload {
     );
   }
 
-  function _hashCalls(
-    Call[] memory calls
-  ) internal pure returns (bytes32) {
+  function _hashCalls(Call[] memory calls) internal pure returns (bytes32) {
     // In EIP712, an array is often hashed as the keccak256 of the concatenated
     // hashes of each item. So we hash each Call, pack them, and hash again.
     bytes memory encoded;
@@ -204,9 +192,7 @@ library Payload {
     return keccak256(encoded);
   }
 
-  function _hashParentWallets(
-    address[] memory wallets
-  ) internal pure returns (bytes32) {
+  function _hashParentWallets(address[] memory wallets) internal pure returns (bytes32) {
     // Similar approach for an address array: treat each address as 32 bytes
     // (left or right padded), then keccak the concatenation.
     bytes memory encoded;
@@ -217,9 +203,7 @@ library Payload {
     return keccak256(encoded);
   }
 
-  function toEIP712(
-    Decoded memory _decoded
-  ) internal pure returns (bytes32) {
+  function toEIP712(Decoded memory _decoded) internal pure returns (bytes32) {
     bytes32 walletsHash = _hashParentWallets(_decoded.parentWallets);
 
     if (_decoded.kind == KIND_TRANSACTIONS) {
@@ -242,9 +226,7 @@ library Payload {
     }
   }
 
-  function hash(
-    Decoded memory _decoded
-  ) internal view returns (bytes32) {
+  function hash(Decoded memory _decoded) internal view returns (bytes32) {
     bytes32 domain = domainSeparator(_decoded.noChainId, address(this));
     bytes32 structHash = toEIP712(_decoded);
     return keccak256(abi.encodePacked("\x19\x01", domain, structHash));
