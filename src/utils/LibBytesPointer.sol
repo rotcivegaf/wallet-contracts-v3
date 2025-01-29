@@ -1,5 +1,13 @@
 pragma solidity ^0.8.18;
 
+/**
+ * @title Library for reading data from bytes arrays
+ * @author Agustin Aguilar (aa@horizon.io), Michael Standen (mstan@horizon.io)
+ * @notice This library contains functions for reading data from bytes arrays.
+ *
+ * @dev These functions do not check if the input index is within the bounds of the data array.
+ *         Reading out of bounds may return dirty values.
+ */
 library LibBytesPointer {
 
   function readFirstUint8(
@@ -127,16 +135,20 @@ library LibBytesPointer {
     }
   }
 
-  function readRSV(
+  // ERC-2098 Compact Signature
+  function readRSVCompact(
     bytes calldata _data,
     uint256 _index
   ) internal pure returns (bytes32 r, bytes32 s, uint8 v, uint256 newPointer) {
+    uint256 yParityAndS;
     assembly {
       r := calldataload(add(_index, _data.offset))
-      s := calldataload(add(_index, add(_data.offset, 32)))
-      v := shr(248, calldataload(add(_index, add(_data.offset, 64))))
+      yParityAndS := calldataload(add(_index, add(_data.offset, 32)))
       newPointer := add(_index, 64)
     }
+    uint256 yParity = uint256(yParityAndS >> 255);
+    s = bytes32(uint256(yParityAndS) & ((1 << 255) - 1));
+    v = uint8(yParity) + 27;
   }
 
 }

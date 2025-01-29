@@ -7,19 +7,15 @@ import { Attestation, LibAttestation } from "../Attestation.sol";
 import { PermissionValidator } from "../PermissionValidator.sol";
 import { Permission, UsageLimit } from "../interfaces/IPermission.sol";
 import { ISapient, Payload } from "../interfaces/ISapient.sol";
-import {
-  ISessionManager,
-  SessionManagerConfiguration,
-  SessionManagerSignature,
-  SessionPermissions
-} from "../interfaces/ISessionManager.sol";
+import { ISessionManager, SessionManagerSignature, SessionPermissions } from "../interfaces/ISessionManager.sol";
 import { ISignalsImplicitMode } from "../interfaces/ISignalsImplicitMode.sol";
+import { SessionSig } from "./SessionSig.sol";
 
 using LibBytesPointer for bytes;
 using LibBytes for bytes;
 using LibAttestation for Attestation;
 
-contract SessionManager is PermissionValidator, ISessionManager {
+contract SessionManager is SessionSig, PermissionValidator, ISessionManager {
 
   // Special address used for tracking native token value limits
   address public constant VALUE_TRACKING_ADDRESS = address(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
@@ -39,83 +35,65 @@ contract SessionManager is PermissionValidator, ISessionManager {
     Payload.Decoded calldata payload,
     bytes calldata encodedSignature
   ) external view returns (bytes32) {
+    // Recover the session manager signature
+    SessionManagerSignature memory signature = recoverSignature(payload, encodedSignature);
+
+    // Validate the session using recovered permissions
     address wallet = msg.sender;
+    _validateSession(wallet, payload, signature);
 
-    // Recover the session signer from the session signature
-    bytes32 payloadHash = keccak256(abi.encode(payload));
-    SessionManagerSignature memory signature = abi.decode(encodedSignature, (SessionManagerSignature));
-    (bytes32 r, bytes32 s, uint8 v) = signature.sessionSignature.readMRSV(0);
-    address recoveredPayloadSigner = ecrecover(payloadHash, v, r, s); // This is the session signer
-
-    // Verify global signer's signature on the attestation
-    bytes32 attestationHash = signature.attestation.toHash();
-    (r, s, v) = signature.globalSignature.readMRSV(0);
-    address recoveredGlobalSigner = ecrecover(attestationHash, v, r, s);
-
-    // Validate the session
-    _validateSession(wallet, signature, payload, recoveredPayloadSigner);
-
-    // Generate and return imageHash
-    return getImageHash(recoveredGlobalSigner, signature.configuration);
+    // Generate and return the image hash
+    return getImageHash(signature);
   }
 
-  /// @notice Generates an image hash for the given configuration
-  /// @param globalSigner The global signer address
-  /// @param configuration The session configuration
+  /// @notice Generates an image hash for the given session manager decoded signature
+  /// @param signature The session manager signature
   /// @return bytes32 The generated image hash
   function getImageHash(
-    address globalSigner,
-    SessionManagerConfiguration memory configuration
+    SessionManagerSignature memory signature
   ) public pure returns (bytes32) {
-    return keccak256(abi.encode(globalSigner, configuration));
+    return keccak256(abi.encode(signature.globalSigner, signature.permissionsRoot, signature.implicitBlacklist));
   }
 
   /// @notice Routes session validation to either implicit or explicit mode
   /// @param wallet The wallet's address
-  /// @param signature The session signature data
   /// @param payload The decoded payload containing calls
-  /// @param sessionSigner The signer for the current session
+  /// @param signature The session signature data
   function _validateSession(
     address wallet,
-    SessionManagerSignature memory signature,
     Payload.Decoded calldata payload,
-    address sessionSigner
+    SessionManagerSignature memory signature
   ) internal view {
     if (signature.isImplicit) {
-      _validateImplicitMode(wallet, signature, payload, sessionSigner);
+      _validateImplicitMode(wallet, payload, signature);
     } else {
-      _validateExplicitMode(wallet, signature, payload, sessionSigner);
+      _validateExplicitMode(wallet, payload, signature);
     }
   }
 
   /// @notice Validates a session in explicit mode
   /// @param wallet The wallet's address
-  /// @param signature The session signature data
   /// @param payload The decoded payload containing calls
-  /// @param sessionSigner The signer for the current session
+  /// @param signature The session signature data
   function _validateExplicitMode(
     address wallet,
-    SessionManagerSignature memory signature,
     Payload.Decoded calldata payload,
-    address sessionSigner
+    SessionManagerSignature memory signature
   ) internal view {
-    // Get permissions for the signer
-    SessionPermissions memory signerPermissions =
-      _findSignerPermissions(signature.configuration.sessionPermissions, sessionSigner);
+    SessionPermissions memory sessionPermissions = signature.sessionPermissions;
 
     // Check if session has expired
-    if (signerPermissions.deadline != 0 && block.timestamp > signerPermissions.deadline) {
-      revert SessionExpired(sessionSigner, signerPermissions.deadline);
+    if (sessionPermissions.deadline != 0 && block.timestamp > sessionPermissions.deadline) {
+      revert SessionExpired(sessionPermissions.signer, sessionPermissions.deadline);
     }
 
     // Validate calls and track usage
-    bytes32 limitHashPrefix = keccak256(abi.encode(wallet, sessionSigner));
-    (uint256 totalValueUsed, UsageLimit[] memory limits) = _validateCallsAndTrackUsage(
-      limitHashPrefix, payload, signerPermissions.permissions, signature.permissionIdxPerCall
-    );
+    bytes32 limitHashPrefix = keccak256(abi.encode(wallet, sessionPermissions.signer));
+    (uint256 totalValueUsed, UsageLimit[] memory limits) =
+      _validateCallsAndTrackUsage(limitHashPrefix, payload, signature);
 
     // Verify total value is within limit
-    if (totalValueUsed != 0 && totalValueUsed > signerPermissions.valueLimit) {
+    if (totalValueUsed != 0 && totalValueUsed > sessionPermissions.valueLimit) {
       revert InvalidValue();
     }
 
@@ -123,67 +101,24 @@ contract SessionManager is PermissionValidator, ISessionManager {
     _verifyLimitUsageIncrement(payload, limits);
   }
 
-  /// @notice Finds the permissions for the given signer
-  /// @param sessionPermissions The array of session permissions
-  /// @param sessionSigner The signer for the current session
-  /// @return signerPermissions The recovered permissions for the signer
-  function _findSignerPermissions(
-    SessionPermissions[] memory sessionPermissions,
-    address sessionSigner
-  ) private pure returns (SessionPermissions memory signerPermissions) {
-    uint256 left = 0;
-    uint256 right = sessionPermissions.length - 1;
-
-    while (left <= right) {
-      uint256 mid = left + (right - left) / 2;
-      address currentSigner = sessionPermissions[mid].signer;
-      if (currentSigner == sessionSigner) {
-        return sessionPermissions[mid];
-      } else if (currentSigner < sessionSigner) {
-        left = mid + 1;
-      } else {
-        right = mid - 1;
-      }
-    }
-    // Fail out if the signer is not found
-    revert MissingPermissions(sessionSigner);
-  }
-
-  // 🤢
-  struct ValidateCallsAndTrackUsageParams {
-    UsageLimit[][] allLimits;
-    uint256 limitIndex;
-    uint256 validArrays;
-    uint256 i;
-    uint256 j;
-    uint256 permissionIdx;
-  }
-
-  //FIXME This function has stack too deep issues
   /// @notice Validates calls and tracks usage
   /// @param limitHashPrefix The hash prefix for the usage limits
   /// @param payload The decoded payload containing calls
-  /// @param permissions The permissions for the signer
-  /// @param permissionIdxPerCall The index of the permission for each call
+  /// @param signature The session manager signature
   /// @return totalValueUsed The total value used
   /// @return limits The usage limits
   function _validateCallsAndTrackUsage(
     bytes32 limitHashPrefix,
     Payload.Decoded calldata payload,
-    Permission[] memory permissions,
-    uint8[] memory permissionIdxPerCall
+    SessionManagerSignature memory signature
   ) private view returns (uint256 totalValueUsed, UsageLimit[] memory limits) {
-    ValidateCallsAndTrackUsageParams memory params = ValidateCallsAndTrackUsageParams({
-      allLimits: new UsageLimit[][](payload.calls.length + 1),
-      limitIndex: 0,
-      validArrays: 0,
-      i: 0,
-      j: 0,
-      permissionIdx: 0
-    });
+    UsageLimit[][] memory allLimits = new UsageLimit[][](payload.calls.length + 1);
+    uint256 limitIndex = 0;
+    uint256 validArrays = 0;
+    uint256 permissionIdx = 0;
 
-    for (params.i = 0; params.i < payload.calls.length; params.i++) {
-      Payload.Call calldata call = payload.calls[params.i];
+    for (uint256 i = 0; i < payload.calls.length; i++) {
+      Payload.Call calldata call = payload.calls[i];
       if (call.delegateCall) {
         // Delegate calls are not allowed
         revert InvalidDelegateCall();
@@ -195,9 +130,9 @@ contract SessionManager is PermissionValidator, ISessionManager {
       }
 
       // Get the permission for the current call
-      params.permissionIdx = permissionIdxPerCall[params.i];
-      if (params.permissionIdx >= permissions.length) {
-        revert MissingPermission(params.i);
+      permissionIdx = signature.permissionIdxPerCall[i];
+      if (permissionIdx >= signature.sessionPermissions.permissions.length) {
+        revert MissingPermission(i);
       }
 
       if (call.value > 0) {
@@ -207,38 +142,38 @@ contract SessionManager is PermissionValidator, ISessionManager {
 
       // Validate the permission for the current call
       (bool isValid, UsageLimit[] memory usageLimits) =
-        validatePermission(permissions[params.permissionIdx], call, limitHashPrefix);
+        validatePermission(signature.sessionPermissions.permissions[permissionIdx], call, limitHashPrefix);
       if (!isValid) {
-        revert InvalidPermission(params.i);
+        revert InvalidPermission(i);
       }
 
       // Track usage limits
       if (usageLimits.length > 0) {
-        params.allLimits[params.validArrays] = usageLimits;
-        params.limitIndex += usageLimits.length;
-        params.validArrays++;
+        allLimits[validArrays] = usageLimits;
+        limitIndex += usageLimits.length;
+        validArrays++;
       }
     }
 
     // Create final arrays of exact size needed
     if (totalValueUsed == 0) {
-      limits = new UsageLimit[](params.limitIndex);
+      limits = new UsageLimit[](limitIndex);
     } else {
-      limits = new UsageLimit[](params.limitIndex + 1);
+      limits = new UsageLimit[](limitIndex + 1);
       // Add the value tracking hash to the end
-      limits[params.limitIndex] = UsageLimit({
+      limits[limitIndex] = UsageLimit({
         usageHash: keccak256(abi.encode(limitHashPrefix, VALUE_TRACKING_ADDRESS)),
         usageAmount: totalValueUsed
       });
     }
 
     // Flatten arrays
-    params.limitIndex = 0;
-    for (params.i = 0; params.i < params.validArrays; params.i++) {
-      UsageLimit[] memory subLimits = params.allLimits[params.i];
-      for (params.j = 0; params.j < subLimits.length; params.j++) {
-        limits[params.limitIndex] = subLimits[params.j];
-        params.limitIndex++;
+    limitIndex = 0;
+    for (uint256 i = 0; i < validArrays; i++) {
+      UsageLimit[] memory subLimits = allLimits[i];
+      for (uint256 j = 0; j < subLimits.length; j++) {
+        limits[limitIndex] = subLimits[j];
+        limitIndex++;
       }
     }
 
@@ -273,22 +208,15 @@ contract SessionManager is PermissionValidator, ISessionManager {
 
   /// @notice Validates a session in implicit mode, checking blacklist and calling acceptImplicitRequest
   /// @param wallet The wallet's address
-  /// @param signature The session signature data
   /// @param payload The decoded payload containing calls
-  /// @param sessionSigner The signer for the current session
+  /// @param signature The session signature data
   function _validateImplicitMode(
     address wallet,
-    SessionManagerSignature memory signature,
     Payload.Decoded calldata payload,
-    address sessionSigner
+    SessionManagerSignature memory signature
   ) internal view {
-    // Validate the session signer
-    if (sessionSigner != signature.attestation.approvedSigner) {
-      revert InvalidSessionSignature();
-    }
-
     // Validate blacklist
-    address[] memory blacklist = signature.configuration.implicitBlacklist;
+    address[] memory blacklist = signature.implicitBlacklist;
 
     // Check each call's target address against blacklist
     for (uint256 i = 0; i < payload.calls.length; i++) {

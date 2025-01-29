@@ -10,25 +10,18 @@ import { ISapient, Payload } from "./ISapient.sol";
 struct SessionManagerSignature {
   /// @notice Whether this signature is for an implicit session mode
   bool isImplicit;
-  /// @notice Session configuration for the calling wallet including permissions and blacklist
-  SessionManagerConfiguration configuration;
   /// @notice The attestation data for the current session
   Attestation attestation;
-  /// @notice Signature from the wallet's global signer validating the attestation
-  bytes globalSignature;
-  /// @notice Signature from the session signer validating the payload
-  bytes sessionSignature;
-  /// @notice Indices of permissions used for this request
-  uint8[] permissionIdxPerCall;
-}
-
-/// @notice Configuration for a session manager permissions and blacklist
-/// @dev Global signer is inferred from the signature verification
-struct SessionManagerConfiguration {
-  /// @notice Array of permissions for each session signer, sorted by signer address
-  SessionPermissions[] sessionPermissions;
+  /// @notice The global signer address
+  address globalSigner;
+  /// @notice The permissions root for the session in this configuration
+  bytes32 permissionsRoot;
+  /// @notice Session permissions for the session signer
+  SessionPermissions sessionPermissions;
   /// @notice Array of addresses blacklisted from being called in implicit mode, sorted
   address[] implicitBlacklist;
+  /// @notice Indices of permissions used for this request
+  uint8[] permissionIdxPerCall;
 }
 
 /// @notice Permissions configuration for a specific session signer
