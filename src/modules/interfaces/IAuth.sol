@@ -40,7 +40,9 @@ abstract contract IAuth {
    * @notice Validates the signature image
    * @return true if the signature image is valid
    */
-  function _isValidImage(bytes32) internal view virtual returns (bool) {
+  function _isValidImage(
+    bytes32
+  ) internal view virtual returns (bool) {
     return false;
   }
 
@@ -48,12 +50,16 @@ abstract contract IAuth {
    * @notice Updates the signers configuration of the wallet
    * @param _imageHash New required image hash of the signature
    */
-  function updateImageHash(bytes32 _imageHash) external virtual;
+  function updateImageHash(
+    bytes32 _imageHash
+  ) external virtual;
 
   /**
    * @notice Updates the signers configuration of the wallet
    * @param _imageHash New required image hash of the signature
    */
-  function _updateImageHash(bytes32 _imageHash) internal virtual;
+  function _updateImageHash(
+    bytes32 _imageHash
+  ) internal virtual;
 
 }

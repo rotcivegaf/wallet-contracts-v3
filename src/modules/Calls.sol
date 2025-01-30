@@ -26,7 +26,9 @@ abstract contract Calls is IAuth {
     _execute(opHash, decoded);
   }
 
-  function selfExecute(bytes calldata _payload) external virtual onlySelf {
+  function selfExecute(
+    bytes calldata _payload
+  ) external virtual onlySelf {
     Payload.Decoded memory decoded = Payload.fromPackedCalls(_payload);
     bytes32 opHash = Payload.toEIP712(decoded);
     _execute(opHash, decoded);

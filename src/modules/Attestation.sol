@@ -19,8 +19,26 @@ struct Attestation {
 
 library LibAttestation {
 
-  function toHash(Attestation memory attestation) internal pure returns (bytes32) {
-    return keccak256(abi.encode(attestation));
+  function toHash(
+    Attestation memory attestation
+  ) internal pure returns (bytes32) { }
+
+  function fromPacked(
+    bytes calldata encoded,
+    uint256 pointer
+  ) internal pure returns (Attestation memory attestation, uint256 newPointer) {
+    (attestation.approvedSigner, pointer) = encoded.readAddress(pointer);
+    (attestation.identityType, pointer) = encoded.readBytes4(pointer);
+    (attestation.issuerHash, pointer) = encoded.readBytes32(pointer);
+    (attestation.audienceHash, pointer) = encoded.readBytes32(pointer);
+    uint256 dataSize;
+    (dataSize, pointer) = encoded.readUint24(pointer);
+    attestation.authData = encoded[pointer:pointer + dataSize];
+    pointer += dataSize;
+    (dataSize, pointer) = encoded.readUint24(pointer);
+    attestation.applicationData = encoded[pointer:pointer + dataSize];
+    pointer += dataSize;
+    return (attestation, pointer);
   }
 
   function generateImplicitRequestMagic(Attestation memory attestation, address wallet) internal pure returns (bytes32) {

@@ -47,7 +47,9 @@ contract BaseSig {
     return keccak256(abi.encodePacked("Sequence sapient config:\n", _addr, _weight, _imageHash));
   }
 
-  function _leafForHardcodedSubdigest(bytes32 _subdigest) internal pure returns (bytes32) {
+  function _leafForHardcodedSubdigest(
+    bytes32 _subdigest
+  ) internal pure returns (bytes32) {
     return keccak256(abi.encodePacked("Sequence static digest:\n", _subdigest));
   }
 

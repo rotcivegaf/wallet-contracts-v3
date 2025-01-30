@@ -41,21 +41,11 @@ contract SessionSig {
     address recoveredPayloadSigner = ecrecover(payloadHash, v, r, s);
 
     // Read attestation components
-    (signature.attestation.approvedSigner, pointer) = encodedSignature.readAddress(pointer);
+    (signature.attestation, pointer) = LibAttestation.fromPacked(encodedSignature, pointer);
     if (recoveredPayloadSigner != signature.attestation.approvedSigner) {
       // Payload must be signed by the approved signer
       revert InvalidPayloadSigner(signature.attestation.approvedSigner, recoveredPayloadSigner);
     }
-    (signature.attestation.identityType, pointer) = encodedSignature.readBytes4(pointer);
-    (signature.attestation.issuerHash, pointer) = encodedSignature.readBytes32(pointer);
-    (signature.attestation.audienceHash, pointer) = encodedSignature.readBytes32(pointer);
-    uint256 dataSize;
-    (dataSize, pointer) = encodedSignature.readUint24(pointer);
-    signature.attestation.authData = encodedSignature[pointer:pointer + dataSize];
-    pointer += dataSize;
-    (dataSize, pointer) = encodedSignature.readUint24(pointer);
-    signature.attestation.applicationData = encodedSignature[pointer:pointer + dataSize];
-    pointer += dataSize;
 
     // Read global signature (r,sv)
     (r, s, v, pointer) = encodedSignature.readRSVCompact(pointer);
@@ -65,6 +55,7 @@ contract SessionSig {
     signature.globalSigner = ecrecover(attestationHash, v, r, s);
 
     // Read encoded permissions size and data
+    uint256 dataSize;
     (dataSize, pointer) = encodedSignature.readUint24(pointer);
     bytes calldata encodedPermissions = encodedSignature[pointer:pointer + dataSize];
     pointer += dataSize;
