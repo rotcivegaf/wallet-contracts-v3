@@ -33,10 +33,8 @@ contract BaseSig {
   error UnusedSnapshot(Snapshot _snapshot);
   error InvalidSignatureFlag(uint256 _flag);
 
-  function _leafForAddressAndWeight(address _addr, uint96 _weight) internal pure returns (bytes32) {
-    unchecked {
-      return bytes32((uint256(_weight) << 160) | uint256(uint160(_addr)));
-    }
+  function _leafForAddressAndWeight(address _addr, uint256 _weight) internal pure returns (bytes32) {
+    return keccak256(abi.encodePacked("Sequence signer:\n", _addr, _weight));
   }
 
   function _leafForNested(bytes32 _node, uint256 _threshold, uint256 _weight) internal pure returns (bytes32) {
@@ -321,12 +319,12 @@ contract BaseSig {
 
           // Enter a branch of the signature merkle tree
           // but with an internal threshold and an external fixed weight
-          uint256 externalWeight = uint8(firstByte & 0x03);
+          uint256 externalWeight = uint8(firstByte & 0x0c) >> 2;
           if (externalWeight == 0) {
             (externalWeight, rindex) = _signature.readUint8(rindex);
           }
 
-          uint256 internalThreshold = uint8(firstByte & 0x0c) >> 2;
+          uint256 internalThreshold = uint8(firstByte & 0x03);
           if (internalThreshold == 0) {
             (internalThreshold, rindex) = _signature.readUint16(rindex);
           }
