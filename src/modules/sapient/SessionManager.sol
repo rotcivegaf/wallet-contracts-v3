@@ -4,11 +4,12 @@ pragma solidity ^0.8.27;
 import { LibBytes } from "../../utils/LibBytes.sol";
 import { LibBytesPointer } from "../../utils/LibBytesPointer.sol";
 import { Attestation, LibAttestation } from "../Attestation.sol";
-import { PermissionValidator } from "../PermissionValidator.sol";
-import { Permission, UsageLimit } from "../interfaces/IPermission.sol";
+
+import { Permission, UsageLimit } from "../Permission.sol";
 import { ISapient, Payload } from "../interfaces/ISapient.sol";
 import { ISessionManager, SessionManagerSignature, SessionPermissions } from "../interfaces/ISessionManager.sol";
 import { ISignalsImplicitMode } from "../interfaces/ISignalsImplicitMode.sol";
+import { PermissionValidator } from "./PermissionValidator.sol";
 import { SessionSig } from "./SessionSig.sol";
 
 using LibBytesPointer for bytes;
@@ -21,7 +22,9 @@ contract SessionManager is SessionSig, PermissionValidator, ISessionManager {
   address public constant VALUE_TRACKING_ADDRESS = address(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
 
   /// @inheritdoc ISessionManager
-  function incrementUsageLimit(UsageLimit[] calldata limits) external {
+  function incrementUsageLimit(
+    UsageLimit[] calldata limits
+  ) external {
     for (uint256 i = 0; i < limits.length; i++) {
       limitUsage[limits[i].usageHash] += limits[i].usageAmount;
     }
@@ -47,7 +50,9 @@ contract SessionManager is SessionSig, PermissionValidator, ISessionManager {
   /// @notice Generates an image hash for the given session manager decoded signature
   /// @param signature The session manager signature
   /// @return bytes32 The generated image hash
-  function getImageHash(SessionManagerSignature memory signature) public pure returns (bytes32) {
+  function getImageHash(
+    SessionManagerSignature memory signature
+  ) public pure returns (bytes32) {
     return keccak256(abi.encode(signature.globalSigner, signature.permissionsRoot, signature.implicitBlacklist));
   }
 
@@ -269,7 +274,9 @@ contract SessionManager is SessionSig, PermissionValidator, ISessionManager {
 
   /// @notice Returns true if the contract implements the given interface
   /// @param interfaceId The interface identifier
-  function supportsInterface(bytes4 interfaceId) public pure returns (bool) {
+  function supportsInterface(
+    bytes4 interfaceId
+  ) public pure returns (bool) {
     return interfaceId == type(ISapient).interfaceId || interfaceId == type(ISessionManager).interfaceId;
   }
 

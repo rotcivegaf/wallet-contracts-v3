@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.18;
 
 /**
@@ -10,7 +11,9 @@ pragma solidity ^0.8.18;
  */
 library LibBytesPointer {
 
-  function readFirstUint8(bytes calldata _data) internal pure returns (uint8 a, uint256 newPointer) {
+  function readFirstUint8(
+    bytes calldata _data
+  ) internal pure returns (uint8 a, uint256 newPointer) {
     assembly {
       let word := calldataload(_data.offset)
       a := shr(248, word)
@@ -18,7 +21,9 @@ library LibBytesPointer {
     }
   }
 
-  function readFirstUint16(bytes calldata _data) internal pure returns (uint16 a, uint256 newPointer) {
+  function readFirstUint16(
+    bytes calldata _data
+  ) internal pure returns (uint16 a, uint256 newPointer) {
     assembly {
       let word := calldataload(_data.offset)
       a := shr(240, word)
@@ -26,7 +31,9 @@ library LibBytesPointer {
     }
   }
 
-  function readFirstUint24(bytes calldata _data) internal pure returns (uint24 a, uint256 newPointer) {
+  function readFirstUint24(
+    bytes calldata _data
+  ) internal pure returns (uint24 a, uint256 newPointer) {
     assembly {
       let word := calldataload(_data.offset)
       a := shr(232, word)

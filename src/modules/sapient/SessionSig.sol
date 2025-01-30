@@ -7,7 +7,7 @@ import { LibOptim } from "../../utils/LibOptim.sol";
 import { Attestation, LibAttestation } from "../Attestation.sol";
 
 import { Payload } from "../Payload.sol";
-import { Permission } from "../interfaces/IPermission.sol";
+import { LibPermission, Permission } from "../Permission.sol";
 import { SessionManagerSignature, SessionPermissions } from "../interfaces/ISessionManager.sol";
 
 contract SessionSig {
@@ -15,6 +15,7 @@ contract SessionSig {
   using LibBytesPointer for bytes;
   using LibOptim for bytes;
   using LibAttestation for Attestation;
+  using LibPermission for Permission;
 
   uint256 internal constant FLAG_PERMISSIONS = 0;
   uint256 internal constant FLAG_NODE = 1;
@@ -124,16 +125,15 @@ contract SessionSig {
         (permSize, rindex) = encodedSessions.readUint24(rindex);
 
         // Read permissions array
-        bytes memory permData = encodedSessions[rindex:rindex + permSize];
+        bytes calldata permData = encodedSessions[rindex:rindex + permSize];
         rindex += permSize;
+        Permission[] memory perms;
+        (perms, rindex) = _decodePermissions(permData, rindex);
 
-        SessionPermissions memory nodePermissions = SessionPermissions({
-          signer: signer,
-          valueLimit: valueLimit,
-          deadline: deadline,
-          permissions: abi.decode(permData, (Permission[]))
-        });
+        SessionPermissions memory nodePermissions =
+          SessionPermissions({ signer: signer, valueLimit: valueLimit, deadline: deadline, permissions: perms });
 
+        // Compute node hash
         bytes32 node = _leafForPermissions(nodePermissions);
         root = root != bytes32(0) ? LibOptim.fkeccak256(root, node) : node;
 
@@ -178,7 +178,9 @@ contract SessionSig {
     return (root, permissions);
   }
 
-  function _leafForPermissions(SessionPermissions memory permissions) internal pure returns (bytes32) {
+  function _leafForPermissions(
+    SessionPermissions memory permissions
+  ) internal pure returns (bytes32) {
     return keccak256(
       abi.encode(
         "Session permissions leaf:\n",
@@ -188,6 +190,29 @@ contract SessionSig {
         permissions.permissions
       )
     );
+  }
+
+  function _decodePermissions(
+    bytes calldata encoded,
+    uint256 pointer
+  ) internal pure returns (Permission[] memory permissions, uint256 newPointer) {
+    uint256 length;
+    (length, newPointer) = encoded.readUint24(pointer);
+    permissions = new Permission[](length);
+    for (uint256 i = 0; i < length; i++) {
+      (permissions[i], pointer) = LibPermission.readPermission(encoded, pointer);
+    }
+    return (permissions, pointer);
+  }
+
+  function _encodePermissions(
+    Permission[] calldata permissions
+  ) internal pure returns (bytes memory packed) {
+    bytes memory encoded = abi.encodePacked(uint24(permissions.length));
+    for (uint256 i = 0; i < permissions.length; i++) {
+      encoded = abi.encodePacked(encoded, permissions[i].toPacked());
+    }
+    return encoded;
   }
 
 }

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import { LibBytes } from "../utils/LibBytes.sol";
+import { LibBytes } from "../../utils/LibBytes.sol";
 
-import { ParameterOperation, ParameterRule, Permission, UsageLimit } from "./interfaces/IPermission.sol";
-import { Payload } from "./interfaces/ISapient.sol";
+import { ParameterOperation, ParameterRule, Permission, UsageLimit } from "../Permission.sol";
+import { Payload } from "../interfaces/ISapient.sol";
 
 abstract contract PermissionValidator {
 

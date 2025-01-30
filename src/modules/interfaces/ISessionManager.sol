@@ -2,8 +2,9 @@
 pragma solidity ^0.8.27;
 
 import { Attestation } from "../Attestation.sol";
-import { PermissionValidator } from "../PermissionValidator.sol";
-import { Permission, UsageLimit } from "./IPermission.sol";
+
+import { Permission, UsageLimit } from "../Permission.sol";
+import { PermissionValidator } from "../sapient/PermissionValidator.sol";
 import { ISapient, Payload } from "./ISapient.sol";
 
 /// @notice Represents a signature for a session, containing all necessary components for validation
@@ -78,6 +79,8 @@ interface ISessionManager is ISapient, ISessionManagerSignals {
 
   /// @notice Increment usage for a caller's given session and target
   /// @param limits Array of limit/session/target combinations
-  function incrementUsageLimit(UsageLimit[] calldata limits) external;
+  function incrementUsageLimit(
+    UsageLimit[] calldata limits
+  ) external;
 
 }
