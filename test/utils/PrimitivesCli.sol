@@ -53,8 +53,9 @@ library PrimitivesCli {
         _vm.toString(_threshold),
         " --checkpoint ",
         _vm.toString(_checkpoint),
-        " ",
-        _elements
+        " '",
+        _elements,
+        "'"
       )
     );
     return string(_vm.shffi(command));
@@ -73,6 +74,19 @@ library PrimitivesCli {
   function getImageHash(Vm _vm, string memory _config) internal returns (bytes32) {
     string memory command = string(abi.encodePacked(_vm.root(), " config image-hash '", _config, "'"));
     return bytes32(_vm.shffi(command));
+  }
+
+  function randomConfig(Vm _vm, uint256 _maxDepth, uint256 _seed) internal returns (string memory) {
+    string memory command = string(
+      abi.encodePacked(
+        root(_vm),
+        " dev-tools random-config --max-depth ",
+        _vm.toString(_maxDepth),
+        " --min-threshold-on-nested 1 --seed ",
+        _vm.toString(_seed)
+      )
+    );
+    return string(_vm.shffi(command));
   }
 
 }
