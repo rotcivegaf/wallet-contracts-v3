@@ -24,10 +24,10 @@ contract SessionSig {
   error InvalidPayloadSigner(address expectedSigner, address recoveredSigner);
   error InvalidNodeType(uint256 flag);
 
-  function recoverSignature(
-    Payload.Decoded calldata payload,
+  function _recoverSignature(
+    Payload.Decoded memory payload,
     bytes calldata encodedSignature
-  ) public pure returns (SessionManagerSignature memory signature) {
+  ) internal pure returns (SessionManagerSignature memory signature) {
     uint256 pointer = 0;
     bytes32 r;
     bytes32 s;
@@ -62,7 +62,7 @@ contract SessionSig {
 
     // Recover permissions tree and find signer's permissions
     (signature.permissionsRoot, signature.sessionPermissions) =
-      recoverPermissionsTree(encodedPermissions, recoveredPayloadSigner);
+      _recoverPermissionsTree(encodedPermissions, recoveredPayloadSigner);
 
     // Read blacklist length and addresses
     (dataSize, pointer) = encodedSignature.readUint24(pointer);
@@ -83,10 +83,10 @@ contract SessionSig {
     return signature;
   }
 
-  function recoverPermissionsTree(
+  function _recoverPermissionsTree(
     bytes calldata encodedSessions,
     address sessionSigner
-  ) public pure returns (bytes32 root, SessionPermissions memory permissions) {
+  ) internal pure returns (bytes32 root, SessionPermissions memory permissions) {
     uint256 rindex;
 
     while (rindex < encodedSessions.length) {
@@ -146,13 +146,12 @@ contract SessionSig {
       // Branch (0x02)
       if (flag == FLAG_BRANCH) {
         // Read branch size
-        uint256 size;
-        (size, rindex) = encodedSessions.readUint24(rindex);
+        uint256 size = uint8(firstByte & 0x0f);
 
         // Process branch
         uint256 nrindex = rindex + size;
         (bytes32 branchRoot, SessionPermissions memory branchPermissions) =
-          recoverPermissionsTree(encodedSessions[rindex:nrindex], sessionSigner);
+          _recoverPermissionsTree(encodedSessions[rindex:nrindex], sessionSigner);
 
         if (branchPermissions.signer == sessionSigner) {
           permissions = branchPermissions;
@@ -169,6 +168,19 @@ contract SessionSig {
     return (root, permissions);
   }
 
+  function _decodePermissions(
+    bytes calldata encoded,
+    uint256 pointer
+  ) internal pure returns (Permission[] memory permissions, uint256 newPointer) {
+    uint256 length;
+    (length, pointer) = encoded.readUint24(pointer);
+    permissions = new Permission[](length);
+    for (uint256 i = 0; i < length; i++) {
+      (permissions[i], pointer) = LibPermission.readPermission(encoded, pointer);
+    }
+    return (permissions, pointer);
+  }
+
   function _leafForPermissions(
     SessionPermissions memory permissions
   ) internal pure returns (bytes32) {
@@ -181,19 +193,6 @@ contract SessionSig {
         permissions.permissions
       )
     );
-  }
-
-  function _decodePermissions(
-    bytes calldata encoded,
-    uint256 pointer
-  ) internal pure returns (Permission[] memory permissions, uint256 newPointer) {
-    uint256 length;
-    (length, newPointer) = encoded.readUint24(pointer);
-    permissions = new Permission[](length);
-    for (uint256 i = 0; i < length; i++) {
-      (permissions[i], pointer) = LibPermission.readPermission(encoded, pointer);
-    }
-    return (permissions, pointer);
   }
 
   function _encodePermissions(

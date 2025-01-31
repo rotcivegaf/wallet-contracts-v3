@@ -37,7 +37,7 @@ contract SessionManager is SessionSig, PermissionValidator, ISessionManager {
     bytes calldata encodedSignature
   ) external view returns (bytes32) {
     // Recover the session manager signature
-    SessionManagerSignature memory signature = recoverSignature(payload, encodedSignature);
+    SessionManagerSignature memory signature = _recoverSignature(payload, encodedSignature);
 
     // Validate the session using recovered permissions
     address wallet = msg.sender;
