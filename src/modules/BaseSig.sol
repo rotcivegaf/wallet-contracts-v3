@@ -54,7 +54,8 @@ contract BaseSig {
   function recover(
     Payload.Decoded memory _payload,
     bytes calldata _signature,
-    bool _ignoreCheckpointer
+    bool _ignoreCheckpointer,
+    address _checkpointer
   ) internal view returns (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint) {
     // First byte is the signature flag
     (uint256 signatureFlag, uint256 rindex) = _signature.readFirstUint8();
@@ -67,30 +68,32 @@ contract BaseSig {
     // - X000 0000 (bit [7]): reserved
 
     Snapshot memory snapshot;
-    address checkpointer;
+    address checkpointer = _checkpointer;
 
     // Recover the imageHash checkpointer if any
-    if (signatureFlag & 0x40 == 0x40) {
+    // but checkpointer passed as argument takes precedence
+    // since it can be defined by the chained signatures
+    if (signatureFlag & 0x40 == 0x40 && checkpointer != address(0)) {
       (checkpointer, rindex) = _signature.readAddress(rindex);
 
-      // Next 3 bytes determine the checkpointer data size
-      uint256 checkpointerDataSize;
-      (checkpointerDataSize, rindex) = _signature.readUint24(rindex);
-
       if (!_ignoreCheckpointer) {
+        // Next 3 bytes determine the checkpointer data size
+        uint256 checkpointerDataSize;
+        (checkpointerDataSize, rindex) = _signature.readUint24(rindex);
+
         // Read the checkpointer data
         bytes memory checkpointerData = _signature[rindex:rindex + checkpointerDataSize];
 
         // Call the middleware
         snapshot = ICheckpointer(checkpointer).snapshotFor(address(this), checkpointerData);
-      }
 
-      rindex += checkpointerDataSize;
+        rindex += checkpointerDataSize;
+      }
     }
 
     // If signature type is 01 we do a chained signature
     if (signatureFlag & 0x01 == 0x01) {
-      return recoverChained(_payload, snapshot, _signature[rindex:]);
+      return recoverChained(_payload, checkpointer, snapshot, _signature[rindex:]);
     }
 
     // If the signature type is 10 we do a no chain id signature
@@ -127,6 +130,7 @@ contract BaseSig {
 
   function recoverChained(
     Payload.Decoded memory _payload,
+    address _checkpointer,
     Snapshot memory _snapshot,
     bytes calldata _signature
   ) internal view returns (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint) {
@@ -137,14 +141,17 @@ contract BaseSig {
     uint256 prevCheckpoint = type(uint256).max;
 
     while (rindex < _signature.length) {
-      (uint256 sigSize, uint256 tmpIndex) = _signature.readUint24(rindex);
-      rindex = tmpIndex;
+      uint256 sigSize;
+      (sigSize, rindex) = _signature.readUint24(rindex);
       uint256 nrindex = sigSize + rindex;
+
+      bool isLast = nrindex == _signature.length;
 
       (threshold, weight, imageHash, checkpoint) = recover(
         prevCheckpoint == type(uint256).max ? _payload : linkedPayload,
         _signature[rindex:nrindex],
-        true // The checkpointer is only needed once
+        true, // The checkpointer is only used at the last step
+        isLast ? _checkpointer : address(0)
       );
 
       if (weight < threshold) {
