@@ -76,6 +76,12 @@ library PrimitivesCli {
     return _vm.shffi(command);
   }
 
+  function toPackedSessionPermission(Vm _vm, string memory _sessionPermission) internal returns (bytes memory) {
+    string memory command =
+      string(abi.encodePacked(_vm.root(), " permission to-packed-session '", _sessionPermission, "'"));
+    return _vm.shffi(command);
+  }
+
   function getImageHash(Vm _vm, string memory _config) internal returns (bytes32) {
     string memory command = string(abi.encodePacked(_vm.root(), " config image-hash '", _config, "'"));
     return bytes32(_vm.shffi(command));
@@ -91,12 +97,6 @@ library PrimitivesCli {
         _vm.toString(_seed)
       )
     );
-    return string(_vm.shffi(command));
-  }
-
-  function randomPermission(Vm _vm, uint256 _seed) internal returns (string memory) {
-    string memory command =
-      string(abi.encodePacked(root(_vm), " dev-tools random-permission --seed ", _vm.toString(_seed)));
     return string(_vm.shffi(command));
   }
 

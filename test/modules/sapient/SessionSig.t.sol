@@ -7,7 +7,6 @@ import {
 } from "../../../src/modules/sapient/SessionSig.sol";
 
 import { PrimitivesCli } from "../../utils/PrimitivesCli.sol";
-
 import { AdvTest } from "../../utils/TestUtils.sol";
 import { console } from "forge-std/console.sol";
 
@@ -32,6 +31,12 @@ contract SessionSigImp is SessionSig {
   ) external pure returns (Permission[] memory permissions) {
     (permissions,) = _decodePermissions(encodedPermissions, 0);
     return permissions;
+  }
+
+  function leftForPermissions(
+    SessionPermissions memory permissions
+  ) external pure returns (bytes32) {
+    return _leafForPermissions(permissions);
   }
 
 }
@@ -70,6 +75,92 @@ contract SessionSigTest is AdvTest {
     }
   }
 
+  function test_recoverPermissionsTree_singleNode(
+    uint256 seed
+  ) external {
+    // Generate a random permission
+    SessionPermissions memory sessionPermission;
+    (sessionPermission, seed) = _randomSessionPermission(seed);
+    // Encode with ffi
+    bytes memory encodedPermissions =
+      PrimitivesCli.toPackedSessionPermission(vm, _sessionPermissionToJSON(sessionPermission));
+    // Encode into tree of a single node
+    encodedPermissions = abi.encodePacked(uint8(0), encodedPermissions);
+    bytes32 expectedRoot = sessionSig.leftForPermissions(sessionPermission); // Single node, root is leaf
+
+    // Decode on contract
+    (bytes32 root, SessionPermissions memory decodedPermissions) =
+      sessionSig.recoverPermissionsTree(encodedPermissions, sessionPermission.signer);
+    // Validate
+    assertEq(root, expectedRoot, "Root");
+    assertEq(decodedPermissions.signer, sessionPermission.signer, "Signer");
+    assertEq(decodedPermissions.valueLimit, sessionPermission.valueLimit, "Value limit");
+    assertEq(decodedPermissions.deadline, sessionPermission.deadline, "Deadline");
+    assertEq(decodedPermissions.permissions.length, sessionPermission.permissions.length, "Permissions length");
+    for (uint256 i = 0; i < decodedPermissions.permissions.length; i++) {
+      assertEq(decodedPermissions.permissions[i].target, sessionPermission.permissions[i].target, "Permissions target");
+      assertEq(
+        decodedPermissions.permissions[i].rules.length,
+        sessionPermission.permissions[i].rules.length,
+        "Permissions rules length"
+      );
+      for (uint256 j = 0; j < decodedPermissions.permissions[i].rules.length; j++) {
+        assertEq(
+          decodedPermissions.permissions[i].rules[j].cumulative,
+          sessionPermission.permissions[i].rules[j].cumulative,
+          "Permissions rules cumulative"
+        );
+        assertEq(
+          uint8(decodedPermissions.permissions[i].rules[j].operation),
+          uint8(sessionPermission.permissions[i].rules[j].operation),
+          "Permissions rules operation"
+        );
+        assertEq(
+          decodedPermissions.permissions[i].rules[j].value,
+          sessionPermission.permissions[i].rules[j].value,
+          "Permissions rules value"
+        );
+        assertEq(
+          decodedPermissions.permissions[i].rules[j].offset,
+          sessionPermission.permissions[i].rules[j].offset,
+          "Permissions rules offset"
+        );
+        assertEq(
+          decodedPermissions.permissions[i].rules[j].mask,
+          sessionPermission.permissions[i].rules[j].mask,
+          "Permissions rules mask"
+        );
+      }
+    }
+  }
+
+  function _randomSessionPermission(
+    uint256 seed
+  ) internal pure returns (SessionPermissions memory sessionPermission, uint256 newSeed) {
+    bytes32 result;
+    // Generate a random signer
+    (result, seed) = _useSeed(seed);
+    sessionPermission.signer = address(uint160(uint256(result)));
+    console.log("sessionPermission.signer", sessionPermission.signer);
+    // Generate a random value limit
+    (result, seed) = _useSeed(seed);
+    sessionPermission.valueLimit = uint256(result);
+    console.log("sessionPermission.valueLimit", sessionPermission.valueLimit);
+    // Generate a random deadline
+    (result, seed) = _useSeed(seed);
+    sessionPermission.deadline = uint256(result);
+    console.log("sessionPermission.deadline", sessionPermission.deadline);
+    // Generate random permissions
+    (result, seed) = _useSeed(seed);
+    // uint256 permissionCount = uint256(result) % 3 + 1; // Max 3 permissions
+    uint256 permissionCount = 1;
+    sessionPermission.permissions = new Permission[](permissionCount);
+    for (uint256 i = 0; i < permissionCount; i++) {
+      (sessionPermission.permissions[i], seed) = _randomPermission(seed);
+    }
+    return (sessionPermission, seed);
+  }
+
   function _randomPermission(
     uint256 seed
   ) internal pure returns (Permission memory permission, uint256 newSeed) {
@@ -95,6 +186,31 @@ contract SessionSigTest is AdvTest {
   ) internal pure returns (bytes32 value, uint256 newSeed) {
     value = keccak256(abi.encode(seed));
     newSeed = uint256(value);
+  }
+
+  function _sessionPermissionToJSON(
+    SessionPermissions memory sessionPermission
+  ) internal pure returns (string memory) {
+    bytes memory json = "";
+    for (uint256 i = 0; i < sessionPermission.permissions.length; i++) {
+      if (i > 0) {
+        json = abi.encodePacked(json, ",");
+      }
+      json = abi.encodePacked(json, _permissionToJSON(sessionPermission.permissions[i]));
+    }
+    return string(
+      abi.encodePacked(
+        '{"signer":"',
+        vm.toString(sessionPermission.signer),
+        '","valueLimit":"',
+        vm.toString(sessionPermission.valueLimit),
+        '","deadline":"',
+        vm.toString(sessionPermission.deadline),
+        '","permissions":[',
+        json,
+        "]}"
+      )
+    );
   }
 
   function _permissionToJSON(

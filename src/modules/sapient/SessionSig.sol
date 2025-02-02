@@ -99,30 +99,21 @@ contract SessionSig {
 
       // Permissions configuration (0x00)
       if (flag == FLAG_PERMISSIONS) {
+        SessionPermissions memory nodePermissions;
+
         // Read signer
-        address signer;
-        (signer, rindex) = encodedSessions.readAddress(rindex);
+        (nodePermissions.signer, rindex) = encodedSessions.readAddress(rindex);
 
         // Read value limit
-        uint256 valueLimit;
-        (valueLimit, rindex) = encodedSessions.readUint256(rindex);
+        (nodePermissions.valueLimit, rindex) = encodedSessions.readUint256(rindex);
 
         // Read deadline
-        uint256 deadline;
-        (deadline, rindex) = encodedSessions.readUint256(rindex);
-
-        // Read permissions array size
-        uint256 permSize;
-        (permSize, rindex) = encodedSessions.readUint24(rindex);
+        (nodePermissions.deadline, rindex) = encodedSessions.readUint256(rindex);
 
         // Read permissions array
-        bytes calldata permData = encodedSessions[rindex:rindex + permSize];
-        rindex += permSize;
-        Permission[] memory perms;
-        (perms, rindex) = _decodePermissions(permData, rindex);
-
-        SessionPermissions memory nodePermissions =
-          SessionPermissions({ signer: signer, valueLimit: valueLimit, deadline: deadline, permissions: perms });
+        uint256 nrindex;
+        (nodePermissions.permissions, nrindex) = _decodePermissions(encodedSessions[rindex:], 0);
+        rindex += nrindex;
 
         // Compute node hash
         bytes32 node = _leafForPermissions(nodePermissions);
@@ -152,7 +143,6 @@ contract SessionSig {
         uint256 nrindex = rindex + size;
         (bytes32 branchRoot, SessionPermissions memory branchPermissions) =
           _recoverPermissionsTree(encodedSessions[rindex:nrindex], sessionSigner);
-
         if (branchPermissions.signer == sessionSigner) {
           permissions = branchPermissions;
         }
