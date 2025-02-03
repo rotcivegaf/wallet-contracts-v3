@@ -16,9 +16,10 @@ contract BaseSigImp is BaseSig {
   function recoverPub(
     Payload.Decoded memory _payload,
     bytes calldata _signature,
-    bool _ignoreCheckpointer
+    bool _ignoreCheckpointer,
+    address _checkpointer
   ) external view returns (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint) {
-    return recover(_payload, _signature, _ignoreCheckpointer);
+    return recover(_payload, _signature, _ignoreCheckpointer, _checkpointer);
   }
 
 }
@@ -39,7 +40,7 @@ contract BaseSigTest is AdvTest {
     string memory config = PrimitivesCli.randomConfig(vm, _maxDepth, _seed);
     bytes memory encodedConfig = PrimitivesCli.toEncodedConfig(vm, config);
 
-    (, uint256 weight, bytes32 imageHash,) = baseSigImp.recoverPub(payload, encodedConfig, true);
+    (, uint256 weight, bytes32 imageHash,) = baseSigImp.recoverPub(payload, encodedConfig, true, address(0));
 
     assertEq(weight, 0);
     assertEq(imageHash, PrimitivesCli.getImageHash(vm, config));
@@ -126,7 +127,7 @@ contract BaseSigTest is AdvTest {
     }
 
     (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint) =
-      baseSigImp.recoverPub(_payload, encodedSignature, true);
+      baseSigImp.recoverPub(_payload, encodedSignature, true, address(0));
 
     assertEq(threshold, _threshold);
     assertEq(imageHash, PrimitivesCli.getImageHash(vm, config));
@@ -202,7 +203,7 @@ contract BaseSigTest is AdvTest {
     }
 
     (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint) =
-      baseSigImp.recoverPub(_payload, encodedSignature, true);
+      baseSigImp.recoverPub(_payload, encodedSignature, true, address(0));
 
     assertEq(threshold, _threshold);
     assertEq(imageHash, PrimitivesCli.getImageHash(vm, config));
@@ -300,7 +301,7 @@ contract BaseSigTest is AdvTest {
     }
 
     (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint) =
-      baseSigImp.recoverPub(_payload, encodedSignature, true);
+      baseSigImp.recoverPub(_payload, encodedSignature, true, address(0));
 
     assertEq(threshold, _threshold);
     assertEq(imageHash, PrimitivesCli.getImageHash(vm, config));
@@ -418,7 +419,7 @@ contract BaseSigTest is AdvTest {
     }
 
     (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint) =
-      baseSigImp.recoverPub(_payload, encodedSignature, true);
+      baseSigImp.recoverPub(_payload, encodedSignature, true, address(0));
 
     assertEq(threshold, _threshold);
     assertEq(imageHash, PrimitivesCli.getImageHash(vm, config));
