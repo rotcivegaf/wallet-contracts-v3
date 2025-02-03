@@ -82,6 +82,11 @@ library PrimitivesCli {
     return _vm.shffi(command);
   }
 
+  function toPackedSessionTopology(Vm _vm, string memory _sessionTopology) internal returns (bytes memory) {
+    string memory command = string(abi.encodePacked(_vm.root(), " session to-packed '", _sessionTopology, "'"));
+    return _vm.shffi(command);
+  }
+
   function getImageHash(Vm _vm, string memory _config) internal returns (bytes32) {
     string memory command = string(abi.encodePacked(_vm.root(), " config image-hash '", _config, "'"));
     return bytes32(_vm.shffi(command));
@@ -94,6 +99,19 @@ library PrimitivesCli {
         " dev-tools random-config --max-depth ",
         _vm.toString(_maxDepth),
         " --min-threshold-on-nested 1 --seed ",
+        _vm.toString(_seed)
+      )
+    );
+    return string(_vm.shffi(command));
+  }
+
+  function randomSessionTopology(Vm _vm, uint256 _maxDepth, uint256 _seed) internal returns (string memory) {
+    string memory command = string(
+      abi.encodePacked(
+        root(_vm),
+        " dev-tools random-session-topology --max-depth ",
+        _vm.toString(_maxDepth),
+        " --max-permissions 1 --max-rules 1 --seed ",
         _vm.toString(_seed)
       )
     );

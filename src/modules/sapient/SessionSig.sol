@@ -137,7 +137,9 @@ contract SessionSig {
       // Branch (0x02)
       if (flag == FLAG_BRANCH) {
         // Read branch size
-        uint256 size = uint8(firstByte & 0x0f);
+        uint256 sizeSize = uint8(firstByte & 0x0f);
+        uint256 size;
+        (size, rindex) = encodedSessions.readUintX(rindex, sizeSize);
 
         // Process branch
         uint256 nrindex = rindex + size;

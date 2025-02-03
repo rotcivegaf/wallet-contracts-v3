@@ -134,6 +134,20 @@ contract SessionSigTest is AdvTest {
     }
   }
 
+  function test_recoverPermissionsTree_random(
+    uint256 seed
+  ) external {
+    uint256 maxDepth = seed % 3 + 1;
+    // Generate a random session topology using ffi
+    string memory encodedTopology = PrimitivesCli.randomSessionTopology(vm, maxDepth, seed);
+    // Encode with ffi
+    bytes memory encodedSessions = PrimitivesCli.toPackedSessionTopology(vm, encodedTopology);
+    // Decode on contract
+    (bytes32 root, SessionPermissions memory decodedPermissions) =
+      sessionSig.recoverPermissionsTree(encodedSessions, address(0));
+    // Validate?
+  }
+
   function _randomSessionPermission(
     uint256 seed
   ) internal pure returns (SessionPermissions memory sessionPermission, uint256 newSeed) {
