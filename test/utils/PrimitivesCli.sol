@@ -83,7 +83,7 @@ library PrimitivesCli {
   }
 
   function toPackedSessionTopology(Vm _vm, string memory _sessionTopology) internal returns (bytes memory) {
-    string memory command = string(abi.encodePacked(_vm.root(), " session to-packed '", _sessionTopology, "'"));
+    string memory command = string(abi.encodePacked(_vm.root(), " session to-packed-topology '", _sessionTopology, "'"));
     return _vm.shffi(command);
   }
 

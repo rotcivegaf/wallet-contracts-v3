@@ -3,19 +3,22 @@ pragma solidity ^0.8.27;
 
 import { ParameterOperation, ParameterRule, Permission, UsageLimit } from "../../../src/modules/Permission.sol";
 import {
-  Payload, SessionManagerSignature, SessionPermissions, SessionSig
-} from "../../../src/modules/sapient/SessionSig.sol";
+  ExplicitSessionSig,
+  ExplicitSessionSignature,
+  Payload,
+  SessionPermissions
+} from "../../../src/modules/sapient/ExplicitSessionSig.sol";
 
 import { PrimitivesCli } from "../../utils/PrimitivesCli.sol";
 import { AdvTest } from "../../utils/TestUtils.sol";
 import { console } from "forge-std/console.sol";
 
-contract SessionSigImp is SessionSig {
+contract ExplicitSessionSigImp is ExplicitSessionSig {
 
   function recoverSignature(
     Payload.Decoded memory payload,
     bytes calldata signature
-  ) external pure returns (SessionManagerSignature memory) {
+  ) external pure returns (ExplicitSessionSignature memory) {
     return _recoverSignature(payload, signature);
   }
 
@@ -41,12 +44,12 @@ contract SessionSigImp is SessionSig {
 
 }
 
-contract SessionSigTest is AdvTest {
+contract ExplicitSessionSigTest is AdvTest {
 
-  SessionSigImp public sessionSig;
+  ExplicitSessionSigImp public sessionSig;
 
   function setUp() public {
-    sessionSig = new SessionSigImp();
+    sessionSig = new ExplicitSessionSigImp();
   }
 
   function test_decodePermissions(
@@ -143,8 +146,7 @@ contract SessionSigTest is AdvTest {
     // Encode with ffi
     bytes memory encodedSessions = PrimitivesCli.toPackedSessionTopology(vm, encodedTopology);
     // Decode on contract
-    (bytes32 root, SessionPermissions memory decodedPermissions) =
-      sessionSig.recoverPermissionsTree(encodedSessions, address(0));
+    (,) = sessionSig.recoverPermissionsTree(encodedSessions, address(0));
     // Validate?
   }
 
@@ -153,19 +155,19 @@ contract SessionSigTest is AdvTest {
   ) internal pure returns (SessionPermissions memory sessionPermission, uint256 newSeed) {
     bytes32 result;
     // Generate a random signer
-    (result, seed) = _useSeed(seed);
+    (result, seed) = useSeed(seed);
     sessionPermission.signer = address(uint160(uint256(result)));
     console.log("sessionPermission.signer", sessionPermission.signer);
     // Generate a random value limit
-    (result, seed) = _useSeed(seed);
+    (result, seed) = useSeed(seed);
     sessionPermission.valueLimit = uint256(result);
     console.log("sessionPermission.valueLimit", sessionPermission.valueLimit);
     // Generate a random deadline
-    (result, seed) = _useSeed(seed);
+    (result, seed) = useSeed(seed);
     sessionPermission.deadline = uint256(result);
     console.log("sessionPermission.deadline", sessionPermission.deadline);
     // Generate random permissions
-    (result, seed) = _useSeed(seed);
+    (result, seed) = useSeed(seed);
     // uint256 permissionCount = uint256(result) % 3 + 1; // Max 3 permissions
     uint256 permissionCount = 1;
     sessionPermission.permissions = new Permission[](permissionCount);
@@ -179,27 +181,20 @@ contract SessionSigTest is AdvTest {
     uint256 seed
   ) internal pure returns (Permission memory permission, uint256 newSeed) {
     bytes32 value;
-    (value, newSeed) = _useSeed(seed);
+    (value, newSeed) = useSeed(seed);
     permission.target = address(uint160(uint256(value)));
     permission.rules = new ParameterRule[](1);
-    (value, newSeed) = _useSeed(newSeed);
+    (value, newSeed) = useSeed(newSeed);
     permission.rules[0].cumulative = uint256(value) % 2 == 0;
-    (value, newSeed) = _useSeed(newSeed);
+    (value, newSeed) = useSeed(newSeed);
     permission.rules[0].operation = ParameterOperation(uint256(value) % 4);
-    (value, newSeed) = _useSeed(newSeed);
+    (value, newSeed) = useSeed(newSeed);
     permission.rules[0].value = value;
-    (value, newSeed) = _useSeed(newSeed);
+    (value, newSeed) = useSeed(newSeed);
     permission.rules[0].offset = uint256(value);
-    (value, newSeed) = _useSeed(newSeed);
+    (value, newSeed) = useSeed(newSeed);
     permission.rules[0].mask = value;
     return (permission, newSeed);
-  }
-
-  function _useSeed(
-    uint256 seed
-  ) internal pure returns (bytes32 value, uint256 newSeed) {
-    value = keccak256(abi.encode(seed));
-    newSeed = uint256(value);
   }
 
   function _sessionPermissionToJSON(

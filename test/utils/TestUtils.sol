@@ -40,4 +40,11 @@ contract AdvTest is Test {
     vm.assume(_addr != address(0x000000000000000000636F6e736F6c652e6c6f67));
   }
 
+  function useSeed(
+    uint256 seed
+  ) internal pure returns (bytes32 value, uint256 newSeed) {
+    value = keccak256(abi.encode(seed));
+    newSeed = uint256(value);
+  }
+
 }

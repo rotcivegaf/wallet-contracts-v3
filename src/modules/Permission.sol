@@ -6,6 +6,8 @@ import { Attestation } from "./Attestation.sol";
 import { ISapient, Payload } from "./interfaces/ISapient.sol";
 import { PermissionValidator } from "./sapient/PermissionValidator.sol";
 
+import { console } from "forge-std/console.sol";
+
 struct Permission {
   address target;
   ParameterRule[] rules;
@@ -47,21 +49,29 @@ library LibPermission {
   ) internal pure returns (Permission memory permission, uint256 newPointer) {
     // Target
     (permission.target, pointer) = encoded.readAddress(pointer);
+    console.log("permission.target", permission.target);
     // Rules
     uint256 rulesLength;
     (rulesLength, pointer) = encoded.readUint24(pointer);
+    console.log("rulesLength", rulesLength);
     permission.rules = new ParameterRule[](rulesLength);
     for (uint256 i = 0; i < rulesLength; i++) {
       uint8 operationCumulative;
       (operationCumulative, pointer) = encoded.readUint8(pointer);
+      console.log("operationCumulative", operationCumulative);
       // 000X: cumulative
       permission.rules[i].cumulative = operationCumulative & 1 != 0;
       // XXX0: operation
       permission.rules[i].operation = ParameterOperation(operationCumulative >> 1);
 
       (permission.rules[i].value, pointer) = encoded.readBytes32(pointer);
+      console.log("permission.rules[i].value");
+      console.logBytes32(permission.rules[i].value);
       (permission.rules[i].offset, pointer) = encoded.readUint256(pointer);
+      console.log("permission.rules[i].offset", permission.rules[i].offset);
       (permission.rules[i].mask, pointer) = encoded.readBytes32(pointer);
+      console.log("permission.rules[i].mask");
+      console.logBytes32(permission.rules[i].mask);
     }
     return (permission, pointer);
   }

@@ -4,30 +4,26 @@ pragma solidity ^0.8.27;
 import { LibBytesPointer } from "../../utils/LibBytesPointer.sol";
 import { LibOptim } from "../../utils/LibOptim.sol";
 
-import { Attestation, LibAttestation } from "../Attestation.sol";
-
 import { Payload } from "../Payload.sol";
 import { LibPermission, Permission } from "../Permission.sol";
-import { SessionManagerSignature, SessionPermissions } from "../interfaces/ISessionManager.sol";
+import { ExplicitSessionSignature, SessionPermissions } from "../interfaces/IExplicitSessionManager.sol";
 
-contract SessionSig {
+contract ExplicitSessionSig {
 
   using LibBytesPointer for bytes;
   using LibOptim for bytes;
-  using LibAttestation for Attestation;
   using LibPermission for Permission;
 
   uint256 internal constant FLAG_PERMISSIONS = 0;
   uint256 internal constant FLAG_NODE = 1;
   uint256 internal constant FLAG_BRANCH = 2;
 
-  error InvalidPayloadSigner(address expectedSigner, address recoveredSigner);
   error InvalidNodeType(uint256 flag);
 
   function _recoverSignature(
     Payload.Decoded memory payload,
     bytes calldata encodedSignature
-  ) internal pure returns (SessionManagerSignature memory signature) {
+  ) internal pure returns (ExplicitSessionSignature memory signature) {
     uint256 pointer = 0;
     bytes32 r;
     bytes32 s;
@@ -40,19 +36,8 @@ contract SessionSig {
     bytes32 payloadHash = keccak256(abi.encode(payload));
     address recoveredPayloadSigner = ecrecover(payloadHash, v, r, s);
 
-    // Read attestation components
-    (signature.attestation, pointer) = LibAttestation.fromPacked(encodedSignature, pointer);
-    if (recoveredPayloadSigner != signature.attestation.approvedSigner) {
-      // Payload must be signed by the approved signer
-      revert InvalidPayloadSigner(signature.attestation.approvedSigner, recoveredPayloadSigner);
-    }
-
     // Read global signature (r,sv)
     (r, s, v, pointer) = encodedSignature.readRSVCompact(pointer);
-
-    // Recover the global signer from the global signature
-    bytes32 attestationHash = signature.attestation.toHash();
-    signature.globalSigner = ecrecover(attestationHash, v, r, s);
 
     // Read encoded permissions size and data
     uint256 dataSize;
@@ -64,13 +49,6 @@ contract SessionSig {
     (signature.permissionsRoot, signature.sessionPermissions) =
       _recoverPermissionsTree(encodedPermissions, recoveredPayloadSigner);
 
-    // Read blacklist length and addresses
-    (dataSize, pointer) = encodedSignature.readUint24(pointer);
-    signature.implicitBlacklist = new address[](dataSize);
-    for (uint256 i = 0; i < dataSize; i++) {
-      (signature.implicitBlacklist[i], pointer) = encodedSignature.readAddress(pointer);
-    }
-
     // Read permission indices length and values
     (dataSize, pointer) = encodedSignature.readUint24(pointer);
     signature.permissionIdxPerCall = new uint8[](dataSize);
@@ -78,8 +56,6 @@ contract SessionSig {
       (signature.permissionIdxPerCall[i], pointer) = encodedSignature.readUint8(pointer);
     }
 
-    // Construct and return the signature struct
-    signature.isImplicit = signature.sessionPermissions.signer == address(0);
     return signature;
   }
 
@@ -185,16 +161,6 @@ contract SessionSig {
         permissions.permissions
       )
     );
-  }
-
-  function _encodePermissions(
-    Permission[] calldata permissions
-  ) internal pure returns (bytes memory packed) {
-    bytes memory encoded = abi.encodePacked(uint24(permissions.length));
-    for (uint256 i = 0; i < permissions.length; i++) {
-      encoded = abi.encodePacked(encoded, permissions[i].toPacked());
-    }
-    return encoded;
   }
 
 }

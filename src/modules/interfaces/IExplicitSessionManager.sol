@@ -7,20 +7,12 @@ import { Permission, UsageLimit } from "../Permission.sol";
 import { PermissionValidator } from "../sapient/PermissionValidator.sol";
 import { ISapient, Payload } from "./ISapient.sol";
 
-/// @notice Represents a signature for a session, containing all necessary components for validation
-struct SessionManagerSignature {
-  /// @notice Whether this signature is for an implicit session mode
-  bool isImplicit;
-  /// @notice The attestation data for the current session
-  Attestation attestation;
-  /// @notice The global signer address
-  address globalSigner;
+/// @notice Represents a decoded signature for an explicit session
+struct ExplicitSessionSignature {
   /// @notice The permissions root for the session in this configuration
   bytes32 permissionsRoot;
   /// @notice Session permissions for the session signer
   SessionPermissions sessionPermissions;
-  /// @notice Array of addresses blacklisted from being called in implicit mode, sorted
-  address[] implicitBlacklist;
   /// @notice Indices of permissions used for this request
   uint8[] permissionIdxPerCall;
 }
@@ -38,13 +30,10 @@ struct SessionPermissions {
 }
 
 /// @notice Signals for the session manager
-interface ISessionManagerSignals {
+interface IExplicitSessionManagerSignals {
 
   /// @notice Invalid signature from session signer
   error InvalidSessionSignature();
-
-  /// @notice Invalid result from implicit mode
-  error InvalidImplicitResult();
 
   /// @notice Invalid delegate call
   error InvalidDelegateCall();
@@ -67,15 +56,12 @@ interface ISessionManagerSignals {
   /// @notice Invalid limit usage increment
   error InvalidLimitUsageIncrement();
 
-  /// @notice Address is blacklisted
-  error BlacklistedAddress(address target);
-
   /// @notice Session has expired
-  error SessionExpired(address sessionSigner, uint256 deadline);
+  error SessionExpired(uint256 deadline);
 
 }
 
-interface ISessionManager is ISapient, ISessionManagerSignals {
+interface IExplicitSessionManager is ISapient, IExplicitSessionManagerSignals {
 
   /// @notice Increment usage for a caller's given session and target
   /// @param limits Array of limit/session/target combinations

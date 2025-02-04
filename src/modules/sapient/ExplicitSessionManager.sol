@@ -3,25 +3,28 @@ pragma solidity ^0.8.27;
 
 import { LibBytes } from "../../utils/LibBytes.sol";
 import { LibBytesPointer } from "../../utils/LibBytesPointer.sol";
-import { Attestation, LibAttestation } from "../Attestation.sol";
 
 import { Permission, UsageLimit } from "../Permission.sol";
+
+import {
+  ExplicitSessionSignature,
+  IExplicitSessionManager,
+  SessionPermissions
+} from "../interfaces/IExplicitSessionManager.sol";
 import { ISapient, Payload } from "../interfaces/ISapient.sol";
-import { ISessionManager, SessionManagerSignature, SessionPermissions } from "../interfaces/ISessionManager.sol";
-import { ISignalsImplicitMode } from "../interfaces/ISignalsImplicitMode.sol";
+
+import { ExplicitSessionSig } from "./ExplicitSessionSig.sol";
 import { PermissionValidator } from "./PermissionValidator.sol";
-import { SessionSig } from "./SessionSig.sol";
 
 using LibBytesPointer for bytes;
 using LibBytes for bytes;
-using LibAttestation for Attestation;
 
-contract SessionManager is SessionSig, PermissionValidator, ISessionManager {
+contract ExplicitSessionManager is ExplicitSessionSig, PermissionValidator, IExplicitSessionManager {
 
   // Special address used for tracking native token value limits
   address public constant VALUE_TRACKING_ADDRESS = address(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
 
-  /// @inheritdoc ISessionManager
+  /// @inheritdoc IExplicitSessionManager
   function incrementUsageLimit(
     UsageLimit[] calldata limits
   ) external {
@@ -37,55 +40,30 @@ contract SessionManager is SessionSig, PermissionValidator, ISessionManager {
     bytes calldata encodedSignature
   ) external view returns (bytes32) {
     // Recover the session manager signature
-    SessionManagerSignature memory signature = _recoverSignature(payload, encodedSignature);
+    ExplicitSessionSignature memory signature = _recoverSignature(payload, encodedSignature);
 
     // Validate the session using recovered permissions
     address wallet = msg.sender;
     _validateSession(wallet, payload, signature);
 
-    // Generate and return the image hash
-    return getImageHash(signature);
+    // Return the permissions root as the image hash
+    return signature.permissionsRoot;
   }
 
-  /// @notice Generates an image hash for the given session manager decoded signature
-  /// @param signature The session manager signature
-  /// @return bytes32 The generated image hash
-  function getImageHash(
-    SessionManagerSignature memory signature
-  ) public pure returns (bytes32) {
-    return keccak256(abi.encode(signature.globalSigner, signature.permissionsRoot, signature.implicitBlacklist));
-  }
-
-  /// @notice Routes session validation to either implicit or explicit mode
+  /// @notice Validates the explicit session
   /// @param wallet The wallet's address
   /// @param payload The decoded payload containing calls
   /// @param signature The session signature data
   function _validateSession(
     address wallet,
     Payload.Decoded calldata payload,
-    SessionManagerSignature memory signature
-  ) internal view {
-    if (signature.isImplicit) {
-      _validateImplicitMode(wallet, payload, signature);
-    } else {
-      _validateExplicitMode(wallet, payload, signature);
-    }
-  }
-
-  /// @notice Validates a session in explicit mode
-  /// @param wallet The wallet's address
-  /// @param payload The decoded payload containing calls
-  /// @param signature The session signature data
-  function _validateExplicitMode(
-    address wallet,
-    Payload.Decoded calldata payload,
-    SessionManagerSignature memory signature
+    ExplicitSessionSignature memory signature
   ) internal view {
     SessionPermissions memory sessionPermissions = signature.sessionPermissions;
 
     // Check if session has expired
     if (sessionPermissions.deadline != 0 && block.timestamp > sessionPermissions.deadline) {
-      revert SessionExpired(sessionPermissions.signer, sessionPermissions.deadline);
+      revert SessionExpired(sessionPermissions.deadline);
     }
 
     // Validate calls and track usage
@@ -111,7 +89,7 @@ contract SessionManager is SessionSig, PermissionValidator, ISessionManager {
   function _validateCallsAndTrackUsage(
     bytes32 limitHashPrefix,
     Payload.Decoded calldata payload,
-    SessionManagerSignature memory signature
+    ExplicitSessionSignature memory signature
   ) private view returns (uint256 totalValueUsed, UsageLimit[] memory limits) {
     UsageLimit[][] memory allLimits = new UsageLimit[][](payload.calls.length + 1);
     uint256 limitIndex = 0;
@@ -207,77 +185,12 @@ contract SessionManager is SessionSig, PermissionValidator, ISessionManager {
     }
   }
 
-  /// @notice Validates a session in implicit mode, checking blacklist and calling acceptImplicitRequest
-  /// @param wallet The wallet's address
-  /// @param payload The decoded payload containing calls
-  /// @param signature The session signature data
-  function _validateImplicitMode(
-    address wallet,
-    Payload.Decoded calldata payload,
-    SessionManagerSignature memory signature
-  ) internal view {
-    // Validate blacklist
-    address[] memory blacklist = signature.implicitBlacklist;
-
-    // Check each call's target address against blacklist
-    for (uint256 i = 0; i < payload.calls.length; i++) {
-      if (payload.calls[i].delegateCall) {
-        // Delegate calls are not allowed
-        revert InvalidDelegateCall();
-      }
-      if (_isAddressBlacklisted(payload.calls[i].to, blacklist)) {
-        revert BlacklistedAddress(payload.calls[i].to);
-      }
-      // No value
-      if (payload.calls[i].value > 0) {
-        revert InvalidValue();
-      }
-    }
-
-    bytes32 attestationMagic = signature.attestation.generateImplicitRequestMagic(wallet);
-    bytes32 redirectUrlHash = keccak256(abi.encodePacked(signature.attestation.authData));
-
-    for (uint256 i = 0; i < payload.calls.length; i++) {
-      // Validate implicit mode
-      bytes32 result = ISignalsImplicitMode(payload.calls[i].to).acceptImplicitRequest(
-        wallet, signature.attestation, redirectUrlHash, payload.calls[i]
-      );
-      if (result != attestationMagic) {
-        revert InvalidImplicitResult();
-      }
-    }
-  }
-
-  /// @notice Checks if an address is in the blacklist using binary search
-  /// @param target The address to check
-  /// @param blacklist The sorted array of blacklisted addresses
-  /// @return bool True if the address is blacklisted, false otherwise
-  function _isAddressBlacklisted(address target, address[] memory blacklist) internal pure returns (bool) {
-    int256 left = 0;
-    int256 right = int256(blacklist.length) - 1;
-
-    while (left <= right) {
-      int256 mid = left + (right - left) / 2;
-      address currentAddress = blacklist[uint256(mid)];
-
-      if (currentAddress == target) {
-        return true;
-      } else if (currentAddress < target) {
-        left = mid + 1;
-      } else {
-        right = mid - 1;
-      }
-    }
-
-    return false;
-  }
-
   /// @notice Returns true if the contract implements the given interface
   /// @param interfaceId The interface identifier
   function supportsInterface(
     bytes4 interfaceId
   ) public pure returns (bool) {
-    return interfaceId == type(ISapient).interfaceId || interfaceId == type(ISessionManager).interfaceId;
+    return interfaceId == type(ISapient).interfaceId || interfaceId == type(IExplicitSessionManager).interfaceId;
   }
 
 }
