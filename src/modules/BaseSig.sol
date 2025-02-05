@@ -73,7 +73,7 @@ contract BaseSig {
     // Recover the imageHash checkpointer if any
     // but checkpointer passed as argument takes precedence
     // since it can be defined by the chained signatures
-    if (signatureFlag & 0x40 == 0x40 && checkpointer != address(0)) {
+    if (signatureFlag & 0x40 == 0x40 && checkpointer == address(0)) {
       (checkpointer, rindex) = _signature.readAddress(rindex);
 
       if (!_ignoreCheckpointer) {
