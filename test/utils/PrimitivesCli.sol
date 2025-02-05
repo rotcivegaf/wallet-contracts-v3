@@ -118,4 +118,12 @@ library PrimitivesCli {
     return string(_vm.shffi(command));
   }
 
+  function concatSignatures(Vm _vm, bytes[] memory _signatures) internal returns (bytes memory) {
+    string memory command = string(abi.encodePacked(_vm.root(), " signature concat"));
+    for (uint256 i = 0; i < _signatures.length; i++) {
+      command = string(abi.encodePacked(command, " ", _vm.toString(_signatures[i])));
+    }
+    return _vm.shffi(command);
+  }
+
 }

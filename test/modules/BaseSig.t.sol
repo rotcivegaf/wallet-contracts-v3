@@ -427,4 +427,129 @@ contract BaseSigTest is AdvTest {
     assertEq(weight, _weight >= _internalThreshold ? _externalWeight : 0);
   }
 
+  function test_recover_chained_signature_single_case() external {
+    uint256 signer1pk = 1;
+    uint256 signer2pk = 2;
+    uint256 signer3pk = 3;
+
+    string memory config1 =
+      PrimitivesCli.newConfig(vm, 1, 1, string(abi.encodePacked("signer:", vm.toString(vm.addr(signer1pk)), ":1")));
+
+    string memory config2 = PrimitivesCli.newConfig(
+      vm,
+      1,
+      2,
+      string(
+        abi.encodePacked(
+          "signer:", vm.toString(vm.addr(signer2pk)), ":3 ", "signer:", vm.toString(vm.addr(signer1pk)), ":2"
+        )
+      )
+    );
+
+    string memory config3 = PrimitivesCli.newConfig(
+      vm,
+      1,
+      3,
+      string(
+        abi.encodePacked(
+          "signer:", vm.toString(vm.addr(signer3pk)), ":2 ", "signer:", vm.toString(vm.addr(signer2pk)), ":2"
+        )
+      )
+    );
+
+    bytes32 config1Hash = PrimitivesCli.getImageHash(vm, config1);
+    bytes32 config2Hash = PrimitivesCli.getImageHash(vm, config2);
+    bytes32 config3Hash = PrimitivesCli.getImageHash(vm, config3);
+
+    Payload.Decoded memory payloadApprove2;
+    payloadApprove2.kind = Payload.KIND_CONFIG_UPDATE;
+
+    Payload.Decoded memory payloadApprove3;
+    payloadApprove3.kind = Payload.KIND_CONFIG_UPDATE;
+
+    Payload.Decoded memory finalPayload;
+    finalPayload.kind = Payload.KIND_DIGEST;
+
+    payloadApprove2.imageHash = config2Hash;
+    payloadApprove3.imageHash = config3Hash;
+
+    bytes memory signatureForFinalPayload;
+    bytes memory signature1to2;
+    bytes memory signature2to3;
+
+    {
+      (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(signer1pk, Payload.hashFor(payloadApprove2, address(baseSigImp)));
+      (uint8 v3, bytes32 r3, bytes32 s3) = vm.sign(signer2pk, Payload.hashFor(payloadApprove3, address(baseSigImp)));
+      (uint8 fv, bytes32 fr, bytes32 fs) = vm.sign(signer3pk, Payload.hashFor(finalPayload, address(baseSigImp)));
+
+      // Signature for final payload
+      signatureForFinalPayload = PrimitivesCli.toEncodedSignature(
+        vm,
+        config3,
+        string(
+          abi.encodePacked(
+            "--signature ",
+            vm.toString(vm.addr(signer3pk)),
+            ":hash:",
+            vm.toString(fr),
+            ":",
+            vm.toString(fs),
+            ":",
+            vm.toString(fv)
+          )
+        )
+      );
+
+      // Signatures for links, config3 -> config2 -> config1
+      signature1to2 = PrimitivesCli.toEncodedSignature(
+        vm,
+        config1,
+        string(
+          abi.encodePacked(
+            "--signature ",
+            vm.toString(vm.addr(signer1pk)),
+            ":hash:",
+            vm.toString(r2),
+            ":",
+            vm.toString(s2),
+            ":",
+            vm.toString(v2)
+          )
+        )
+      );
+      signature2to3 = PrimitivesCli.toEncodedSignature(
+        vm,
+        config2,
+        string(
+          abi.encodePacked(
+            "--signature ",
+            vm.toString(vm.addr(signer2pk)),
+            ":hash:",
+            vm.toString(r3),
+            ":",
+            vm.toString(s3),
+            ":",
+            vm.toString(v3)
+          )
+        )
+      );
+    }
+
+    bytes[] memory signatures = new bytes[](3);
+    signatures[0] = signatureForFinalPayload;
+    signatures[1] = signature2to3;
+    signatures[2] = signature1to2;
+
+    bytes memory chainedSignature = PrimitivesCli.concatSignatures(vm, signatures);
+
+    // Recover chained signature
+    (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint) =
+      baseSigImp.recoverPub(finalPayload, chainedSignature, true, address(0));
+
+    assertEq(threshold, 1);
+    assertEq(weight, 1);
+    assertEq(imageHash, config1Hash);
+    assertEq(checkpoint, 1);
+  }
+
 }
