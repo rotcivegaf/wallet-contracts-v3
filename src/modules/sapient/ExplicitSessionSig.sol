@@ -42,17 +42,17 @@ contract ExplicitSessionSig {
     // Read encoded permissions size and data
     uint256 dataSize;
     (dataSize, pointer) = encodedSignature.readUint24(pointer);
-    bytes calldata encodedPermissions = encodedSignature[pointer:pointer + dataSize];
+    bytes calldata encodedPermissionsTree = encodedSignature[pointer:pointer + dataSize];
     pointer += dataSize;
 
     // Recover permissions tree and find signer's permissions
     (signature.permissionsRoot, signature.sessionPermissions) =
-      _recoverPermissionsTree(encodedPermissions, recoveredPayloadSigner);
+      _recoverPermissionsTree(encodedPermissionsTree, recoveredPayloadSigner);
 
     // Read permission indices length and values
-    (dataSize, pointer) = encodedSignature.readUint24(pointer);
-    signature.permissionIdxPerCall = new uint8[](dataSize);
-    for (uint256 i = 0; i < dataSize; i++) {
+    uint256 remainingBytes = encodedSignature.length - pointer;
+    signature.permissionIdxPerCall = new uint8[](remainingBytes);
+    for (uint256 i = 0; i < remainingBytes; i++) {
       (signature.permissionIdxPerCall[i], pointer) = encodedSignature.readUint8(pointer);
     }
 
