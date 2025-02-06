@@ -41,6 +41,21 @@ library LibAttestation {
     return (attestation, pointer);
   }
 
+  function toPacked(
+    Attestation memory attestation
+  ) internal pure returns (bytes memory) {
+    return abi.encodePacked(
+      attestation.approvedSigner,
+      attestation.identityType,
+      attestation.issuerHash,
+      attestation.audienceHash,
+      uint24(attestation.authData.length),
+      attestation.authData,
+      uint24(attestation.applicationData.length),
+      attestation.applicationData
+    );
+  }
+
   function generateImplicitRequestMagic(Attestation memory attestation, address wallet) internal pure returns (bytes32) {
     return keccak256(
       abi.encodePacked(ACCEPT_IMPLICIT_REQUEST_MAGIC_PREFIX, wallet, attestation.audienceHash, attestation.issuerHash)

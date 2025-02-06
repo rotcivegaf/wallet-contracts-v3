@@ -108,8 +108,7 @@ library LibBytesPointer {
 
   function readBytes4(bytes calldata _data, uint256 _pointer) internal pure returns (bytes4 a, uint256 newPointer) {
     assembly {
-      let word := calldataload(add(_pointer, _data.offset))
-      a := shr(224, word)
+      a := calldataload(add(_pointer, _data.offset))
       newPointer := add(_pointer, 4)
     }
   }
