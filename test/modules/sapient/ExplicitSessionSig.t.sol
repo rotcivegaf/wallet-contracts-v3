@@ -146,8 +146,7 @@ contract ExplicitSessionSigTest is AdvTest {
     // Encode with ffi
     bytes memory encodedSessions = PrimitivesCli.toPackedSessionTopology(vm, encodedTopology);
     // Decode on contract
-    (,) = sessionSig.recoverPermissionsTree(encodedSessions, address(0));
-    // Validate?
+    sessionSig.recoverPermissionsTree(encodedSessions, address(0));
   }
 
   function _randomSessionPermission(
