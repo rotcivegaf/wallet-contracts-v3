@@ -52,7 +52,7 @@ contract ExplicitSessionSigTest is AdvTest {
     sessionSig = new ExplicitSessionSigImp();
   }
 
-  function test_decodePermissions(
+  function test_explicit_decodePermissions(
     uint256 seed
   ) external {
     Permission memory permission;
@@ -78,7 +78,7 @@ contract ExplicitSessionSigTest is AdvTest {
     }
   }
 
-  function test_recoverPermissionsTree_singleNode(
+  function test_explicit_recoverPermissionsTree_singleNode(
     uint256 seed
   ) external {
     // Generate a random permission
@@ -137,7 +137,7 @@ contract ExplicitSessionSigTest is AdvTest {
     }
   }
 
-  function test_recoverPermissionsTree_random(
+  function test_explicit_recoverPermissionsTree_random(
     uint256 seed
   ) external {
     uint256 maxDepth = seed % 3 + 1;
@@ -148,6 +148,48 @@ contract ExplicitSessionSigTest is AdvTest {
     // Decode on contract
     sessionSig.recoverPermissionsTree(encodedSessions, address(0));
   }
+
+  function test_explicit_recoverPermissionsTree_cliEmptyAddRemove(uint256 seed, uint256 addCount) external {
+    addCount = addCount % 3 + 1; // Add 1 to 3 random session permissions
+    // Generate an empty session topology using ffi and populate it with a random session permission
+    string memory topology = PrimitivesCli.emptyExplicitSession(vm);
+    SessionPermissions memory sessionPermission;
+    {
+      for (uint256 i = 0; i < addCount; i++) {
+        (sessionPermission, seed) = _randomSessionPermission(seed);
+        // Add the session permission to the topology
+        topology = PrimitivesCli.addExplicitSession(vm, _sessionPermissionToJSON(sessionPermission), topology);
+        // Encode with ffi
+        bytes memory encodedSessions = PrimitivesCli.toPackedSessionTopology(vm, topology);
+        // Decode on contract
+        (, SessionPermissions memory decodedPermissions) =
+          sessionSig.recoverPermissionsTree(encodedSessions, sessionPermission.signer);
+        // Validate
+        assertEq(decodedPermissions.signer, sessionPermission.signer, "Signer");
+        assertEq(decodedPermissions.valueLimit, sessionPermission.valueLimit, "Value limit");
+        assertEq(decodedPermissions.deadline, sessionPermission.deadline, "Deadline");
+        assertEq(decodedPermissions.permissions.length, sessionPermission.permissions.length, "Permissions length");
+      }
+    }
+
+    {
+      // Remove the session permission from the topology
+      topology =
+        PrimitivesCli.removeExplicitSession(vm, sessionPermission.signer, _sessionPermissionToJSON(sessionPermission));
+      // Encode with ffi
+      bytes memory encodedSessions = PrimitivesCli.toPackedSessionTopology(vm, topology);
+      // Decode on contract
+      (, SessionPermissions memory decodedPermissions) =
+        sessionSig.recoverPermissionsTree(encodedSessions, sessionPermission.signer);
+      // Validate
+      assertEq(decodedPermissions.signer, address(0), "Signer 0");
+      assertEq(decodedPermissions.valueLimit, 0, "Value limit 0");
+      assertEq(decodedPermissions.deadline, 0, "Deadline 0");
+      assertEq(decodedPermissions.permissions.length, 0, "Permissions length 0");
+    }
+  }
+
+  // Helpers
 
   function _randomSessionPermission(
     uint256 seed

@@ -82,11 +82,6 @@ library PrimitivesCli {
     return _vm.shffi(command);
   }
 
-  function toPackedSessionTopology(Vm _vm, string memory _sessionTopology) internal returns (bytes memory) {
-    string memory command = string(abi.encodePacked(_vm.root(), " session to-packed-topology '", _sessionTopology, "'"));
-    return _vm.shffi(command);
-  }
-
   function getImageHash(Vm _vm, string memory _config) internal returns (bytes32) {
     string memory command = string(abi.encodePacked(_vm.root(), " config image-hash '", _config, "'"));
     return bytes32(_vm.shffi(command));
@@ -123,6 +118,42 @@ library PrimitivesCli {
     for (uint256 i = 0; i < _signatures.length; i++) {
       command = string(abi.encodePacked(command, " ", _vm.toString(_signatures[i])));
     }
+    return _vm.shffi(command);
+  }
+
+  // Session explicit
+
+  function emptyExplicitSession(
+    Vm _vm
+  ) internal returns (string memory) {
+    string memory command = string(abi.encodePacked(_vm.root(), " session explicit empty"));
+    return string(_vm.shffi(command));
+  }
+
+  function addExplicitSession(
+    Vm _vm,
+    string memory _session,
+    string memory _sessionConfig
+  ) internal returns (string memory) {
+    string memory command =
+      string(abi.encodePacked(_vm.root(), " session explicit add '", _session, "' '", _sessionConfig, "'"));
+    return string(_vm.shffi(command));
+  }
+
+  function removeExplicitSession(
+    Vm _vm,
+    address _sessionAddr,
+    string memory _sessionConfig
+  ) internal returns (string memory) {
+    string memory command = string(
+      abi.encodePacked(_vm.root(), " session explicit remove '", _vm.toString(_sessionAddr), "' '", _sessionConfig, "'")
+    );
+    return string(_vm.shffi(command));
+  }
+
+  function toPackedSessionTopology(Vm _vm, string memory _sessionTopology) internal returns (bytes memory) {
+    string memory command =
+      string(abi.encodePacked(_vm.root(), " session explicit to-packed-topology '", _sessionTopology, "'"));
     return _vm.shffi(command);
   }
 
