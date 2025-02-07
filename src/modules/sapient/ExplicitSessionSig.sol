@@ -36,18 +36,15 @@ contract ExplicitSessionSig {
     bytes32 payloadHash = keccak256(abi.encode(payload));
     address recoveredPayloadSigner = ecrecover(payloadHash, v, r, s);
 
-    // Read global signature (r,sv)
-    (r, s, v, pointer) = encodedSignature.readRSVCompact(pointer);
-
     // Read encoded permissions size and data
     uint256 dataSize;
     (dataSize, pointer) = encodedSignature.readUint24(pointer);
     bytes calldata encodedPermissionsTree = encodedSignature[pointer:pointer + dataSize];
-    pointer += dataSize;
 
     // Recover permissions tree and find signer's permissions
     (signature.permissionsRoot, signature.sessionPermissions) =
       _recoverPermissionsTree(encodedPermissionsTree, recoveredPayloadSigner);
+    pointer += dataSize;
 
     // Read permission indices length and values
     uint256 remainingBytes = encodedSignature.length - pointer;

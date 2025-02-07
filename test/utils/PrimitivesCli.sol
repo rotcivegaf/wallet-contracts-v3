@@ -151,6 +151,32 @@ library PrimitivesCli {
     return string(_vm.shffi(command));
   }
 
+  function useSessionExplicit(
+    Vm _vm,
+    string memory _sessionSignature,
+    uint8[] memory _permissionIdxPerCall,
+    string memory _sessionTopology
+  ) internal returns (bytes memory) {
+    string memory permissionIdxPerCall = "";
+    for (uint256 i = 0; i < _permissionIdxPerCall.length; i++) {
+      permissionIdxPerCall =
+        string(abi.encodePacked(permissionIdxPerCall, i > 0 ? "," : "", _vm.toString(_permissionIdxPerCall[i])));
+    }
+    string memory command = string(
+      abi.encodePacked(
+        _vm.root(),
+        " session explicit use '",
+        _sessionSignature,
+        "' '",
+        permissionIdxPerCall,
+        "' '",
+        _sessionTopology,
+        "' "
+      )
+    );
+    return _vm.shffi(command);
+  }
+
   function toPackedSessionTopology(Vm _vm, string memory _sessionTopology) internal returns (bytes memory) {
     string memory command =
       string(abi.encodePacked(_vm.root(), " session explicit to-packed-topology '", _sessionTopology, "'"));

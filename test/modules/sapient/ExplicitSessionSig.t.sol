@@ -140,7 +140,7 @@ contract ExplicitSessionSigTest is AdvTest {
   function test_explicit_recoverPermissionsTree_random(
     uint256 seed
   ) external {
-    uint256 maxDepth = seed % 3 + 1;
+    uint256 maxDepth = _bound(seed, 1, 3);
     // Generate a random session topology using ffi
     string memory encodedTopology = PrimitivesCli.randomSessionTopology(vm, maxDepth, seed);
     // Encode with ffi
@@ -150,7 +150,7 @@ contract ExplicitSessionSigTest is AdvTest {
   }
 
   function test_explicit_recoverPermissionsTree_cliEmptyAddRemove(uint256 seed, uint256 addCount) external {
-    addCount = addCount % 3 + 1; // Add 1 to 3 random session permissions
+    addCount = _bound(addCount, 1, 3);
     // Generate an empty session topology using ffi and populate it with a random session permission
     string memory topology = PrimitivesCli.emptyExplicitSession(vm);
     SessionPermissions memory sessionPermission;
@@ -189,6 +189,72 @@ contract ExplicitSessionSigTest is AdvTest {
     }
   }
 
+  function test_explicit_recoverSignature_cli(
+    uint256 seed,
+    uint256 signerPk,
+    uint256 addCountBefore,
+    uint256 addCountAfter,
+    uint256 callCount
+  ) external {
+    addCountBefore = _bound(addCountBefore, 0, 3);
+    addCountAfter = _bound(addCountAfter, 0, 3);
+    callCount = _bound(callCount, 1, 3);
+    signerPk = boundPk(signerPk);
+    // Add some random session permissions before the expected signer
+    string memory topology = PrimitivesCli.emptyExplicitSession(vm);
+    {
+      for (uint256 i = 0; i < addCountBefore; i++) {
+        SessionPermissions memory sessionPermission;
+        (sessionPermission, seed) = _randomSessionPermission(seed);
+        // Add the session permission to the topology
+        topology = PrimitivesCli.addExplicitSession(vm, _sessionPermissionToJSON(sessionPermission), topology);
+      }
+    }
+    address signerAddr = vm.addr(signerPk);
+    {
+      // Add the signer for this session
+      SessionPermissions memory sessionPermission;
+      (sessionPermission, seed) = _randomSessionPermission(seed);
+      sessionPermission.signer = signerAddr;
+      topology = PrimitivesCli.addExplicitSession(vm, _sessionPermissionToJSON(sessionPermission), topology);
+    }
+    // Add some random session permissions after the expected signer
+    {
+      for (uint256 i = 0; i < addCountAfter; i++) {
+        SessionPermissions memory sessionPermission;
+        (sessionPermission, seed) = _randomSessionPermission(seed);
+        // Add the session permission to the topology
+        topology = PrimitivesCli.addExplicitSession(vm, _sessionPermissionToJSON(sessionPermission), topology);
+      }
+    }
+
+    // Generate a random payload
+    Payload.Decoded memory payload;
+    //FIXME Implement (payload, seed) = _randomPayload(seed);
+    bytes32 payloadHash = keccak256(abi.encode(payload));
+    (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPk, payloadHash);
+    string memory sessionSignature = string(abi.encodePacked(vm.toString(r), ":", vm.toString(s), ":", vm.toString(v)));
+    // Generate a random permission index per call
+    uint8[] memory permissionIdxPerCall = new uint8[](callCount);
+    {
+      for (uint256 i = 0; i < callCount; i++) {
+        bytes32 value;
+        (value, seed) = useSeed(seed);
+        permissionIdxPerCall[i] = uint8(uint256(value));
+      }
+    }
+
+    // Encode with ffi
+    bytes memory encodedSessions =
+      PrimitivesCli.useSessionExplicit(vm, sessionSignature, permissionIdxPerCall, topology);
+    // Decode on contract
+    ExplicitSessionSignature memory decodedSignature = sessionSig.recoverSignature(payload, encodedSessions);
+    // Validate
+    assertEq(decodedSignature.sessionPermissions.signer, signerAddr, "Signer");
+    for (uint256 i = 0; i < decodedSignature.permissionIdxPerCall.length; i++) {
+      assertEq(decodedSignature.permissionIdxPerCall[i], permissionIdxPerCall[i], "Permission index per call");
+    }
+  }
   // Helpers
 
   function _randomSessionPermission(
