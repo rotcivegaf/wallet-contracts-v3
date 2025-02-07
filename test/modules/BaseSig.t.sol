@@ -427,7 +427,11 @@ contract BaseSigTest is AdvTest {
     assertEq(weight, _weight >= _internalThreshold ? _externalWeight : 0);
   }
 
-  function test_recover_chained_signature_single_case() external {
+  function test_recover_chained_signature_single_case(
+    Payload.Decoded memory _finalPayload
+  ) external {
+    boundToLegalPayload(_finalPayload);
+
     uint256 signer1pk = 1;
     uint256 signer2pk = 2;
     uint256 signer3pk = 3;
@@ -467,9 +471,6 @@ contract BaseSigTest is AdvTest {
     Payload.Decoded memory payloadApprove3;
     payloadApprove3.kind = Payload.KIND_CONFIG_UPDATE;
 
-    Payload.Decoded memory finalPayload;
-    finalPayload.kind = Payload.KIND_DIGEST;
-
     payloadApprove2.imageHash = config2Hash;
     payloadApprove3.imageHash = config3Hash;
 
@@ -480,7 +481,9 @@ contract BaseSigTest is AdvTest {
     {
       (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(signer1pk, Payload.hashFor(payloadApprove2, address(baseSigImp)));
       (uint8 v3, bytes32 r3, bytes32 s3) = vm.sign(signer2pk, Payload.hashFor(payloadApprove3, address(baseSigImp)));
-      (uint8 fv, bytes32 fr, bytes32 fs) = vm.sign(signer3pk, Payload.hashFor(finalPayload, address(baseSigImp)));
+      (uint8 fv, bytes32 fr, bytes32 fs) = vm.sign(signer3pk, Payload.hashFor(_finalPayload, address(baseSigImp)));
+
+      string memory noChainId = _finalPayload.noChainId ? " --no-chain-id" : "";
 
       // Signature for final payload
       signatureForFinalPayload = PrimitivesCli.toEncodedSignature(
@@ -495,7 +498,8 @@ contract BaseSigTest is AdvTest {
             ":",
             vm.toString(fs),
             ":",
-            vm.toString(fv)
+            vm.toString(fv),
+            noChainId
           )
         )
       );
@@ -544,7 +548,7 @@ contract BaseSigTest is AdvTest {
 
     // Recover chained signature
     (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint) =
-      baseSigImp.recoverPub(finalPayload, chainedSignature, true, address(0));
+      baseSigImp.recoverPub(_finalPayload, chainedSignature, true, address(0));
 
     assertEq(threshold, 1);
     assertEq(weight, 1);
