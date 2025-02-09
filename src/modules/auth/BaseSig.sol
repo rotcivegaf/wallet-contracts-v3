@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import { LibBytesPointer } from "../utils/LibBytesPointer.sol";
-import { LibOptim } from "../utils/LibOptim.sol";
-import { Payload } from "./Payload.sol";
+import { LibBytesPointer } from "../../utils/LibBytesPointer.sol";
+import { LibOptim } from "../../utils/LibOptim.sol";
+import { Payload } from "../Payload.sol";
 
-import { ICheckpointer, Snapshot } from "./interfaces/ICheckpointer.sol";
-import { IERC1271, IERC1271_MAGIC_VALUE } from "./interfaces/IERC1271.sol";
-import { ISapient, ISapientCompact } from "./interfaces/ISapient.sol";
+import { ICheckpointer, Snapshot } from "../interfaces/ICheckpointer.sol";
+import { IERC1271, IERC1271_MAGIC_VALUE } from "../interfaces/IERC1271.sol";
+import { ISapient, ISapientCompact } from "../interfaces/ISapient.sol";
 
 using LibBytesPointer for bytes;
 using LibOptim for bytes;
 using Payload for Payload.Decoded;
 
-contract BaseSig {
+library BaseSig {
 
   uint256 internal constant FLAG_SIGNATURE_HASH = 0;
   uint256 internal constant FLAG_ADDRESS = 1;
@@ -56,7 +56,7 @@ contract BaseSig {
     bytes calldata _signature,
     bool _ignoreCheckpointer,
     address _checkpointer
-  ) internal view returns (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint) {
+  ) internal view returns (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint, bytes32 opHash) {
     // First byte is the signature flag
     (uint256 signatureFlag, uint256 rindex) = _signature.readFirstUint8();
 
@@ -65,7 +65,7 @@ contract BaseSig {
     // - 000X XX00 (bits [4..2]): checkpoint size (00 = 0 bytes, 001 = 1 byte, 010 = 2 bytes...)
     // - 00X0 0000 (bit [5]): threshold size (0 = 1 byte, 1 = 2 bytes)
     // - 0X00 0000 (bit [6]): set if imageHash checkpointer is used
-    // - X000 0000 (bit [7]): reserved
+    // - X000 0000 (bit [7]): reserved by base-auth
 
     Snapshot memory snapshot;
     address checkpointer = _checkpointer;
@@ -112,10 +112,8 @@ contract BaseSig {
     }
 
     // Recover the tree
-    {
-      bytes32 opHash = _payload.hash();
-      (weight, imageHash) = recoverBranch(_payload, opHash, _signature[rindex:]);
-    }
+    opHash = _payload.hash();
+    (weight, imageHash) = recoverBranch(_payload, opHash, _signature[rindex:]);
 
     imageHash = LibOptim.fkeccak256(imageHash, bytes32(threshold));
     imageHash = LibOptim.fkeccak256(imageHash, bytes32(checkpoint));
@@ -133,12 +131,13 @@ contract BaseSig {
     address _checkpointer,
     Snapshot memory _snapshot,
     bytes calldata _signature
-  ) internal view returns (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint) {
+  ) internal view returns (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint, bytes32 opHash) {
     Payload.Decoded memory linkedPayload;
     linkedPayload.kind = Payload.KIND_CONFIG_UPDATE;
 
     uint256 rindex;
     uint256 prevCheckpoint = type(uint256).max;
+    opHash = _payload.hash();
 
     while (rindex < _signature.length) {
       uint256 sigSize;
@@ -147,7 +146,7 @@ contract BaseSig {
 
       bool isLast = nrindex == _signature.length;
 
-      (threshold, weight, imageHash, checkpoint) = recover(
+      (threshold, weight, imageHash, checkpoint,) = recover(
         prevCheckpoint == type(uint256).max ? _payload : linkedPayload,
         _signature[rindex:nrindex],
         true, // The checkpointer is only used at the last step

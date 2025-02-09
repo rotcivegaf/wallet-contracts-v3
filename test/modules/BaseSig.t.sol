@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import { BaseSig } from "../../src/modules/BaseSig.sol";
 import { Payload } from "../../src/modules/Payload.sol";
+import { BaseSig } from "../../src/modules/auth/BaseSig.sol";
 
 import { ISapient, ISapientCompact } from "../../src/modules/interfaces/ISapient.sol";
 import { PrimitivesCli } from "../utils/PrimitivesCli.sol";
@@ -11,15 +11,15 @@ import { AdvTest } from "../utils/TestUtils.sol";
 import { Vm } from "forge-std/Test.sol";
 import { console } from "forge-std/console.sol";
 
-contract BaseSigImp is BaseSig {
+contract BaseSigImp {
 
   function recoverPub(
     Payload.Decoded memory _payload,
     bytes calldata _signature,
     bool _ignoreCheckpointer,
     address _checkpointer
-  ) external view returns (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint) {
-    return recover(_payload, _signature, _ignoreCheckpointer, _checkpointer);
+  ) external view returns (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint, bytes32 opHash) {
+    return BaseSig.recover(_payload, _signature, _ignoreCheckpointer, _checkpointer);
   }
 
 }
@@ -40,10 +40,12 @@ contract BaseSigTest is AdvTest {
     string memory config = PrimitivesCli.randomConfig(vm, _maxDepth, _seed);
     bytes memory encodedConfig = PrimitivesCli.toEncodedConfig(vm, config);
 
-    (, uint256 weight, bytes32 imageHash,) = baseSigImp.recoverPub(payload, encodedConfig, true, address(0));
+    (, uint256 weight, bytes32 imageHash,, bytes32 opHash) =
+      baseSigImp.recoverPub(payload, encodedConfig, true, address(0));
 
     assertEq(weight, 0);
     assertEq(imageHash, PrimitivesCli.getImageHash(vm, config));
+    assertEq(opHash, Payload.hashFor(payload, address(baseSigImp)));
   }
 
   struct AddressWeightPair {
@@ -126,13 +128,14 @@ contract BaseSigTest is AdvTest {
       encodedSignature = PrimitivesCli.toEncodedSignature(vm, config, se);
     }
 
-    (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint) =
+    (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint, bytes32 opHash) =
       baseSigImp.recoverPub(_payload, encodedSignature, true, address(0));
 
     assertEq(threshold, _threshold);
     assertEq(imageHash, PrimitivesCli.getImageHash(vm, config));
     assertEq(checkpoint, _checkpoint);
     assertEq(weight, _weight);
+    assertEq(opHash, Payload.hashFor(_payload, address(baseSigImp)));
   }
 
   function test_recover_one_1271_signer(
@@ -202,13 +205,14 @@ contract BaseSigTest is AdvTest {
       encodedSignature = PrimitivesCli.toEncodedSignature(vm, config, se);
     }
 
-    (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint) =
+    (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint, bytes32 opHash) =
       baseSigImp.recoverPub(_payload, encodedSignature, true, address(0));
 
     assertEq(threshold, _threshold);
     assertEq(imageHash, PrimitivesCli.getImageHash(vm, config));
     assertEq(checkpoint, _checkpoint);
     assertEq(weight, _weight);
+    assertEq(opHash, Payload.hashFor(_payload, address(baseSigImp)));
   }
 
   function test_recover_one_sapient_signer(
@@ -300,13 +304,14 @@ contract BaseSigTest is AdvTest {
       encodedSignature = PrimitivesCli.toEncodedSignature(vm, config, se);
     }
 
-    (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint) =
+    (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint, bytes32 opHash) =
       baseSigImp.recoverPub(_payload, encodedSignature, true, address(0));
 
     assertEq(threshold, _threshold);
     assertEq(imageHash, PrimitivesCli.getImageHash(vm, config));
     assertEq(checkpoint, _checkpoint);
     assertEq(weight, _weight);
+    assertEq(opHash, Payload.hashFor(_payload, address(baseSigImp)));
   }
 
   function test_recover_nested_config(
@@ -418,13 +423,14 @@ contract BaseSigTest is AdvTest {
       encodedSignature = PrimitivesCli.toEncodedSignature(vm, config, se);
     }
 
-    (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint) =
+    (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint, bytes32 opHash) =
       baseSigImp.recoverPub(_payload, encodedSignature, true, address(0));
 
     assertEq(threshold, _threshold);
     assertEq(imageHash, PrimitivesCli.getImageHash(vm, config));
     assertEq(checkpoint, _checkpoint);
     assertEq(weight, _weight >= _internalThreshold ? _externalWeight : 0);
+    assertEq(opHash, Payload.hashFor(_payload, address(baseSigImp)));
   }
 
   function test_recover_chained_signature_single_case(
@@ -547,13 +553,14 @@ contract BaseSigTest is AdvTest {
     bytes memory chainedSignature = PrimitivesCli.concatSignatures(vm, signatures);
 
     // Recover chained signature
-    (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint) =
+    (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint, bytes32 opHash) =
       baseSigImp.recoverPub(_finalPayload, chainedSignature, true, address(0));
 
     assertEq(threshold, 1);
     assertEq(weight, 1);
     assertEq(imageHash, config1Hash);
     assertEq(checkpoint, 1);
+    assertEq(opHash, Payload.hashFor(_finalPayload, address(baseSigImp)));
   }
 
 }

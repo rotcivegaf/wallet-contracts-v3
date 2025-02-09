@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
+import { Nonce } from "./Nonce.sol";
 import { Payload } from "./Payload.sol";
-import { IAuth } from "./interfaces/IAuth.sol";
+import { BaseAuth } from "./auth/BaseAuth.sol";
+import { SelfAuth } from "./auth/SelfAuth.sol";
 
-abstract contract Calls is IAuth {
+abstract contract Calls is BaseAuth, Nonce {
 
   event Success(bytes32 _opHash, uint256 _index);
   event Failed(bytes32 _opHash, uint256 _index);
@@ -17,6 +19,8 @@ abstract contract Calls is IAuth {
 
   function execute(bytes calldata _payload, bytes calldata _signature) external virtual {
     Payload.Decoded memory decoded = Payload.fromPackedCalls(_payload);
+
+    _consumeNonce(decoded.space, decoded.nonce);
     (bool isValid, bytes32 opHash) = signatureValidation(decoded, _signature);
 
     if (!isValid) {
