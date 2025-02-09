@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
+import { LibOptim } from "../utils/LibOptim.sol";
 import { Nonce } from "./Nonce.sol";
 import { Payload } from "./Payload.sol";
 import { BaseAuth } from "./auth/BaseAuth.sol";
@@ -58,13 +59,11 @@ abstract contract Calls is BaseAuth, Nonce {
         revert NotEnoughGas(_decoded, i, gasleft());
       }
 
-      // TODO: Copy return data only if needed
-      bytes memory returnData;
       bool success;
       if (call.delegateCall) {
-        (success, returnData) = call.to.delegatecall{ gas: gasLimit }(call.data);
+        (success) = LibOptim.delegatecall(call.to, gasLimit, call.data);
       } else {
-        (success, returnData) = call.to.call{ value: call.value, gas: gasLimit }(call.data);
+        (success) = LibOptim.call(call.to, call.value, gasLimit, call.data);
       }
 
       if (!success) {
@@ -75,7 +74,7 @@ abstract contract Calls is BaseAuth, Nonce {
         }
 
         if (call.behaviorOnError == Payload.BEHAVIOR_REVERT_ON_ERROR) {
-          revert Reverted(_decoded, i, returnData);
+          revert Reverted(_decoded, i, LibOptim.returnData());
         }
 
         if (call.behaviorOnError == Payload.BEHAVIOR_ABORT_ON_ERROR) {

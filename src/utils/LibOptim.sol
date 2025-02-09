@@ -47,12 +47,9 @@ library LibOptim {
    * @param _data The data to send to the contract.
    * @return r The success status of the call.
    */
-  function call(address _to, uint256 _val, uint256 _gas, bytes calldata _data) internal returns (bool r) {
+  function call(address _to, uint256 _val, uint256 _gas, bytes memory _data) internal returns (bool r) {
     assembly {
-      let tmp := mload(0x40)
-      calldatacopy(tmp, _data.offset, _data.length)
-
-      r := call(_gas, _to, _val, tmp, _data.length, 0, 0)
+      r := call(_gas, _to, _val, add(_data, 32), mload(_data), 0, 0)
     }
   }
 
@@ -64,12 +61,9 @@ library LibOptim {
    * @param _data The data to send to the contract.
    * @return r The success status of the call.
    */
-  function delegatecall(address _to, uint256 _gas, bytes calldata _data) internal returns (bool r) {
+  function delegatecall(address _to, uint256 _gas, bytes memory _data) internal returns (bool r) {
     assembly {
-      let tmp := mload(0x40)
-      calldatacopy(tmp, _data.offset, _data.length)
-
-      r := delegatecall(_gas, _to, tmp, _data.length, 0, 0)
+      r := delegatecall(_gas, _to, add(_data, 32), mload(_data), 0, 0)
     }
   }
 
