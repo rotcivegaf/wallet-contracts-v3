@@ -68,13 +68,14 @@ library BaseSig {
     // - X000 0000 (bit [7]): reserved by base-auth
 
     Snapshot memory snapshot;
-    address checkpointer = _checkpointer;
 
     // Recover the imageHash checkpointer if any
     // but checkpointer passed as argument takes precedence
     // since it can be defined by the chained signatures
-    if (signatureFlag & 0x40 == 0x40 && checkpointer == address(0)) {
-      (checkpointer, rindex) = _signature.readAddress(rindex);
+    if (signatureFlag & 0x40 == 0x40 && _checkpointer == address(0)) {
+      // Override the checkpointer
+      // not ideal, but we don't have much room in the stack
+      (_checkpointer, rindex) = _signature.readAddress(rindex);
 
       if (!_ignoreCheckpointer) {
         // Next 3 bytes determine the checkpointer data size
@@ -85,7 +86,7 @@ library BaseSig {
         bytes memory checkpointerData = _signature[rindex:rindex + checkpointerDataSize];
 
         // Call the middleware
-        snapshot = ICheckpointer(checkpointer).snapshotFor(address(this), checkpointerData);
+        snapshot = ICheckpointer(_checkpointer).snapshotFor(address(this), checkpointerData);
 
         rindex += checkpointerDataSize;
       }
@@ -93,7 +94,7 @@ library BaseSig {
 
     // If signature type is 01 we do a chained signature
     if (signatureFlag & 0x01 == 0x01) {
-      return recoverChained(_payload, checkpointer, snapshot, _signature[rindex:]);
+      return recoverChained(_payload, _checkpointer, snapshot, _signature[rindex:]);
     }
 
     // If the signature type is 10 we do a no chain id signature
@@ -117,7 +118,7 @@ library BaseSig {
 
     imageHash = LibOptim.fkeccak256(imageHash, bytes32(threshold));
     imageHash = LibOptim.fkeccak256(imageHash, bytes32(checkpoint));
-    imageHash = LibOptim.fkeccak256(imageHash, bytes32(uint256(uint160(checkpointer))));
+    imageHash = LibOptim.fkeccak256(imageHash, bytes32(uint256(uint160(_checkpointer))));
 
     // If the snapshot is used, either the imageHash must match
     // or the checkpoint must be greater than the snapshot checkpoint
@@ -137,21 +138,21 @@ library BaseSig {
 
     uint256 rindex;
     uint256 prevCheckpoint = type(uint256).max;
-    opHash = _payload.hash();
 
     while (rindex < _signature.length) {
-      uint256 sigSize;
-      (sigSize, rindex) = _signature.readUint24(rindex);
-      uint256 nrindex = sigSize + rindex;
+      uint256 nrindex;
 
-      bool isLast = nrindex == _signature.length;
+      {
+        uint256 sigSize;
+        (sigSize, rindex) = _signature.readUint24(rindex);
+        nrindex = sigSize + rindex;
+      }
 
-      (threshold, weight, imageHash, checkpoint,) = recover(
-        prevCheckpoint == type(uint256).max ? _payload : linkedPayload,
-        _signature[rindex:nrindex],
-        true, // The checkpointer is only used at the last step
-        isLast ? _checkpointer : address(0)
-      );
+      address actualCheckpointer = (nrindex == _signature.length) ? _checkpointer : address(0);
+      Payload.Decoded memory currentPayload = (prevCheckpoint == type(uint256).max) ? _payload : linkedPayload;
+
+      (threshold, weight, imageHash, checkpoint,) =
+        recover(currentPayload, _signature[rindex:nrindex], true, actualCheckpointer);
 
       if (weight < threshold) {
         revert LowWeightChainedSignature(_signature[rindex:nrindex], threshold, weight);
@@ -175,6 +176,8 @@ library BaseSig {
     if (_snapshot.imageHash != bytes32(0) && checkpoint <= _snapshot.checkpoint) {
       revert UnusedSnapshot(_snapshot);
     }
+
+    opHash = _payload.hash();
   }
 
   function recoverBranch(

@@ -2,8 +2,9 @@
 src = "src"
 out = "out"
 libs = ["lib"]
-via-ir = true
+via-ir = false
 fs_permissions = [{ access = "read-write", path = "/tmp"}]
+solc = "0.8.28"
 
 [fmt]
 # Explicitly define all formatting rules

@@ -54,63 +54,73 @@ contract BaseSigTest is AdvTest {
     uint8 weight;
   }
 
+  struct test_recover_one_signer_params {
+    AddressWeightPair[] prefix;
+    AddressWeightPair[] suffix;
+    Payload.Decoded payload;
+    uint16 threshold;
+    uint56 checkpoint;
+    uint8 weight;
+    uint256 pk;
+    bool useEthSign;
+  }
+
   function test_recover_one_signer(
-    AddressWeightPair[] calldata _prefix,
-    AddressWeightPair[] calldata _suffix,
-    Payload.Decoded memory _payload,
-    uint16 _threshold,
-    uint56 _checkpoint,
-    uint8 _weight,
-    uint256 _pk,
-    bool _useEthSign
+    test_recover_one_signer_params memory params
   ) external {
-    vm.assume(_prefix.length + _suffix.length < 600);
+    vm.assume(params.prefix.length + params.suffix.length < 600);
 
-    boundToLegalPayload(_payload);
-    _pk = boundPk(_pk);
+    boundToLegalPayload(params.payload);
+    params.pk = boundPk(params.pk);
 
-    address signer = vm.addr(_pk);
+    address signer = vm.addr(params.pk);
 
     // The signer should not be in the prefix or suffix
     // or we may end up with more weight than expected
-    for (uint256 i = 0; i < _prefix.length; i++) {
-      vm.assume(_prefix[i].addr != signer);
+    for (uint256 i = 0; i < params.prefix.length; i++) {
+      vm.assume(params.prefix[i].addr != signer);
     }
-    for (uint256 i = 0; i < _suffix.length; i++) {
-      vm.assume(_suffix[i].addr != signer);
+    for (uint256 i = 0; i < params.suffix.length; i++) {
+      vm.assume(params.suffix[i].addr != signer);
     }
 
     string memory config;
 
     {
       string memory ce;
-      for (uint256 i = 0; i < _prefix.length; i++) {
+      for (uint256 i = 0; i < params.prefix.length; i++) {
         ce = string(
-          abi.encodePacked(ce, "signer:", vm.toString(_prefix[i].addr), ":", vm.toString(_prefix[i].weight), " ")
+          abi.encodePacked(
+            ce, "signer:", vm.toString(params.prefix[i].addr), ":", vm.toString(params.prefix[i].weight), " "
+          )
         );
       }
 
-      ce = string(abi.encodePacked(ce, "signer:", vm.toString(signer), ":", vm.toString(_weight)));
+      ce = string(abi.encodePacked(ce, "signer:", vm.toString(signer), ":", vm.toString(params.weight)));
 
-      for (uint256 i = 0; i < _suffix.length; i++) {
-        ce = string(abi.encodePacked(ce, " signer:", vm.toString(_suffix[i].addr), ":", vm.toString(_suffix[i].weight)));
+      for (uint256 i = 0; i < params.suffix.length; i++) {
+        ce = string(
+          abi.encodePacked(
+            ce, " signer:", vm.toString(params.suffix[i].addr), ":", vm.toString(params.suffix[i].weight)
+          )
+        );
       }
 
-      config = PrimitivesRPC.newConfig(vm, _threshold, _checkpoint, ce);
+      config = PrimitivesRPC.newConfig(vm, params.threshold, params.checkpoint, ce);
     }
 
     bytes memory encodedSignature;
     {
-      bytes32 payloadHash = Payload.hashFor(_payload, address(baseSigImp));
+      bytes32 payloadHash = Payload.hashFor(params.payload, address(baseSigImp));
 
-      if (_useEthSign) {
+      if (params.useEthSign) {
         payloadHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", payloadHash));
       }
 
-      (uint8 v, bytes32 r, bytes32 s) = vm.sign(_pk, payloadHash);
+      (uint8 v, bytes32 r, bytes32 s) = vm.sign(params.pk, payloadHash);
 
       string memory signatureType;
-      if (_useEthSign) {
+      if (params.useEthSign) {
         signatureType = ":eth_sign:";
       } else {
         signatureType = ":hash:";
@@ -120,277 +130,335 @@ contract BaseSigTest is AdvTest {
         abi.encodePacked(vm.toString(signer), signatureType, vm.toString(r), ":", vm.toString(s), ":", vm.toString(v))
       );
 
-      encodedSignature = PrimitivesRPC.toEncodedSignature(vm, config, signatures, !_payload.noChainId);
+      encodedSignature = PrimitivesRPC.toEncodedSignature(vm, config, signatures, !params.payload.noChainId);
     }
 
     (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint, bytes32 opHash) =
-      baseSigImp.recoverPub(_payload, encodedSignature, true, address(0));
+      baseSigImp.recoverPub(params.payload, encodedSignature, true, address(0));
 
-    assertEq(threshold, _threshold);
+    assertEq(threshold, params.threshold);
     assertEq(imageHash, PrimitivesRPC.getImageHash(vm, config));
-    assertEq(checkpoint, _checkpoint);
-    assertEq(weight, _weight);
-    assertEq(opHash, Payload.hashFor(_payload, address(baseSigImp)));
+    assertEq(checkpoint, params.checkpoint);
+    assertEq(weight, params.weight);
+    assertEq(opHash, Payload.hashFor(params.payload, address(baseSigImp)));
+  }
+
+  struct test_recover_one_1271_signer_params {
+    AddressWeightPair[] prefix;
+    AddressWeightPair[] suffix;
+    Payload.Decoded payload;
+    uint16 threshold;
+    uint56 checkpoint;
+    uint8 weight;
+    address signer;
+    bytes signature;
   }
 
   function test_recover_one_1271_signer(
-    AddressWeightPair[] calldata _prefix,
-    AddressWeightPair[] calldata _suffix,
-    Payload.Decoded memory _payload,
-    uint16 _threshold,
-    uint56 _checkpoint,
-    uint8 _weight,
-    address _signer,
-    bytes calldata _signature
+    test_recover_one_1271_signer_params memory params
   ) external {
-    assumeNotPrecompile2(_signer);
-    vm.assume(_prefix.length + _suffix.length < 600);
+    assumeNotPrecompile2(params.signer);
+    vm.assume(params.prefix.length + params.suffix.length < 600);
 
     // The signer should not be in the prefix or suffix
     // or we may end up with more weight than expected
-    for (uint256 i = 0; i < _prefix.length; i++) {
-      vm.assume(_prefix[i].addr != _signer);
+    for (uint256 i = 0; i < params.prefix.length; i++) {
+      vm.assume(params.prefix[i].addr != params.signer);
     }
-    for (uint256 i = 0; i < _suffix.length; i++) {
-      vm.assume(_suffix[i].addr != _signer);
+    for (uint256 i = 0; i < params.suffix.length; i++) {
+      vm.assume(params.suffix[i].addr != params.signer);
     }
 
-    boundToLegalPayload(_payload);
+    boundToLegalPayload(params.payload);
 
     string memory config;
 
     {
       string memory ce;
-      for (uint256 i = 0; i < _prefix.length; i++) {
+      for (uint256 i = 0; i < params.prefix.length; i++) {
         ce = string(
-          abi.encodePacked(ce, "signer:", vm.toString(_prefix[i].addr), ":", vm.toString(_prefix[i].weight), " ")
+          abi.encodePacked(
+            ce, "signer:", vm.toString(params.prefix[i].addr), ":", vm.toString(params.prefix[i].weight), " "
+          )
         );
       }
 
-      ce = string(abi.encodePacked(ce, "signer:", vm.toString(_signer), ":", vm.toString(_weight)));
+      ce = string(abi.encodePacked(ce, "signer:", vm.toString(params.signer), ":", vm.toString(params.weight)));
 
-      for (uint256 i = 0; i < _suffix.length; i++) {
-        ce = string(abi.encodePacked(ce, " signer:", vm.toString(_suffix[i].addr), ":", vm.toString(_suffix[i].weight)));
+      for (uint256 i = 0; i < params.suffix.length; i++) {
+        ce = string(
+          abi.encodePacked(
+            ce, " signer:", vm.toString(params.suffix[i].addr), ":", vm.toString(params.suffix[i].weight)
+          )
+        );
       }
 
-      config = PrimitivesRPC.newConfig(vm, _threshold, _checkpoint, ce);
+      config = PrimitivesRPC.newConfig(vm, params.threshold, params.checkpoint, ce);
     }
 
     bytes memory encodedSignature;
     {
-      bytes32 payloadHash = Payload.hashFor(_payload, address(baseSigImp));
+      bytes32 payloadHash = Payload.hashFor(params.payload, address(baseSigImp));
 
       vm.mockCall(
-        address(_signer),
-        abi.encodeWithSignature("isValidSignature(bytes32,bytes)", payloadHash, _signature),
+        address(params.signer),
+        abi.encodeWithSignature("isValidSignature(bytes32,bytes)", payloadHash, params.signature),
         abi.encode(bytes4(0x20c13b0b))
       );
 
       vm.expectCall(
-        address(_signer), abi.encodeWithSignature("isValidSignature(bytes32,bytes)", payloadHash, _signature)
+        address(params.signer),
+        abi.encodeWithSignature("isValidSignature(bytes32,bytes)", payloadHash, params.signature)
       );
 
-      string memory se = string(abi.encodePacked(vm.toString(_signer), ":erc1271:", vm.toString(_signature)));
+      string memory se =
+        string(abi.encodePacked(vm.toString(params.signer), ":erc1271:", vm.toString(params.signature)));
 
-      encodedSignature = PrimitivesRPC.toEncodedSignature(vm, config, se, !_payload.noChainId);
+      encodedSignature = PrimitivesRPC.toEncodedSignature(vm, config, se, !params.payload.noChainId);
     }
 
     (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint, bytes32 opHash) =
-      baseSigImp.recoverPub(_payload, encodedSignature, true, address(0));
+      baseSigImp.recoverPub(params.payload, encodedSignature, true, address(0));
 
-    assertEq(threshold, _threshold);
+    assertEq(threshold, params.threshold);
     assertEq(imageHash, PrimitivesRPC.getImageHash(vm, config));
-    assertEq(checkpoint, _checkpoint);
-    assertEq(weight, _weight);
-    assertEq(opHash, Payload.hashFor(_payload, address(baseSigImp)));
+    assertEq(checkpoint, params.checkpoint);
+    assertEq(weight, params.weight);
+    assertEq(opHash, Payload.hashFor(params.payload, address(baseSigImp)));
+  }
+
+  struct test_recover_one_sapient_signer_params {
+    AddressWeightPair[] prefix;
+    AddressWeightPair[] suffix;
+    Payload.Decoded payload;
+    uint16 threshold;
+    uint56 checkpoint;
+    uint8 weight;
+    address signer;
+    bytes signature;
+    bytes32 sapientImageHash;
+    bool isCompact;
   }
 
   function test_recover_one_sapient_signer(
-    AddressWeightPair[] calldata _prefix,
-    AddressWeightPair[] calldata _suffix,
-    Payload.Decoded memory _payload,
-    uint16 _threshold,
-    uint56 _checkpoint,
-    uint8 _weight,
-    address _signer,
-    bytes calldata _signature,
-    bytes32 _sapientImageHash,
-    bool _isCompact
+    test_recover_one_sapient_signer_params memory params
   ) external {
-    assumeNotPrecompile2(_signer);
-    vm.assume(_prefix.length + _suffix.length < 600);
+    assumeNotPrecompile2(params.signer);
+    vm.assume(params.prefix.length + params.suffix.length < 600);
 
     // The signer should not be in the prefix or suffix
     // or we may end up with more weight than expected
-    for (uint256 i = 0; i < _prefix.length; i++) {
-      vm.assume(_prefix[i].addr != _signer);
+    for (uint256 i = 0; i < params.prefix.length; i++) {
+      vm.assume(params.prefix[i].addr != params.signer);
     }
-    for (uint256 i = 0; i < _suffix.length; i++) {
-      vm.assume(_suffix[i].addr != _signer);
+    for (uint256 i = 0; i < params.suffix.length; i++) {
+      vm.assume(params.suffix[i].addr != params.signer);
     }
 
-    boundToLegalPayload(_payload);
+    boundToLegalPayload(params.payload);
 
     string memory config;
 
     {
       string memory ce;
-      for (uint256 i = 0; i < _prefix.length; i++) {
+      for (uint256 i = 0; i < params.prefix.length; i++) {
         ce = string(
-          abi.encodePacked(ce, "signer:", vm.toString(_prefix[i].addr), ":", vm.toString(_prefix[i].weight), " ")
+          abi.encodePacked(
+            ce, "signer:", vm.toString(params.prefix[i].addr), ":", vm.toString(params.prefix[i].weight), " "
+          )
         );
       }
 
       ce = string(
         abi.encodePacked(
-          ce, "sapient:", vm.toString(_sapientImageHash), ":", vm.toString(_signer), ":", vm.toString(_weight)
+          ce,
+          "sapient:",
+          vm.toString(params.sapientImageHash),
+          ":",
+          vm.toString(params.signer),
+          ":",
+          vm.toString(params.weight)
         )
       );
 
-      for (uint256 i = 0; i < _suffix.length; i++) {
-        ce = string(abi.encodePacked(ce, " signer:", vm.toString(_suffix[i].addr), ":", vm.toString(_suffix[i].weight)));
+      for (uint256 i = 0; i < params.suffix.length; i++) {
+        ce = string(
+          abi.encodePacked(
+            ce, " signer:", vm.toString(params.suffix[i].addr), ":", vm.toString(params.suffix[i].weight)
+          )
+        );
       }
 
-      config = PrimitivesRPC.newConfig(vm, _threshold, _checkpoint, ce);
+      config = PrimitivesRPC.newConfig(vm, params.threshold, params.checkpoint, ce);
     }
 
     bytes memory encodedSignature;
     {
       string memory st;
 
-      if (_isCompact) {
+      if (params.isCompact) {
         st = ":sapient_compact:";
-        bytes32 payloadHash = Payload.hashFor(_payload, address(baseSigImp));
+        bytes32 payloadHash = Payload.hashFor(params.payload, address(baseSigImp));
 
         vm.mockCall(
-          address(_signer),
-          abi.encodeWithSelector(ISapientCompact.isValidSapientSignatureCompact.selector, payloadHash, _signature),
-          abi.encode(_sapientImageHash)
+          address(params.signer),
+          abi.encodeWithSelector(ISapientCompact.isValidSapientSignatureCompact.selector, payloadHash, params.signature),
+          abi.encode(params.sapientImageHash)
         );
 
         vm.expectCall(
-          address(_signer),
-          abi.encodeWithSelector(ISapientCompact.isValidSapientSignatureCompact.selector, payloadHash, _signature)
+          address(params.signer),
+          abi.encodeWithSelector(ISapientCompact.isValidSapientSignatureCompact.selector, payloadHash, params.signature)
         );
       } else {
         st = ":sapient:";
         vm.mockCall(
-          address(_signer),
-          abi.encodeWithSelector(ISapient.isValidSapientSignature.selector, _payload, _signature),
-          abi.encode(_sapientImageHash)
+          address(params.signer),
+          abi.encodeWithSelector(ISapient.isValidSapientSignature.selector, params.payload, params.signature),
+          abi.encode(params.sapientImageHash)
         );
 
         vm.expectCall(
-          address(_signer), abi.encodeWithSelector(ISapient.isValidSapientSignature.selector, _payload, _signature)
+          address(params.signer),
+          abi.encodeWithSelector(ISapient.isValidSapientSignature.selector, params.payload, params.signature)
         );
       }
 
-      string memory se = string(abi.encodePacked(vm.toString(_signer), st, vm.toString(_signature)));
+      string memory se = string(abi.encodePacked(vm.toString(params.signer), st, vm.toString(params.signature)));
 
-      encodedSignature = PrimitivesRPC.toEncodedSignature(vm, config, se, !_payload.noChainId);
+      encodedSignature = PrimitivesRPC.toEncodedSignature(vm, config, se, !params.payload.noChainId);
     }
 
     (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint, bytes32 opHash) =
-      baseSigImp.recoverPub(_payload, encodedSignature, true, address(0));
+      baseSigImp.recoverPub(params.payload, encodedSignature, true, address(0));
 
-    assertEq(threshold, _threshold);
+    assertEq(threshold, params.threshold);
     assertEq(imageHash, PrimitivesRPC.getImageHash(vm, config));
-    assertEq(checkpoint, _checkpoint);
-    assertEq(weight, _weight);
-    assertEq(opHash, Payload.hashFor(_payload, address(baseSigImp)));
+    assertEq(checkpoint, params.checkpoint);
+    assertEq(weight, params.weight);
+    assertEq(opHash, Payload.hashFor(params.payload, address(baseSigImp)));
+  }
+
+  struct test_recover_nested_config_params {
+    AddressWeightPair[] prefix;
+    AddressWeightPair[] suffix;
+    AddressWeightPair[] nestedPrefix;
+    AddressWeightPair[] nestedSuffix;
+    Payload.Decoded payload;
+    uint16 threshold;
+    uint56 checkpoint;
+    uint16 internalThreshold;
+    uint8 externalWeight;
+    uint8 weight;
+    uint256 pk;
+    bool useEthSign;
   }
 
   function test_recover_nested_config(
-    AddressWeightPair[] calldata _prefix,
-    AddressWeightPair[] calldata _suffix,
-    AddressWeightPair[] calldata _nestedPrefix,
-    AddressWeightPair[] calldata _nestedSuffix,
-    Payload.Decoded memory _payload,
-    uint16 _threshold,
-    uint56 _checkpoint,
-    uint16 _internalThreshold,
-    uint8 _externalWeight,
-    uint8 _weight,
-    uint256 _pk,
-    bool _useEthSign
+    test_recover_nested_config_params memory params
   ) external {
-    vm.assume(_prefix.length + _suffix.length + _nestedPrefix.length + _nestedSuffix.length < 600);
+    vm.assume(
+      params.prefix.length + params.suffix.length + params.nestedPrefix.length + params.nestedSuffix.length < 600
+    );
 
-    boundToLegalPayload(_payload);
-    _pk = boundPk(_pk);
+    boundToLegalPayload(params.payload);
+    params.pk = boundPk(params.pk);
 
-    address signer = vm.addr(_pk);
+    address signer = vm.addr(params.pk);
 
     // The signer should not be in the prefix or suffix
     // or we may end up with more weight than expected
-    for (uint256 i = 0; i < _prefix.length; i++) {
-      vm.assume(_prefix[i].addr != signer);
+    for (uint256 i = 0; i < params.prefix.length; i++) {
+      vm.assume(params.prefix[i].addr != signer);
     }
-    for (uint256 i = 0; i < _suffix.length; i++) {
-      vm.assume(_suffix[i].addr != signer);
+    for (uint256 i = 0; i < params.suffix.length; i++) {
+      vm.assume(params.suffix[i].addr != signer);
     }
 
-    for (uint256 i = 0; i < _nestedPrefix.length; i++) {
-      vm.assume(_nestedPrefix[i].addr != signer);
+    for (uint256 i = 0; i < params.nestedPrefix.length; i++) {
+      vm.assume(params.nestedPrefix[i].addr != signer);
     }
-    for (uint256 i = 0; i < _nestedSuffix.length; i++) {
-      vm.assume(_nestedSuffix[i].addr != signer);
+    for (uint256 i = 0; i < params.nestedSuffix.length; i++) {
+      vm.assume(params.nestedSuffix[i].addr != signer);
     }
 
     string memory config;
 
     {
       string memory ce;
-      for (uint256 i = 0; i < _prefix.length; i++) {
+      for (uint256 i = 0; i < params.prefix.length; i++) {
         ce = string(
-          abi.encodePacked(ce, "signer:", vm.toString(_prefix[i].addr), ":", vm.toString(_prefix[i].weight), " ")
-        );
-      }
-
-      string memory nestedContent;
-      for (uint256 i = 0; i < _nestedPrefix.length; i++) {
-        nestedContent = string(
           abi.encodePacked(
-            nestedContent, "signer:", vm.toString(_nestedPrefix[i].addr), ":", vm.toString(_nestedPrefix[i].weight), " "
+            ce, "signer:", vm.toString(params.prefix[i].addr), ":", vm.toString(params.prefix[i].weight), " "
           )
         );
       }
 
-      nestedContent = string(abi.encodePacked(nestedContent, "signer:", vm.toString(signer), ":", vm.toString(_weight)));
-
-      for (uint256 i = 0; i < _nestedSuffix.length; i++) {
+      string memory nestedContent;
+      for (uint256 i = 0; i < params.nestedPrefix.length; i++) {
         nestedContent = string(
           abi.encodePacked(
-            nestedContent, " signer:", vm.toString(_nestedSuffix[i].addr), ":", vm.toString(_nestedSuffix[i].weight)
+            nestedContent,
+            "signer:",
+            vm.toString(params.nestedPrefix[i].addr),
+            ":",
+            vm.toString(params.nestedPrefix[i].weight),
+            " "
+          )
+        );
+      }
+
+      nestedContent =
+        string(abi.encodePacked(nestedContent, "signer:", vm.toString(signer), ":", vm.toString(params.weight)));
+
+      for (uint256 i = 0; i < params.nestedSuffix.length; i++) {
+        nestedContent = string(
+          abi.encodePacked(
+            nestedContent,
+            " signer:",
+            vm.toString(params.nestedSuffix[i].addr),
+            ":",
+            vm.toString(params.nestedSuffix[i].weight)
           )
         );
       }
 
       ce = string(
         abi.encodePacked(
-          ce, "nested:", vm.toString(_internalThreshold), ":", vm.toString(_externalWeight), ":(", nestedContent, ")"
+          ce,
+          "nested:",
+          vm.toString(params.internalThreshold),
+          ":",
+          vm.toString(params.externalWeight),
+          ":(",
+          nestedContent,
+          ")"
         )
       );
 
-      for (uint256 i = 0; i < _suffix.length; i++) {
-        ce = string(abi.encodePacked(ce, " signer:", vm.toString(_suffix[i].addr), ":", vm.toString(_suffix[i].weight)));
+      for (uint256 i = 0; i < params.suffix.length; i++) {
+        ce = string(
+          abi.encodePacked(
+            ce, " signer:", vm.toString(params.suffix[i].addr), ":", vm.toString(params.suffix[i].weight)
+          )
+        );
       }
 
-      config = PrimitivesRPC.newConfig(vm, _threshold, _checkpoint, ce);
+      config = PrimitivesRPC.newConfig(vm, params.threshold, params.checkpoint, ce);
     }
 
     bytes memory encodedSignature;
     {
-      bytes32 payloadHash = Payload.hashFor(_payload, address(baseSigImp));
+      bytes32 payloadHash = Payload.hashFor(params.payload, address(baseSigImp));
 
-      if (_useEthSign) {
+      if (params.useEthSign) {
         payloadHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", payloadHash));
       }
 
-      (uint8 v, bytes32 r, bytes32 s) = vm.sign(_pk, payloadHash);
+      (uint8 v, bytes32 r, bytes32 s) = vm.sign(params.pk, payloadHash);
 
       string memory signatureType;
-      if (_useEthSign) {
+      if (params.useEthSign) {
         signatureType = ":eth_sign:";
       } else {
         signatureType = ":hash:";
@@ -400,17 +468,46 @@ contract BaseSigTest is AdvTest {
         abi.encodePacked(vm.toString(signer), signatureType, vm.toString(r), ":", vm.toString(s), ":", vm.toString(v))
       );
 
-      encodedSignature = PrimitivesRPC.toEncodedSignature(vm, config, se, !_payload.noChainId);
+      encodedSignature = PrimitivesRPC.toEncodedSignature(vm, config, se, !params.payload.noChainId);
     }
 
     (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint, bytes32 opHash) =
-      baseSigImp.recoverPub(_payload, encodedSignature, true, address(0));
+      baseSigImp.recoverPub(params.payload, encodedSignature, true, address(0));
 
-    assertEq(threshold, _threshold);
+    assertEq(threshold, params.threshold);
     assertEq(imageHash, PrimitivesRPC.getImageHash(vm, config));
-    assertEq(checkpoint, _checkpoint);
-    assertEq(weight, _weight >= _internalThreshold ? _externalWeight : 0);
-    assertEq(opHash, Payload.hashFor(_payload, address(baseSigImp)));
+    assertEq(checkpoint, params.checkpoint);
+    assertEq(weight, params.weight >= params.internalThreshold ? params.externalWeight : 0);
+    assertEq(opHash, Payload.hashFor(params.payload, address(baseSigImp)));
+  }
+
+  struct test_recover_chained_signature_single_case_vars {
+    address signer1addr;
+    address signer2addr;
+    address signer3addr;
+    uint256 signer1pk;
+    uint256 signer2pk;
+    uint256 signer3pk;
+    string config1;
+    string config2;
+    string config3;
+    bytes32 config1Hash;
+    bytes32 config2Hash;
+    bytes32 config3Hash;
+    Payload.Decoded payloadApprove2;
+    Payload.Decoded payloadApprove3;
+    bytes signatureForFinalPayload;
+    bytes signature1to2;
+    bytes signature2to3;
+    uint8 v2;
+    bytes32 r2;
+    bytes32 s2;
+    uint8 v3;
+    bytes32 r3;
+    bytes32 s3;
+    uint8 fv;
+    bytes32 fr;
+    bytes32 fs;
   }
 
   function test_recover_chained_signature_single_case(
@@ -418,100 +515,105 @@ contract BaseSigTest is AdvTest {
   ) external {
     boundToLegalPayload(_finalPayload);
 
-    uint256 signer1pk = 1;
-    uint256 signer2pk = 2;
-    uint256 signer3pk = 3;
+    test_recover_chained_signature_single_case_vars memory vars;
 
-    string memory config1 =
-      PrimitivesRPC.newConfig(vm, 1, 1, string(abi.encodePacked("signer:", vm.toString(vm.addr(signer1pk)), ":1")));
+    vars.signer1pk = 1;
+    vars.signer2pk = 2;
+    vars.signer3pk = 3;
 
-    string memory config2 = PrimitivesRPC.newConfig(
+    vars.signer1addr = vm.addr(vars.signer1pk);
+    vars.signer2addr = vm.addr(vars.signer2pk);
+    vars.signer3addr = vm.addr(vars.signer3pk);
+
+    vars.config1 =
+      PrimitivesRPC.newConfig(vm, 1, 1, string(abi.encodePacked("signer:", vm.toString(vars.signer1addr), ":1")));
+
+    vars.config2 = PrimitivesRPC.newConfig(
       vm,
       1,
       2,
       string(
         abi.encodePacked(
-          "signer:", vm.toString(vm.addr(signer2pk)), ":3 ", "signer:", vm.toString(vm.addr(signer1pk)), ":2"
+          "signer:", vm.toString(vars.signer2addr), ":3 ", "signer:", vm.toString(vars.signer1addr), ":2"
         )
       )
     );
 
-    string memory config3 = PrimitivesRPC.newConfig(
+    vars.config3 = PrimitivesRPC.newConfig(
       vm,
       1,
       3,
       string(
         abi.encodePacked(
-          "signer:", vm.toString(vm.addr(signer3pk)), ":2 ", "signer:", vm.toString(vm.addr(signer2pk)), ":2"
+          "signer:", vm.toString(vars.signer3addr), ":2 ", "signer:", vm.toString(vars.signer2addr), ":2"
         )
       )
     );
 
-    bytes32 config1Hash = PrimitivesRPC.getImageHash(vm, config1);
-    bytes32 config2Hash = PrimitivesRPC.getImageHash(vm, config2);
-    bytes32 config3Hash = PrimitivesRPC.getImageHash(vm, config3);
+    vars.config1Hash = PrimitivesRPC.getImageHash(vm, vars.config1);
+    vars.config2Hash = PrimitivesRPC.getImageHash(vm, vars.config2);
+    vars.config3Hash = PrimitivesRPC.getImageHash(vm, vars.config3);
 
-    Payload.Decoded memory payloadApprove2;
-    payloadApprove2.kind = Payload.KIND_CONFIG_UPDATE;
+    vars.payloadApprove2.kind = Payload.KIND_CONFIG_UPDATE;
+    vars.payloadApprove3.kind = Payload.KIND_CONFIG_UPDATE;
 
-    Payload.Decoded memory payloadApprove3;
-    payloadApprove3.kind = Payload.KIND_CONFIG_UPDATE;
-
-    payloadApprove2.imageHash = config2Hash;
-    payloadApprove3.imageHash = config3Hash;
-
-    bytes memory signatureForFinalPayload;
-    bytes memory signature1to2;
-    bytes memory signature2to3;
+    vars.payloadApprove2.imageHash = vars.config2Hash;
+    vars.payloadApprove3.imageHash = vars.config3Hash;
 
     {
-      (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(signer1pk, Payload.hashFor(payloadApprove2, address(baseSigImp)));
-      (uint8 v3, bytes32 r3, bytes32 s3) = vm.sign(signer2pk, Payload.hashFor(payloadApprove3, address(baseSigImp)));
-      (uint8 fv, bytes32 fr, bytes32 fs) = vm.sign(signer3pk, Payload.hashFor(_finalPayload, address(baseSigImp)));
+      (vars.v2, vars.r2, vars.s2) = vm.sign(vars.signer1pk, Payload.hashFor(vars.payloadApprove2, address(baseSigImp)));
+      (vars.v3, vars.r3, vars.s3) = vm.sign(vars.signer2pk, Payload.hashFor(vars.payloadApprove3, address(baseSigImp)));
+      (vars.fv, vars.fr, vars.fs) = vm.sign(vars.signer3pk, Payload.hashFor(_finalPayload, address(baseSigImp)));
 
       // Signature for final payload
-      signatureForFinalPayload = PrimitivesRPC.toEncodedSignature(
+      vars.signatureForFinalPayload = PrimitivesRPC.toEncodedSignature(
         vm,
-        config3,
+        vars.config3,
         string(
           abi.encodePacked(
-            vm.toString(vm.addr(signer3pk)), ":hash:", vm.toString(fr), ":", vm.toString(fs), ":", vm.toString(fv)
+            vm.toString(vars.signer3addr),
+            ":hash:",
+            vm.toString(vars.fr),
+            ":",
+            vm.toString(vars.fs),
+            ":",
+            vm.toString(vars.fv)
           )
         ),
         !_finalPayload.noChainId
       );
 
       // Signatures for links, config3 -> config2 -> config1
-      signature1to2 = PrimitivesRPC.toEncodedSignature(
+      vars.signature1to2 = PrimitivesRPC.toEncodedSignature(
         vm,
-        config1,
+        vars.config1,
         string(
           abi.encodePacked(
             "--signature ",
-            vm.toString(vm.addr(signer1pk)),
+            vm.toString(vars.signer1addr),
             ":hash:",
-            vm.toString(r2),
+            vm.toString(vars.r2),
             ":",
-            vm.toString(s2),
+            vm.toString(vars.s2),
             ":",
-            vm.toString(v2)
+            vm.toString(vars.v2)
           )
         ),
         true
       );
-      signature2to3 = PrimitivesRPC.toEncodedSignature(
+      vars.signature2to3 = PrimitivesRPC.toEncodedSignature(
         vm,
-        config2,
+        vars.config2,
         string(
           abi.encodePacked(
             "--signature ",
-            vm.toString(vm.addr(signer2pk)),
+            vm.toString(vars.signer2addr),
             ":hash:",
-            vm.toString(r3),
+            vm.toString(vars.r3),
             ":",
-            vm.toString(s3),
+            vm.toString(vars.s3),
             ":",
-            vm.toString(v3)
+            vm.toString(vars.v3)
           )
         ),
         true
@@ -519,9 +621,9 @@ contract BaseSigTest is AdvTest {
     }
 
     bytes[] memory signatures = new bytes[](3);
-    signatures[0] = signatureForFinalPayload;
-    signatures[1] = signature2to3;
-    signatures[2] = signature1to2;
+    signatures[0] = vars.signatureForFinalPayload;
+    signatures[1] = vars.signature2to3;
+    signatures[2] = vars.signature1to2;
 
     bytes memory chainedSignature = PrimitivesRPC.concatSignatures(vm, signatures);
 
@@ -531,7 +633,7 @@ contract BaseSigTest is AdvTest {
 
     assertEq(threshold, 1);
     assertEq(weight, 1);
-    assertEq(imageHash, config1Hash);
+    assertEq(imageHash, vars.config1Hash);
     assertEq(checkpoint, 1);
     assertEq(opHash, Payload.hashFor(_finalPayload, address(baseSigImp)));
   }
