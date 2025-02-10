@@ -6,9 +6,10 @@ import {
   IImplicitSessionManager,
   IImplicitSessionManagerSignals
 } from "src/extensions/sessions/implicit/IImplicitSessionManager.sol";
-import { ISapient, Payload } from "src/modules/interfaces/ISapient.sol";
+
 import { ISignalsImplicitMode } from "src/extensions/sessions/implicit/ISignalsImplicitMode.sol";
 import { ImplicitSessionManager } from "src/extensions/sessions/implicit/ImplicitSessionManager.sol";
+import { ISapient, Payload } from "src/modules/interfaces/ISapient.sol";
 
 import { MockImplicitContract } from "../../../mocks/MockImplicitContract.sol";
 import { AdvTest } from "../../../utils/TestUtils.sol";
@@ -148,14 +149,26 @@ contract ImplicitSessionManagerTest is AdvTest, IImplicitSessionManagerSignals {
     address[] memory blacklist
   ) internal view returns (bytes memory signature) {
     // 1. Sign the payload using the session key.
-    bytes32 payloadHash = keccak256(abi.encode(payload));
-    (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(sessionSignerPk, payloadHash);
-    bytes32 compactS1 = _toERC2098(v1, s1);
+    uint8 v1;
+    bytes32 r1;
+    bytes32 s1;
+    bytes32 compactS1;
+    {
+      bytes32 payloadHash = keccak256(abi.encode(payload));
+      (v1, r1, s1) = vm.sign(sessionSignerPk, payloadHash);
+      compactS1 = _toERC2098(v1, s1);
+    }
 
     // 2. Sign the attestation using the global key.
-    bytes32 attestationHash = attestation.toHash();
-    (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(globalSignerPk, attestationHash);
-    bytes32 compactS2 = _toERC2098(v2, s2);
+    uint8 v2;
+    bytes32 r2;
+    bytes32 s2;
+    bytes32 compactS2;
+    {
+      bytes32 attestationHash = attestation.toHash();
+      (v2, r2, s2) = vm.sign(globalSignerPk, attestationHash);
+      compactS2 = _toERC2098(v2, s2);
+    }
 
     // 3. Encode all parts.
     signature = abi.encodePacked(r1, compactS1, attestation.toPacked(), r2, compactS2, uint24(blacklist.length));
