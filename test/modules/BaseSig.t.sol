@@ -36,6 +36,7 @@ contract BaseSigTest is AdvTest {
     _maxDepth = bound(_maxDepth, 1, 6);
 
     Payload.Decoded memory payload;
+    payload.noChainId = true;
 
     string memory config = PrimitivesCli.randomConfig(vm, _maxDepth, _seed);
     bytes memory encodedConfig = PrimitivesCli.toEncodedConfig(vm, config);
