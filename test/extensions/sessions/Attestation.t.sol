@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import { Attestation, LibAttestation } from "../../src/modules/Attestation.sol";
+import { Attestation, LibAttestation } from "../../../src/extensions/sessions/Attestation.sol";
 
-import { AdvTest } from "../utils/TestUtils.sol";
+import { AdvTest } from "../../utils/TestUtils.sol";
 import { Vm } from "forge-std/Test.sol";
 import { console } from "forge-std/console.sol";
 

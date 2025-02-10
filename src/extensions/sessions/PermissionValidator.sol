@@ -3,8 +3,8 @@ pragma solidity ^0.8.27;
 
 import { LibBytes } from "../../utils/LibBytes.sol";
 
-import { ParameterOperation, ParameterRule, Permission, UsageLimit } from "../Permission.sol";
-import { Payload } from "../interfaces/ISapient.sol";
+import { Payload } from "../../modules/interfaces/ISapient.sol";
+import { ParameterOperation, ParameterRule, Permission, UsageLimit } from "./Permission.sol";
 
 abstract contract PermissionValidator {
 

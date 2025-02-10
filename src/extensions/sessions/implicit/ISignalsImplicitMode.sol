@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
+import { Payload } from "../../../modules/Payload.sol";
 import { Attestation } from "../Attestation.sol";
-import { Payload } from "../Payload.sol";
 
 bytes32 constant ACCEPT_IMPLICIT_REQUEST_MAGIC_PREFIX = keccak256(abi.encodePacked("acceptImplicitRequest"));
 

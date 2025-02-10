@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import { LibBytes } from "../../utils/LibBytes.sol";
-import { LibBytesPointer } from "../../utils/LibBytesPointer.sol";
+import { LibBytes } from "../../../utils/LibBytes.sol";
+import { LibBytesPointer } from "../../../utils/LibBytesPointer.sol";
 import { Attestation, LibAttestation } from "../Attestation.sol";
 
-import { IImplicitSessionManager, ImplicitSessionSignature } from "../interfaces/IImplicitSessionManager.sol";
-import { ISapient, Payload } from "../interfaces/ISapient.sol";
-import { ISignalsImplicitMode } from "../interfaces/ISignalsImplicitMode.sol";
+import { ISapient, Payload } from "../../../modules/interfaces/ISapient.sol";
+import { IImplicitSessionManager, ImplicitSessionSignature } from "./IImplicitSessionManager.sol";
+import { ISignalsImplicitMode } from "./ISignalsImplicitMode.sol";
 import { ImplicitSessionSig } from "./ImplicitSessionSig.sol";
 
 using LibBytesPointer for bytes;

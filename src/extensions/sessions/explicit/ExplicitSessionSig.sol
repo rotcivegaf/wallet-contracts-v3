@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import { LibBytesPointer } from "../../utils/LibBytesPointer.sol";
-import { LibOptim } from "../../utils/LibOptim.sol";
+import { LibBytesPointer } from "../../../utils/LibBytesPointer.sol";
+import { LibOptim } from "../../../utils/LibOptim.sol";
 
-import { Payload } from "../Payload.sol";
+import { Payload } from "../../../modules/Payload.sol";
 import { LibPermission, Permission } from "../Permission.sol";
-import { ExplicitSessionSignature, SessionPermissions } from "../interfaces/IExplicitSessionManager.sol";
+import { ExplicitSessionSignature, SessionPermissions } from "./IExplicitSessionManager.sol";
 
 contract ExplicitSessionSig {
 

@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import { ParameterOperation, ParameterRule, Permission, UsageLimit } from "../../../src/modules/Permission.sol";
+import {
+  ParameterOperation, ParameterRule, Permission, UsageLimit
+} from "../../../../src/extensions/sessions/Permission.sol";
 import {
   ExplicitSessionSig,
   ExplicitSessionSignature,
   Payload,
   SessionPermissions
-} from "../../../src/modules/sapient/ExplicitSessionSig.sol";
+} from "../../../../src/extensions/sessions/explicit/ExplicitSessionSig.sol";
 
-import { PrimitivesCli } from "../../utils/PrimitivesCli.sol";
-import { AdvTest } from "../../utils/TestUtils.sol";
+import { PrimitivesCli } from "../../../utils/PrimitivesCli.sol";
+import { AdvTest } from "../../../utils/TestUtils.sol";
 import { console } from "forge-std/console.sol";
 
 contract ExplicitSessionSigImp is ExplicitSessionSig {

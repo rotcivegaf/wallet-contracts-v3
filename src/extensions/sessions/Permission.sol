@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import { LibBytesPointer } from "../utils/LibBytesPointer.sol";
+import { ISapient, Payload } from "../../modules/interfaces/ISapient.sol";
+import { LibBytesPointer } from "../../utils/LibBytesPointer.sol";
 import { Attestation } from "./Attestation.sol";
-import { ISapient, Payload } from "./interfaces/ISapient.sol";
-import { PermissionValidator } from "./sapient/PermissionValidator.sol";
+import { PermissionValidator } from "./PermissionValidator.sol";
 
 import { console } from "forge-std/console.sol";
 

@@ -3,9 +3,9 @@ pragma solidity ^0.8.27;
 
 import { Attestation } from "../Attestation.sol";
 
+import { ISapient, Payload } from "../../../modules/interfaces/ISapient.sol";
 import { Permission, UsageLimit } from "../Permission.sol";
-import { PermissionValidator } from "../sapient/PermissionValidator.sol";
-import { ISapient, Payload } from "./ISapient.sol";
+import { PermissionValidator } from "../PermissionValidator.sol";
 
 /// @notice Represents a decoded signature for an explicit session
 struct ExplicitSessionSignature {
