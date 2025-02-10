@@ -5,7 +5,7 @@ import { Payload } from "../../src/modules/Payload.sol";
 import { BaseSig } from "../../src/modules/auth/BaseSig.sol";
 
 import { ISapient, ISapientCompact } from "../../src/modules/interfaces/ISapient.sol";
-import { PrimitivesCli } from "../utils/PrimitivesCli.sol";
+import { PrimitivesRPC } from "../utils/PrimitivesRPC.sol";
 
 import { AdvTest } from "../utils/TestUtils.sol";
 import { Vm } from "forge-std/Test.sol";
@@ -38,14 +38,14 @@ contract BaseSigTest is AdvTest {
     Payload.Decoded memory payload;
     payload.noChainId = true;
 
-    string memory config = PrimitivesCli.randomConfig(vm, _maxDepth, _seed);
-    bytes memory encodedConfig = PrimitivesCli.toEncodedConfig(vm, config);
+    string memory config = PrimitivesRPC.randomConfig(vm, _maxDepth, _seed, 1, "");
+    bytes memory encodedConfig = PrimitivesRPC.toEncodedConfig(vm, config);
 
     (, uint256 weight, bytes32 imageHash,, bytes32 opHash) =
       baseSigImp.recoverPub(payload, encodedConfig, true, address(0));
 
     assertEq(weight, 0);
-    assertEq(imageHash, PrimitivesCli.getImageHash(vm, config));
+    assertEq(imageHash, PrimitivesRPC.getImageHash(vm, config));
     assertEq(opHash, Payload.hashFor(payload, address(baseSigImp)));
   }
 
@@ -96,7 +96,7 @@ contract BaseSigTest is AdvTest {
         ce = string(abi.encodePacked(ce, " signer:", vm.toString(_suffix[i].addr), ":", vm.toString(_suffix[i].weight)));
       }
 
-      config = PrimitivesCli.newConfig(vm, _threshold, _checkpoint, ce);
+      config = PrimitivesRPC.newConfig(vm, _threshold, _checkpoint, ce);
     }
 
     bytes memory encodedSignature;
@@ -116,24 +116,18 @@ contract BaseSigTest is AdvTest {
         signatureType = ":hash:";
       }
 
-      string memory se = string(
-        abi.encodePacked(
-          "--signature ", vm.toString(signer), signatureType, vm.toString(r), ":", vm.toString(s), ":", vm.toString(v)
-        )
+      string memory signatures = string(
+        abi.encodePacked(vm.toString(signer), signatureType, vm.toString(r), ":", vm.toString(s), ":", vm.toString(v))
       );
 
-      if (_payload.noChainId) {
-        se = string(abi.encodePacked(se, " --no-chain-id"));
-      }
-
-      encodedSignature = PrimitivesCli.toEncodedSignature(vm, config, se);
+      encodedSignature = PrimitivesRPC.toEncodedSignature(vm, config, signatures, !_payload.noChainId);
     }
 
     (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint, bytes32 opHash) =
       baseSigImp.recoverPub(_payload, encodedSignature, true, address(0));
 
     assertEq(threshold, _threshold);
-    assertEq(imageHash, PrimitivesCli.getImageHash(vm, config));
+    assertEq(imageHash, PrimitivesRPC.getImageHash(vm, config));
     assertEq(checkpoint, _checkpoint);
     assertEq(weight, _weight);
     assertEq(opHash, Payload.hashFor(_payload, address(baseSigImp)));
@@ -179,7 +173,7 @@ contract BaseSigTest is AdvTest {
         ce = string(abi.encodePacked(ce, " signer:", vm.toString(_suffix[i].addr), ":", vm.toString(_suffix[i].weight)));
       }
 
-      config = PrimitivesCli.newConfig(vm, _threshold, _checkpoint, ce);
+      config = PrimitivesRPC.newConfig(vm, _threshold, _checkpoint, ce);
     }
 
     bytes memory encodedSignature;
@@ -196,21 +190,16 @@ contract BaseSigTest is AdvTest {
         address(_signer), abi.encodeWithSignature("isValidSignature(bytes32,bytes)", payloadHash, _signature)
       );
 
-      string memory se =
-        string(abi.encodePacked("--signature ", vm.toString(_signer), ":erc1271:", vm.toString(_signature)));
+      string memory se = string(abi.encodePacked(vm.toString(_signer), ":erc1271:", vm.toString(_signature)));
 
-      if (_payload.noChainId) {
-        se = string(abi.encodePacked(se, " --no-chain-id"));
-      }
-
-      encodedSignature = PrimitivesCli.toEncodedSignature(vm, config, se);
+      encodedSignature = PrimitivesRPC.toEncodedSignature(vm, config, se, !_payload.noChainId);
     }
 
     (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint, bytes32 opHash) =
       baseSigImp.recoverPub(_payload, encodedSignature, true, address(0));
 
     assertEq(threshold, _threshold);
-    assertEq(imageHash, PrimitivesCli.getImageHash(vm, config));
+    assertEq(imageHash, PrimitivesRPC.getImageHash(vm, config));
     assertEq(checkpoint, _checkpoint);
     assertEq(weight, _weight);
     assertEq(opHash, Payload.hashFor(_payload, address(baseSigImp)));
@@ -262,7 +251,7 @@ contract BaseSigTest is AdvTest {
         ce = string(abi.encodePacked(ce, " signer:", vm.toString(_suffix[i].addr), ":", vm.toString(_suffix[i].weight)));
       }
 
-      config = PrimitivesCli.newConfig(vm, _threshold, _checkpoint, ce);
+      config = PrimitivesRPC.newConfig(vm, _threshold, _checkpoint, ce);
     }
 
     bytes memory encodedSignature;
@@ -296,20 +285,16 @@ contract BaseSigTest is AdvTest {
         );
       }
 
-      string memory se = string(abi.encodePacked("--signature ", vm.toString(_signer), st, vm.toString(_signature)));
+      string memory se = string(abi.encodePacked(vm.toString(_signer), st, vm.toString(_signature)));
 
-      if (_payload.noChainId) {
-        se = string(abi.encodePacked(se, " --no-chain-id"));
-      }
-
-      encodedSignature = PrimitivesCli.toEncodedSignature(vm, config, se);
+      encodedSignature = PrimitivesRPC.toEncodedSignature(vm, config, se, !_payload.noChainId);
     }
 
     (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint, bytes32 opHash) =
       baseSigImp.recoverPub(_payload, encodedSignature, true, address(0));
 
     assertEq(threshold, _threshold);
-    assertEq(imageHash, PrimitivesCli.getImageHash(vm, config));
+    assertEq(imageHash, PrimitivesRPC.getImageHash(vm, config));
     assertEq(checkpoint, _checkpoint);
     assertEq(weight, _weight);
     assertEq(opHash, Payload.hashFor(_payload, address(baseSigImp)));
@@ -391,7 +376,7 @@ contract BaseSigTest is AdvTest {
         ce = string(abi.encodePacked(ce, " signer:", vm.toString(_suffix[i].addr), ":", vm.toString(_suffix[i].weight)));
       }
 
-      config = PrimitivesCli.newConfig(vm, _threshold, _checkpoint, ce);
+      config = PrimitivesRPC.newConfig(vm, _threshold, _checkpoint, ce);
     }
 
     bytes memory encodedSignature;
@@ -412,23 +397,17 @@ contract BaseSigTest is AdvTest {
       }
 
       string memory se = string(
-        abi.encodePacked(
-          "--signature ", vm.toString(signer), signatureType, vm.toString(r), ":", vm.toString(s), ":", vm.toString(v)
-        )
+        abi.encodePacked(vm.toString(signer), signatureType, vm.toString(r), ":", vm.toString(s), ":", vm.toString(v))
       );
 
-      if (_payload.noChainId) {
-        se = string(abi.encodePacked(se, " --no-chain-id"));
-      }
-
-      encodedSignature = PrimitivesCli.toEncodedSignature(vm, config, se);
+      encodedSignature = PrimitivesRPC.toEncodedSignature(vm, config, se, !_payload.noChainId);
     }
 
     (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint, bytes32 opHash) =
       baseSigImp.recoverPub(_payload, encodedSignature, true, address(0));
 
     assertEq(threshold, _threshold);
-    assertEq(imageHash, PrimitivesCli.getImageHash(vm, config));
+    assertEq(imageHash, PrimitivesRPC.getImageHash(vm, config));
     assertEq(checkpoint, _checkpoint);
     assertEq(weight, _weight >= _internalThreshold ? _externalWeight : 0);
     assertEq(opHash, Payload.hashFor(_payload, address(baseSigImp)));
@@ -444,9 +423,9 @@ contract BaseSigTest is AdvTest {
     uint256 signer3pk = 3;
 
     string memory config1 =
-      PrimitivesCli.newConfig(vm, 1, 1, string(abi.encodePacked("signer:", vm.toString(vm.addr(signer1pk)), ":1")));
+      PrimitivesRPC.newConfig(vm, 1, 1, string(abi.encodePacked("signer:", vm.toString(vm.addr(signer1pk)), ":1")));
 
-    string memory config2 = PrimitivesCli.newConfig(
+    string memory config2 = PrimitivesRPC.newConfig(
       vm,
       1,
       2,
@@ -457,7 +436,7 @@ contract BaseSigTest is AdvTest {
       )
     );
 
-    string memory config3 = PrimitivesCli.newConfig(
+    string memory config3 = PrimitivesRPC.newConfig(
       vm,
       1,
       3,
@@ -468,9 +447,9 @@ contract BaseSigTest is AdvTest {
       )
     );
 
-    bytes32 config1Hash = PrimitivesCli.getImageHash(vm, config1);
-    bytes32 config2Hash = PrimitivesCli.getImageHash(vm, config2);
-    bytes32 config3Hash = PrimitivesCli.getImageHash(vm, config3);
+    bytes32 config1Hash = PrimitivesRPC.getImageHash(vm, config1);
+    bytes32 config2Hash = PrimitivesRPC.getImageHash(vm, config2);
+    bytes32 config3Hash = PrimitivesRPC.getImageHash(vm, config3);
 
     Payload.Decoded memory payloadApprove2;
     payloadApprove2.kind = Payload.KIND_CONFIG_UPDATE;
@@ -490,29 +469,20 @@ contract BaseSigTest is AdvTest {
       (uint8 v3, bytes32 r3, bytes32 s3) = vm.sign(signer2pk, Payload.hashFor(payloadApprove3, address(baseSigImp)));
       (uint8 fv, bytes32 fr, bytes32 fs) = vm.sign(signer3pk, Payload.hashFor(_finalPayload, address(baseSigImp)));
 
-      string memory noChainId = _finalPayload.noChainId ? " --no-chain-id" : "";
-
       // Signature for final payload
-      signatureForFinalPayload = PrimitivesCli.toEncodedSignature(
+      signatureForFinalPayload = PrimitivesRPC.toEncodedSignature(
         vm,
         config3,
         string(
           abi.encodePacked(
-            "--signature ",
-            vm.toString(vm.addr(signer3pk)),
-            ":hash:",
-            vm.toString(fr),
-            ":",
-            vm.toString(fs),
-            ":",
-            vm.toString(fv),
-            noChainId
+            vm.toString(vm.addr(signer3pk)), ":hash:", vm.toString(fr), ":", vm.toString(fs), ":", vm.toString(fv)
           )
-        )
+        ),
+        !_finalPayload.noChainId
       );
 
       // Signatures for links, config3 -> config2 -> config1
-      signature1to2 = PrimitivesCli.toEncodedSignature(
+      signature1to2 = PrimitivesRPC.toEncodedSignature(
         vm,
         config1,
         string(
@@ -526,9 +496,10 @@ contract BaseSigTest is AdvTest {
             ":",
             vm.toString(v2)
           )
-        )
+        ),
+        true
       );
-      signature2to3 = PrimitivesCli.toEncodedSignature(
+      signature2to3 = PrimitivesRPC.toEncodedSignature(
         vm,
         config2,
         string(
@@ -542,7 +513,8 @@ contract BaseSigTest is AdvTest {
             ":",
             vm.toString(v3)
           )
-        )
+        ),
+        true
       );
     }
 
@@ -551,7 +523,7 @@ contract BaseSigTest is AdvTest {
     signatures[1] = signature2to3;
     signatures[2] = signature1to2;
 
-    bytes memory chainedSignature = PrimitivesCli.concatSignatures(vm, signatures);
+    bytes memory chainedSignature = PrimitivesRPC.concatSignatures(vm, signatures);
 
     // Recover chained signature
     (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint, bytes32 opHash) =

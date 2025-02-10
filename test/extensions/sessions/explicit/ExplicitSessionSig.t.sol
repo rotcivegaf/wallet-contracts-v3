@@ -11,7 +11,7 @@ import {
   SessionPermissions
 } from "../../../../src/extensions/sessions/explicit/ExplicitSessionSig.sol";
 
-import { PrimitivesCli } from "../../../utils/PrimitivesCli.sol";
+import { PrimitivesRPC } from "../../../utils/PrimitivesRPC.sol";
 import { AdvTest } from "../../../utils/TestUtils.sol";
 import { console } from "forge-std/console.sol";
 
@@ -60,7 +60,7 @@ contract ExplicitSessionSigTest is AdvTest {
     Permission memory permission;
     (permission, seed) = _randomPermission(seed);
     // Encode with ffi
-    bytes memory encodedPermissions = PrimitivesCli.toPackedPermission(vm, _permissionToJSON(permission));
+    bytes memory encodedPermissions = PrimitivesRPC.toPackedPermission(vm, _permissionToJSON(permission));
     // Prepend length of 1
     encodedPermissions = abi.encodePacked(uint24(1), encodedPermissions);
     // Decode on contract
@@ -88,7 +88,7 @@ contract ExplicitSessionSigTest is AdvTest {
     (sessionPermission, seed) = _randomSessionPermission(seed);
     // Encode with ffi
     bytes memory encodedPermissions =
-      PrimitivesCli.toPackedSessionPermission(vm, _sessionPermissionToJSON(sessionPermission));
+      PrimitivesRPC.toPackedSessionPermission(vm, _sessionPermissionToJSON(sessionPermission));
     // Encode into tree of a single node
     encodedPermissions = abi.encodePacked(uint8(0), encodedPermissions);
     bytes32 expectedRoot = sessionSig.leftForPermissions(sessionPermission); // Single node, root is leaf
@@ -144,9 +144,9 @@ contract ExplicitSessionSigTest is AdvTest {
   ) external {
     uint256 maxDepth = _bound(seed, 1, 3);
     // Generate a random session topology using ffi
-    string memory encodedTopology = PrimitivesCli.randomSessionTopology(vm, maxDepth, seed);
+    string memory encodedTopology = PrimitivesRPC.randomSessionTopology(vm, maxDepth, 1, 1, seed);
     // Encode with ffi
-    bytes memory encodedSessions = PrimitivesCli.toPackedSessionTopology(vm, encodedTopology);
+    bytes memory encodedSessions = PrimitivesRPC.toPackedSessionTopology(vm, encodedTopology);
     // Decode on contract
     sessionSig.recoverPermissionsTree(encodedSessions, address(0));
   }
@@ -154,15 +154,15 @@ contract ExplicitSessionSigTest is AdvTest {
   function test_explicit_recoverPermissionsTree_cliEmptyAddRemove(uint256 seed, uint256 addCount) external {
     addCount = _bound(addCount, 1, 3);
     // Generate an empty session topology using ffi and populate it with a random session permission
-    string memory topology = PrimitivesCli.emptyExplicitSession(vm);
+    string memory topology = PrimitivesRPC.emptyExplicitSession(vm);
     SessionPermissions memory sessionPermission;
     {
       for (uint256 i = 0; i < addCount; i++) {
         (sessionPermission, seed) = _randomSessionPermission(seed);
         // Add the session permission to the topology
-        topology = PrimitivesCli.addExplicitSession(vm, _sessionPermissionToJSON(sessionPermission), topology);
+        topology = PrimitivesRPC.addExplicitSession(vm, _sessionPermissionToJSON(sessionPermission), topology);
         // Encode with ffi
-        bytes memory encodedSessions = PrimitivesCli.toPackedSessionTopology(vm, topology);
+        bytes memory encodedSessions = PrimitivesRPC.toPackedSessionTopology(vm, topology);
         // Decode on contract
         (, SessionPermissions memory decodedPermissions) =
           sessionSig.recoverPermissionsTree(encodedSessions, sessionPermission.signer);
@@ -177,9 +177,9 @@ contract ExplicitSessionSigTest is AdvTest {
     {
       // Remove the session permission from the topology
       topology =
-        PrimitivesCli.removeExplicitSession(vm, sessionPermission.signer, _sessionPermissionToJSON(sessionPermission));
+        PrimitivesRPC.removeExplicitSession(vm, sessionPermission.signer, _sessionPermissionToJSON(sessionPermission));
       // Encode with ffi
-      bytes memory encodedSessions = PrimitivesCli.toPackedSessionTopology(vm, topology);
+      bytes memory encodedSessions = PrimitivesRPC.toPackedSessionTopology(vm, topology);
       // Decode on contract
       (, SessionPermissions memory decodedPermissions) =
         sessionSig.recoverPermissionsTree(encodedSessions, sessionPermission.signer);
@@ -203,13 +203,13 @@ contract ExplicitSessionSigTest is AdvTest {
     callCount = _bound(callCount, 1, 3);
     signerPk = boundPk(signerPk);
     // Add some random session permissions before the expected signer
-    string memory topology = PrimitivesCli.emptyExplicitSession(vm);
+    string memory topology = PrimitivesRPC.emptyExplicitSession(vm);
     {
       for (uint256 i = 0; i < addCountBefore; i++) {
         SessionPermissions memory sessionPermission;
         (sessionPermission, seed) = _randomSessionPermission(seed);
         // Add the session permission to the topology
-        topology = PrimitivesCli.addExplicitSession(vm, _sessionPermissionToJSON(sessionPermission), topology);
+        topology = PrimitivesRPC.addExplicitSession(vm, _sessionPermissionToJSON(sessionPermission), topology);
       }
     }
     address signerAddr = vm.addr(signerPk);
@@ -218,7 +218,7 @@ contract ExplicitSessionSigTest is AdvTest {
       SessionPermissions memory sessionPermission;
       (sessionPermission, seed) = _randomSessionPermission(seed);
       sessionPermission.signer = signerAddr;
-      topology = PrimitivesCli.addExplicitSession(vm, _sessionPermissionToJSON(sessionPermission), topology);
+      topology = PrimitivesRPC.addExplicitSession(vm, _sessionPermissionToJSON(sessionPermission), topology);
     }
     // Add some random session permissions after the expected signer
     {
@@ -226,7 +226,7 @@ contract ExplicitSessionSigTest is AdvTest {
         SessionPermissions memory sessionPermission;
         (sessionPermission, seed) = _randomSessionPermission(seed);
         // Add the session permission to the topology
-        topology = PrimitivesCli.addExplicitSession(vm, _sessionPermissionToJSON(sessionPermission), topology);
+        topology = PrimitivesRPC.addExplicitSession(vm, _sessionPermissionToJSON(sessionPermission), topology);
       }
     }
 
@@ -248,7 +248,7 @@ contract ExplicitSessionSigTest is AdvTest {
 
     // Encode with ffi
     bytes memory encodedSessions =
-      PrimitivesCli.useSessionExplicit(vm, sessionSignature, permissionIdxPerCall, topology);
+      PrimitivesRPC.useSessionExplicit(vm, sessionSignature, permissionIdxPerCall, topology);
     // Decode on contract
     ExplicitSessionSignature memory decodedSignature = sessionSig.recoverSignature(payload, encodedSessions);
     // Validate

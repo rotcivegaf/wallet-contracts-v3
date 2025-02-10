@@ -2,7 +2,8 @@
 pragma solidity ^0.8.27;
 
 import { Payload } from "../../src/modules/Payload.sol";
-import { PrimitivesCli } from "../utils/PrimitivesCli.sol";
+import { PrimitivesRPC } from "../utils/PrimitivesRPC.sol";
+
 import { Test, Vm } from "forge-std/Test.sol";
 import { console } from "forge-std/console.sol";
 
@@ -25,8 +26,6 @@ contract PayloadTest is Test {
   }
 
   function test_fromPackedCalls(Payload.Call[] memory _calls, uint256 _space, uint256 _nonce) external {
-    vm.assume(_calls.length < type(uint16).max);
-
     // Convert nonce into legal range
     _nonce = bound(_nonce, 0, type(uint56).max);
     _space = bound(_space, 0, type(uint160).max);
@@ -44,7 +43,7 @@ contract PayloadTest is Test {
     input.space = _space;
     input.nonce = _nonce;
 
-    bytes memory packed = PrimitivesCli.toPackedPayload(vm, input);
+    bytes memory packed = PrimitivesRPC.toPackedPayload(vm, input);
     console.logBytes(packed);
 
     Payload.Decoded memory output = payloadImp.fromPackedCalls(packed);

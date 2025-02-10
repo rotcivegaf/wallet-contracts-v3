@@ -10,7 +10,7 @@ import {
   Payload
 } from "../../../../src/extensions/sessions/implicit/ImplicitSessionSig.sol";
 
-import { PrimitivesCli } from "../../../utils/PrimitivesCli.sol";
+import { PrimitivesRPC } from "../../../utils/PrimitivesRPC.sol";
 import { AdvTest } from "../../../utils/TestUtils.sol";
 import { console } from "forge-std/console.sol";
 
