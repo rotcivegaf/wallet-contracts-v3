@@ -9,10 +9,52 @@ import { Vm } from "forge-std/Test.sol";
 /// This is done for performance reasons, as `ffi` is very slow.
 library PrimitivesRPC {
 
+  uint256 private constant COUNTER_UNINITIALIZED = 0;
+  uint256 private constant COUNTER_SLOT = uint256(keccak256("sequence.primitives-rpc.counter"));
+
+  function getCounter() private view returns (uint256) {
+    bytes32 counterSlot = bytes32(COUNTER_SLOT);
+    uint256 value;
+    assembly {
+      value := sload(counterSlot)
+    }
+    return value;
+  }
+
+  function setCounter(
+    uint256 value
+  ) private {
+    bytes32 counterSlot = bytes32(COUNTER_SLOT);
+    assembly {
+      sstore(counterSlot, value)
+    }
+  }
+
   function rpcURL(
     Vm _vm
-  ) internal view returns (string memory) {
-    return _vm.envString("SEQ_SDK_RPC_URL");
+  ) internal returns (string memory) {
+    uint256 minPort = uint256(_vm.envUint("SEQ_SDK_RPC_MIN_PORT"));
+    uint256 maxPort = uint256(_vm.envUint("SEQ_SDK_RPC_MAX_PORT"));
+    require(maxPort >= minPort, "Invalid port range");
+
+    // Get or initialize counter
+    uint256 counter = getCounter();
+    if (counter == COUNTER_UNINITIALIZED) {
+      counter = uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao)));
+    }
+
+    // Increment counter
+    counter++;
+    setCounter(counter);
+
+    // Generate port within range using counter
+    uint256 range = maxPort - minPort + 1;
+    uint256 randomPort = minPort + (counter % range);
+
+    string memory prefix = _vm.envString("SEQ_SDK_RPC_URL_PREFIX");
+    string memory suffix = _vm.envString("SEQ_SDK_RPC_URL_SUFFIX");
+
+    return string.concat(prefix, _vm.toString(randomPort), suffix);
   }
 
   // ----------------------------------------------------------------
