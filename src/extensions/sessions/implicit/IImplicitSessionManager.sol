@@ -20,6 +20,9 @@ struct ImplicitSessionSignature {
 /// @notice Signals for the session manager
 interface IImplicitSessionManagerSignals {
 
+  /// @notice Invalid payload signer
+  error InvalidPayloadSigner(address expectedSigner, address recoveredSigner);
+
   /// @notice Invalid signature from session signer
   error InvalidSessionSignature();
 

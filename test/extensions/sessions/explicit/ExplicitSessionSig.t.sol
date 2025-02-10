@@ -3,13 +3,13 @@ pragma solidity ^0.8.27;
 
 import {
   ParameterOperation, ParameterRule, Permission, UsageLimit
-} from "../../../../src/extensions/sessions/Permission.sol";
+} from "src/extensions/sessions/Permission.sol";
 import {
   ExplicitSessionSig,
   ExplicitSessionSignature,
   Payload,
   SessionPermissions
-} from "../../../../src/extensions/sessions/explicit/ExplicitSessionSig.sol";
+} from "src/extensions/sessions/explicit/ExplicitSessionSig.sol";
 
 import { PrimitivesRPC } from "../../../utils/PrimitivesRPC.sol";
 import { AdvTest } from "../../../utils/TestUtils.sol";
