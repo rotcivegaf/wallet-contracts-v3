@@ -2,6 +2,8 @@
 pragma solidity ^0.8.27;
 
 import { ParameterOperation, ParameterRule, Permission, UsageLimit } from "src/extensions/sessions/Permission.sol";
+
+import { ExplicitSessionManager } from "src/extensions/sessions/explicit/ExplicitSessionManager.sol";
 import {
   ExplicitSessionSignature,
   IExplicitSessionManager,
@@ -9,7 +11,6 @@ import {
   SessionPermissions
 } from "src/extensions/sessions/explicit/IExplicitSessionManager.sol";
 import { ISapient, Payload } from "src/modules/interfaces/ISapient.sol";
-import { ExplicitSessionManager } from "src/extensions/sessions/explicit/ExplicitSessionManager.sol";
 
 import { ERC20, MockERC20 } from "../../../mocks/MockERC20.sol";
 import { AdvTest } from "../../../utils/TestUtils.sol";
