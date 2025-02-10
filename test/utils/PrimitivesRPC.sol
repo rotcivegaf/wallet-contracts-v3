@@ -40,7 +40,7 @@ library PrimitivesRPC {
     // Get or initialize counter
     uint256 counter = getCounter();
     if (counter == COUNTER_UNINITIALIZED) {
-      counter = uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao)));
+      counter = uint256(keccak256(abi.encodePacked(msg.data)));
     }
 
     // Increment counter
