@@ -87,7 +87,7 @@ contract ExplicitSessionManager is ExplicitSessionSig, PermissionValidator, IExp
     bytes32 limitHashPrefix,
     Payload.Decoded calldata payload,
     ExplicitSessionSignature memory signature
-  ) private view returns (uint256 totalValueUsed, UsageLimit[] memory limits) {
+  ) internal view returns (uint256 totalValueUsed, UsageLimit[] memory limits) {
     UsageLimit[][] memory allLimits = new UsageLimit[][](payload.calls.length + 1);
     uint256 limitIndex = 0;
     uint256 validArrays = 0;
@@ -160,7 +160,7 @@ contract ExplicitSessionManager is ExplicitSessionSig, PermissionValidator, IExp
   /// @param payload The decoded payload containing calls
   /// @param limits The usage limits
   /// @dev Reverts if the required increment call is missing or invalid
-  function _verifyLimitUsageIncrement(Payload.Decoded calldata payload, UsageLimit[] memory limits) private view {
+  function _verifyLimitUsageIncrement(Payload.Decoded calldata payload, UsageLimit[] memory limits) internal view {
     // Limits call is only required if there are usage limits used
     if (limits.length > 0) {
       // Verify the last call is the increment call

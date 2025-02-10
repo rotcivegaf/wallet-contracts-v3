@@ -11,6 +11,7 @@ import { Payload } from "../Payload.sol";
  */
 interface ISapient {
 
+  /// @notice Validates the signature of the payload
   function isValidSapientSignature(
     Payload.Decoded calldata _payload,
     bytes calldata _signature
@@ -26,6 +27,7 @@ interface ISapient {
  */
 interface ISapientCompact {
 
+  /// @notice Validates the signature of the compacted payload
   function isValidSapientSignatureCompact(bytes32 _digest, bytes calldata _signature) external view returns (bytes32);
 
 }

@@ -9,16 +9,13 @@ import { Attestation, LibAttestation } from "../Attestation.sol";
 import { Payload } from "../../../modules/Payload.sol";
 import { LibPermission, Permission } from "../Permission.sol";
 import { ImplicitSessionSignature } from "./IImplicitSessionManager.sol";
+import { IImplicitSessionManagerSignals } from "./IImplicitSessionManager.sol";
 
-import { console } from "forge-std/console.sol";
-
-contract ImplicitSessionSig {
+contract ImplicitSessionSig is IImplicitSessionManagerSignals {
 
   using LibBytesPointer for bytes;
   using LibOptim for bytes;
   using LibAttestation for Attestation;
-
-  error InvalidPayloadSigner(address expectedSigner, address recoveredSigner);
 
   function _recoverSignature(
     Payload.Decoded memory payload,

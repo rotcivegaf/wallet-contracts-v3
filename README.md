@@ -14,7 +14,13 @@ Git hooks will be automatically installed.
 
 ## Testing
 
-Install the [Sequence Core SDK](https://github.com/0xsequence/sequence-core).
+Install the [Sequence Core SDK](https://github.com/0xsequence/sequence-core) and run a server using the following command:
+
+```sh
+cd ../sequence-core
+pnpm build
+pnpm dev:server
+```
 
 Copy the `env.sample` file to `.env` and set the environment variables.
 
