@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.13;
 
-import { Payload } from "../../src/modules/Payload.sol";
-import { Vm } from "forge-std/Test.sol";
+import { Vm } from "forge-std/Vm.sol";
+import { Payload } from "src/modules/Payload.sol";
 
-/// This library replicates the same usage as your old PrimitivesCli, but via
-/// Foundry's `vm.rpc` JSON-RPC calls instead of `ffi`.
-/// This is done for performance reasons, as `ffi` is very slow.
 library PrimitivesRPC {
 
   uint256 private constant COUNTER_UNINITIALIZED = 0;
@@ -204,7 +201,7 @@ library PrimitivesRPC {
   function emptyExplicitSession(
     Vm _vm
   ) internal returns (string memory) {
-    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_empty", "{}");
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_explicit_empty", "{}");
     return string(rawResponse);
   }
 
@@ -214,7 +211,7 @@ library PrimitivesRPC {
     string memory topologyInput
   ) internal returns (string memory) {
     string memory params = string.concat('{"explicitSession":', sessionInput, ',"sessionTopology":', topologyInput, "}");
-    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_add", params);
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_explicit_add", params);
     return string(rawResponse);
   }
 
@@ -226,7 +223,7 @@ library PrimitivesRPC {
     string memory params = string.concat(
       '{"explicitSessionAddress":"', _vm.toString(explicitSessionAddress), '","sessionTopology":', topologyInput, "}"
     );
-    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_remove", params);
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_explicit_remove", params);
     return string(rawResponse);
   }
 
@@ -251,14 +248,74 @@ library PrimitivesRPC {
       topologyInput,
       "}"
     );
-    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_use", params);
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_explicit_use", params);
     return (rawResponse);
   }
 
   function toPackedSessionTopology(Vm _vm, string memory topologyInput) internal returns (bytes memory) {
     string memory params = string.concat('{"sessionTopology":', topologyInput, "}");
-    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_toPackedTopology", params);
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_explicit_toPackedTopology", params);
     return (rawResponse);
+  }
+
+  // ----------------------------------------------------------------
+  // session implicit
+  // ----------------------------------------------------------------
+
+  function emptyImplicitSession(
+    Vm _vm
+  ) internal returns (string memory) {
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_implicit_empty", "{}");
+    return string(rawResponse);
+  }
+
+  function addImplicitSessionBlacklist(
+    Vm _vm,
+    string memory implicitSessionJson,
+    address addressToAdd
+  ) internal returns (string memory) {
+    string memory params = string.concat(
+      '{"sessionConfiguration":', implicitSessionJson, ',"blacklistAddress":"', _vm.toString(addressToAdd), '"}'
+    );
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_implicit_addBlacklistAddress", params);
+    return string(rawResponse);
+  }
+
+  function removeImplicitSessionBlacklist(
+    Vm _vm,
+    string memory implicitSessionJson,
+    address addressToRemove
+  ) internal returns (string memory) {
+    string memory params = string.concat(
+      '{"sessionConfiguration":', implicitSessionJson, ',"blacklistAddress":"', _vm.toString(addressToRemove), '"}'
+    );
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_implicit_removeBlacklistAddress", params);
+    return string(rawResponse);
+  }
+
+  function useImplicitSession(
+    Vm _vm,
+    string memory sessionSignature,
+    string memory globalSignature,
+    string memory attestationJson,
+    string memory implicitSessionJson
+  ) internal returns (bytes memory) {
+    string memory params = string.concat(
+      '{"sessionSignature":"',
+      sessionSignature,
+      '",',
+      '"globalSignature":"',
+      globalSignature,
+      '",',
+      '"attestation":',
+      attestationJson,
+      ",",
+      '"sessionConfiguration":',
+      implicitSessionJson,
+      "}"
+    );
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_implicit_use", params);
+    return rawResponse;
   }
 
 }

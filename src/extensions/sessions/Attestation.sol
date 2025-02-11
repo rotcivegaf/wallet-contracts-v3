@@ -21,7 +21,9 @@ library LibAttestation {
 
   function toHash(
     Attestation memory attestation
-  ) internal pure returns (bytes32) { }
+  ) internal pure returns (bytes32) {
+    return keccak256(toPacked(attestation));
+  }
 
   function fromPacked(
     bytes calldata encoded,
