@@ -125,4 +125,56 @@ contract CallsTest is AdvTest {
     }
   }
 
+  function test_self_execute(
+    CallsPayload memory _payload
+  ) external {
+    Payload.Decoded memory decoded = toDecodedPayload(_payload);
+
+    uint256 totalEther;
+
+    for (uint256 i = 0; i < decoded.calls.length; i++) {
+      decoded.calls[i].to = boundNoPrecompile(decoded.calls[i].to);
+      decoded.calls[i].value = bound(decoded.calls[i].value, 0, 100_000_000_000_000 ether);
+      decoded.calls[i].gasLimit = bound(decoded.calls[i].gasLimit, 0, 1_000_000_000);
+
+      if (!decoded.calls[i].delegateCall) {
+        totalEther += decoded.calls[i].value;
+      }
+    }
+
+    vm.deal(address(calls), totalEther);
+
+    boundToLegalPayload(decoded);
+
+    bytes32 opHash = Payload.hashFor(decoded, address(calls));
+    bytes memory packed = PrimitivesRPC.toPackedPayload(vm, decoded);
+
+    for (uint256 i = 0; i < decoded.calls.length; i++) {
+      vm.deal(decoded.calls[i].to, 0);
+      vm.expectCall(decoded.calls[i].to, decoded.calls[i].data);
+
+      vm.expectEmit(true, true, true, true);
+      emit Success(opHash, i);
+    }
+
+    vm.prank(address(calls));
+    calls.selfExecute(packed);
+
+    assertEq(address(calls).balance, 0);
+
+    // Assert balance of each destination contract
+    for (uint256 i = 0; i < decoded.calls.length; i++) {
+      if (!decoded.calls[i].delegateCall && decoded.calls[i].to.balance != decoded.calls[i].value) {
+        // We need to do a full recount because maybe the contract is duplicated so multiple transfers are done
+        uint256 totalTransferred = 0;
+        for (uint256 j = 0; j < decoded.calls.length; j++) {
+          if (!decoded.calls[j].delegateCall && decoded.calls[j].to == decoded.calls[i].to) {
+            totalTransferred += decoded.calls[j].value;
+          }
+        }
+        assertEq(totalTransferred, decoded.calls[i].to.balance);
+      }
+    }
+  }
+
 }

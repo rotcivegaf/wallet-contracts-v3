@@ -35,7 +35,7 @@ abstract contract Calls is BaseAuth, Nonce {
     bytes calldata _payload
   ) external virtual onlySelf {
     Payload.Decoded memory decoded = Payload.fromPackedCalls(_payload);
-    bytes32 opHash = Payload.toEIP712(decoded);
+    bytes32 opHash = Payload.hash(decoded);
     _execute(opHash, decoded);
   }
 
