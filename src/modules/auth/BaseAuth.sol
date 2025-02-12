@@ -53,7 +53,7 @@ abstract contract BaseAuth is IAuth, ISapient, IERC1271, SelfAuth {
   function signatureValidation(
     Payload.Decoded memory _payload,
     bytes calldata _signature
-  ) internal view returns (bool isValid, bytes32 opHash) {
+  ) internal view virtual returns (bool isValid, bytes32 opHash) {
     // Read first bit to determine if static signature is used
     bytes1 signatureFlag = _signature[0];
 

@@ -19,8 +19,8 @@ contract AdvTest is Test {
     _payload.kind = uint8(bound(_payload.kind, uint8(0), uint8(Payload.KIND_DIGEST)));
 
     if (_payload.kind == Payload.KIND_TRANSACTIONS) {
-      _payload.space = bound(_payload.space, 0, type(uint56).max);
-      _payload.nonce = bound(_payload.nonce, 0, type(uint160).max);
+      _payload.space = bound(_payload.space, 0, type(uint160).max);
+      _payload.nonce = bound(_payload.nonce, 0, type(uint56).max);
 
       for (uint256 i = 0; i < _payload.calls.length; i++) {
         _payload.calls[i].behaviorOnError = bound(
@@ -38,6 +38,7 @@ contract AdvTest is Test {
     assumeNotPrecompile(_addr);
     vm.assume(_addr.code.length == 0);
     vm.assume(_addr != address(0x000000000000000000636F6e736F6c652e6c6f67));
+    vm.assume(_addr != address(0x4e59b44847b379578588920cA78FbF26c0B4956C));
   }
 
   function useSeed(
@@ -45,6 +46,23 @@ contract AdvTest is Test {
   ) internal pure returns (bytes32 value, uint256 newSeed) {
     value = keccak256(abi.encode(seed));
     newSeed = uint256(value);
+  }
+
+  function boundNoPrecompile(
+    address _addr
+  ) internal view returns (address) {
+    address candidate = _addr;
+    address invalid1 = address(0x000000000000000000636F6e736F6c652e6c6f67);
+    address invalid2 = address(0x4e59b44847b379578588920cA78FbF26c0B4956C);
+
+    while (
+      (uint160(candidate) >= 1 && uint160(candidate) <= 0xff) || candidate == invalid1 || candidate == invalid2
+        || candidate.code.length > 0
+    ) {
+      candidate = address(uint160(uint256(keccak256(abi.encode(candidate)))));
+    }
+
+    return candidate;
   }
 
 }
