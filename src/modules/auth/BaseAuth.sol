@@ -6,6 +6,8 @@ import { Payload } from "../Payload.sol";
 import { Storage } from "../Storage.sol";
 import { IAuth } from "../interfaces/IAuth.sol";
 import { IERC1271 } from "../interfaces/IERC1271.sol";
+
+import { IPartialAuth } from "../interfaces/IPartialAuth.sol";
 import { ISapient } from "../interfaces/ISapient.sol";
 import { BaseSig } from "./BaseSig.sol";
 
@@ -51,7 +53,7 @@ abstract contract BaseAuth is IAuth, ISapient, IERC1271, SelfAuth {
   function signatureValidation(
     Payload.Decoded memory _payload,
     bytes calldata _signature
-  ) public view returns (bool isValid, bytes32 opHash) {
+  ) internal view returns (bool isValid, bytes32 opHash) {
     // Read first bit to determine if static signature is used
     bytes1 signatureFlag = _signature[0];
 
@@ -82,7 +84,7 @@ abstract contract BaseAuth is IAuth, ISapient, IERC1271, SelfAuth {
   function isValidSapientSignature(
     Payload.Decoded memory _payload,
     bytes calldata _signature
-  ) public view returns (bytes32) {
+  ) external view returns (bytes32) {
     // Copy parent wallets + add caller at the end
     address[] memory parentWallets = new address[](_payload.parentWallets.length + 1);
 
@@ -101,7 +103,7 @@ abstract contract BaseAuth is IAuth, ISapient, IERC1271, SelfAuth {
     return bytes32(uint256(1));
   }
 
-  function isValidSignature(bytes32 _hash, bytes calldata _signature) public view returns (bytes4) {
+  function isValidSignature(bytes32 _hash, bytes calldata _signature) external view returns (bytes4) {
     Payload.Decoded memory payload;
     payload.kind = Payload.KIND_DIGEST;
     payload.digest = _hash;
@@ -112,6 +114,25 @@ abstract contract BaseAuth is IAuth, ISapient, IERC1271, SelfAuth {
     }
 
     return bytes4(0x20c13b0b);
+  }
+
+  function recoverPartialSignature(
+    Payload.Decoded memory _payload,
+    bytes calldata _signature
+  )
+    external
+    view
+    returns (
+      uint256 threshold,
+      uint256 weight,
+      bool isValidImage,
+      bytes32 imageHash,
+      uint256 checkpoint,
+      bytes32 opHash
+    )
+  {
+    (threshold, weight, imageHash, checkpoint, opHash) = BaseSig.recover(_payload, _signature, false, address(0));
+    isValidImage = _isValidImage(imageHash);
   }
 
 }
