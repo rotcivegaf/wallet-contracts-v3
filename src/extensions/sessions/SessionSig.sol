@@ -34,6 +34,13 @@ library SessionSig {
     CallSignature[] callSignatures;
   }
 
+  struct RecoverSignatureParams {
+    uint256 pointer;
+    address globalSigner;
+    uint256 flags;
+    uint256 dataSize;
+  }
+
   /// @notice Recovers the decoded signature from the encodedSignature bytes.
   /// The encoded layout is:
   /// - flags: [uint8]
@@ -49,39 +56,37 @@ library SessionSig {
     Payload.Decoded calldata payload,
     bytes calldata encodedSignature
   ) internal pure returns (DecodedSignature memory sig) {
-    uint256 pointer = 0;
-    address globalSigner;
+    RecoverSignatureParams memory params;
+    params.pointer = 0;
 
     // ----- Flags -----
     {
-      uint256 flags;
-      (flags, pointer) = encodedSignature.readUint8(pointer);
-      bool inferGlobalSigner = flags & 1 != 0;
+      (params.flags, params.pointer) = encodedSignature.readUint8(params.pointer);
+      bool inferGlobalSigner = (params.flags & 1) != 0;
 
       if (inferGlobalSigner) {
-        (globalSigner, pointer) = encodedSignature.readAddress(pointer);
+        (params.globalSigner, params.pointer) = encodedSignature.readAddress(params.pointer);
       }
     }
 
     // ----- Explicit Config -----
     {
       // First read the length of the explicit config bytes (uint24)
-      uint256 dataSize;
-      (dataSize, pointer) = encodedSignature.readUint24(pointer);
+      (params.dataSize, params.pointer) = encodedSignature.readUint24(params.pointer);
       // Recover the explicit session permissions tree
       // Note imageHash is not complete at this point
-      (sig.imageHash, sig.sessionPermissions) = _recoverSessionPermissions(encodedSignature[pointer:pointer + dataSize]);
-      pointer += dataSize;
+      (sig.imageHash, sig.sessionPermissions) =
+        _recoverSessionPermissions(encodedSignature[params.pointer:params.pointer + params.dataSize]);
+      params.pointer += params.dataSize;
     }
 
     // ----- Implicit Config -----
     {
       // Blacklist addresses length and array
-      uint256 dataSize;
-      (dataSize, pointer) = encodedSignature.readUint24(pointer);
-      sig.implicitBlacklist = new address[](dataSize);
-      for (uint256 i = 0; i < dataSize; i++) {
-        (sig.implicitBlacklist[i], pointer) = encodedSignature.readAddress(pointer);
+      (params.dataSize, params.pointer) = encodedSignature.readUint24(params.pointer);
+      sig.implicitBlacklist = new address[](params.dataSize);
+      for (uint256 i = 0; i < params.dataSize; i++) {
+        (sig.implicitBlacklist[i], params.pointer) = encodedSignature.readAddress(params.pointer);
       }
       // Add blacklist to imageHash
       // Note imageHash is not complete at this point
@@ -90,45 +95,39 @@ library SessionSig {
 
     // ----- Call Signatures -----
     {
-      uint256 dataSize = payload.calls.length;
-      sig.callSignatures = new CallSignature[](dataSize);
+      sig.callSignatures = new CallSignature[](payload.calls.length);
       {
-        for (uint256 i = 0; i < dataSize; i++) {
+        for (uint256 i = 0; i < payload.calls.length; i++) {
           CallSignature memory callSignature;
           // Determine signature type
-          (callSignature.isImplicit, pointer) = encodedSignature.readBool(pointer);
+          (callSignature.isImplicit, params.pointer) = encodedSignature.readBool(params.pointer);
           if (callSignature.isImplicit) {
             // Read attestation
-            (callSignature.attestation, pointer) = LibAttestation.fromPacked(encodedSignature, pointer);
+            (callSignature.attestation, params.pointer) = LibAttestation.fromPacked(encodedSignature, params.pointer);
             // Read attestation global signature
             {
-              bytes32 r;
-              bytes32 s;
-              uint8 v;
-              (r, s, v, pointer) = encodedSignature.readRSVCompact(pointer);
-              // Recover the global signer from the attestation global signature
               bytes32 attestationHash = callSignature.attestation.toHash();
-              address recoveredGlobalSigner = ecrecover(attestationHash, v, r, s);
-              if (globalSigner == address(0)) {
+              // Recover the global signer from the attestation global signature
+              address recoveredGlobalSigner;
+              (recoveredGlobalSigner, params.pointer) =
+                _readRSVAndRecover(encodedSignature, params.pointer, attestationHash);
+              if (params.globalSigner == address(0)) {
                 // Infer global signer from the first implicit call
-                globalSigner = recoveredGlobalSigner;
-              } else if (recoveredGlobalSigner != globalSigner) {
+                params.globalSigner = recoveredGlobalSigner;
+              } else if (recoveredGlobalSigner != params.globalSigner) {
                 // Global signer must be the same for all calls
                 revert InvalidGlobalSigner();
               }
             }
           } else {
             // Read session permission used for the call
-            (callSignature.sessionPermission, pointer) = encodedSignature.readUint8(pointer);
+            (callSignature.sessionPermission, params.pointer) = encodedSignature.readUint8(params.pointer);
           }
           // Read session signature and recover the signer
           {
-            bytes32 r;
-            bytes32 s;
-            uint8 v;
-            (r, s, v, pointer) = encodedSignature.readRSVCompact(pointer);
             bytes32 callHash = Payload.hashCall(payload.calls[i]);
-            callSignature.sessionSigner = ecrecover(callHash, v, r, s);
+            (callSignature.sessionSigner, params.pointer) =
+              _readRSVAndRecover(encodedSignature, params.pointer, callHash);
           }
 
           sig.callSignatures[i] = callSignature;
@@ -137,14 +136,21 @@ library SessionSig {
     }
 
     // ----- Global signer -----
-    if (globalSigner == address(0)) {
+    if (params.globalSigner == address(0)) {
       // Could not derive the global signer from the signature
       revert InvalidGlobalSigner();
     }
     // Add global signer to imageHash
-    sig.imageHash = LibOptim.fkeccak256(sig.imageHash, _leafForGlobalSigner(globalSigner));
+    sig.imageHash = LibOptim.fkeccak256(sig.imageHash, _leafForGlobalSigner(params.globalSigner));
 
     return sig;
+  }
+
+  struct RecoverSessionPermissionsParams {
+    uint256 pointer;
+    uint256 permissionsCount;
+    uint256 flag;
+    uint256 dataSize;
   }
 
   /// @notice Recovers the session permissions tree from the encoded data.
@@ -159,39 +165,39 @@ library SessionSig {
   function _recoverSessionPermissions(
     bytes calldata encoded
   ) internal pure returns (bytes32 root, SessionPermissions[] memory permissions) {
-    uint256 pointer = 0;
+    RecoverSessionPermissionsParams memory params;
+    params.pointer = 0;
 
     // Read permissions count
-    uint256 permissionsCount;
     {
-      (permissionsCount, pointer) = encoded.readUint24(pointer);
-      permissions = new SessionPermissions[](permissionsCount);
-      permissionsCount = 0;
+      (params.permissionsCount, params.pointer) = encoded.readUint24(params.pointer);
+      permissions = new SessionPermissions[](params.permissionsCount);
+      params.permissionsCount = 0;
     }
 
-    while (pointer < encoded.length) {
+    while (params.pointer < encoded.length) {
       // First byte is the flag (top 4 bits) and additional data (bottom 4 bits)
       uint256 firstByte;
-      (firstByte, pointer) = encoded.readUint8(pointer);
+      (firstByte, params.pointer) = encoded.readUint8(params.pointer);
 
       // The top 4 bits are the flag
-      uint256 flag = (firstByte & 0xf0) >> 4;
+      params.flag = (firstByte & 0xf0) >> 4;
 
       // Permissions configuration (0x00)
-      if (flag == FLAG_PERMISSIONS) {
+      if (params.flag == FLAG_PERMISSIONS) {
         SessionPermissions memory nodePermissions;
 
         // Read signer
-        (nodePermissions.signer, pointer) = encoded.readAddress(pointer);
+        (nodePermissions.signer, params.pointer) = encoded.readAddress(params.pointer);
 
         // Read value limit
-        (nodePermissions.valueLimit, pointer) = encoded.readUint256(pointer);
+        (nodePermissions.valueLimit, params.pointer) = encoded.readUint256(params.pointer);
 
         // Read deadline
-        (nodePermissions.deadline, pointer) = encoded.readUint256(pointer);
+        (nodePermissions.deadline, params.pointer) = encoded.readUint256(params.pointer);
 
         // Read permissions array
-        (nodePermissions.permissions, pointer) = _decodePermissions(encoded, pointer);
+        (nodePermissions.permissions, params.pointer) = _decodePermissions(encoded, params.pointer);
 
         // Update root
         {
@@ -200,15 +206,15 @@ library SessionSig {
         }
 
         // Push node permissions to the permissions array
-        permissions[permissionsCount++] = nodePermissions;
+        permissions[params.permissionsCount++] = nodePermissions;
         continue;
       }
 
       // Node (0x01)
-      if (flag == FLAG_NODE) {
+      if (params.flag == FLAG_NODE) {
         // Read pre-hashed node
         bytes32 node;
-        (node, pointer) = encoded.readBytes32(pointer);
+        (node, params.pointer) = encoded.readBytes32(params.pointer);
 
         // Update root
         root = root != bytes32(0) ? LibOptim.fkeccak256(root, node) : node;
@@ -216,24 +222,24 @@ library SessionSig {
       }
 
       // Branch (0x02)
-      if (flag == FLAG_BRANCH) {
+      if (params.flag == FLAG_BRANCH) {
         {
           // Read branch size
           uint256 size;
           {
             uint256 sizeSize = uint8(firstByte & 0x0f);
-            (size, pointer) = encoded.readUintX(pointer, sizeSize);
+            (size, params.pointer) = encoded.readUintX(params.pointer, sizeSize);
           }
 
           // Process branch
-          uint256 nrindex = pointer + size;
+          uint256 nrindex = params.pointer + size;
           (bytes32 branchRoot, SessionPermissions[] memory branchPermissions) =
-            _recoverSessionPermissions(encoded[pointer:nrindex]);
-          pointer = nrindex;
+            _recoverSessionPermissions(encoded[params.pointer:nrindex]);
+          params.pointer = nrindex;
 
           // Push all branch permissions to the permissions array
           for (uint256 i = 0; i < branchPermissions.length; i++) {
-            permissions[permissionsCount++] = branchPermissions[i];
+            permissions[params.permissionsCount++] = branchPermissions[i];
           }
 
           // Update root
@@ -242,14 +248,17 @@ library SessionSig {
         continue;
       }
 
-      revert InvalidNodeType(flag);
+      revert InvalidNodeType(params.flag);
     }
 
     // Truncate permissions array to the actual number of permissions
     //FIXME Or should this throw an error?
-    if (permissionsCount < permissions.length) {
-      assembly {
-        mstore(permissions, permissionsCount)
+    if (params.permissionsCount < permissions.length) {
+      {
+        uint256 permissionsCount = params.permissionsCount;
+        assembly {
+          mstore(permissions, permissionsCount)
+        }
       }
     }
 
@@ -297,6 +306,19 @@ library SessionSig {
     address globalSigner
   ) internal pure returns (bytes32) {
     return keccak256(abi.encodePacked(globalSigner));
+  }
+
+  /// @notice Reads the R, S, V and recovers the signer from the encoded data.
+  function _readRSVAndRecover(
+    bytes calldata encoded,
+    uint256 pointer,
+    bytes32 digest
+  ) internal pure returns (address recovered, uint256 newPointer) {
+    uint8 v;
+    bytes32 r;
+    bytes32 s;
+    (r, s, v, newPointer) = encoded.readRSVCompact(pointer);
+    return (ecrecover(digest, v, r, s), newPointer);
   }
 
 }
