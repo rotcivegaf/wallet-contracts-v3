@@ -13,6 +13,10 @@ contract Implementation is SelfAuth {
     _updateImplementation(_implementation);
   }
 
+  function getImplementation() external view virtual returns (address) {
+    return _getImplementation();
+  }
+
   function _updateImplementation(
     address _implementation
   ) internal virtual {

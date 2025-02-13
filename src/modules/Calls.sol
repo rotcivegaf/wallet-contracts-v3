@@ -48,7 +48,7 @@ abstract contract Calls is BaseAuth, Nonce {
 
       // If the call is of fallback kind, and errorFlag is set to false
       // then we can skip the call
-      if (call.to == address(this) && !errorFlag) {
+      if (call.onlyFallback && !errorFlag) {
         errorFlag = false;
         emit Skipped(_opHash, i);
         continue;
