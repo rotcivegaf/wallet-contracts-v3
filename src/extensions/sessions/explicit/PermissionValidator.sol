@@ -108,4 +108,20 @@ abstract contract PermissionValidator {
     return (true, newUsageLimits);
   }
 
+  /// @notice Appends a new usage limit to the array
+  /// @param usageLimits Array of current usage limits
+  /// @param newUsageLimit New usage limit to append
+  /// @return newUsageLimits New array of usage limits
+  function _appendUsageLimits(
+    UsageLimit[] memory usageLimits,
+    UsageLimit memory newUsageLimit
+  ) internal pure returns (UsageLimit[] memory) {
+    UsageLimit[] memory newUsageLimits = new UsageLimit[](usageLimits.length + 1);
+    for (uint256 i = 0; i < usageLimits.length; i++) {
+      newUsageLimits[i] = usageLimits[i];
+    }
+    newUsageLimits[usageLimits.length] = newUsageLimit;
+    return newUsageLimits;
+  }
+
 }
