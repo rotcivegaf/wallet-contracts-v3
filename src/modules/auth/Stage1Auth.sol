@@ -6,11 +6,11 @@ import { Implementation } from "../Implementation.sol";
 import { Storage } from "../Storage.sol";
 import { BaseAuth } from "./BaseAuth.sol";
 
-contract FixedAuth is BaseAuth, Implementation {
+contract Stage1Auth is BaseAuth, Implementation {
 
   bytes32 public immutable INIT_CODE_HASH;
   address public immutable FACTORY;
-  address public immutable TURN_IMPLEMENTATION;
+  address public immutable STAGE_2_IMPLEMENTATION;
 
   //                        IMAGE_HASH_KEY = keccak256("org.arcadeum.module.auth.upgradable.image.hash");
   bytes32 internal constant IMAGE_HASH_KEY = bytes32(0xea7157fa25e3aa17d0ae2d5280fa4e24d421c61842aa85e45194e1145aa72bf8);
@@ -21,13 +21,13 @@ contract FixedAuth is BaseAuth, Implementation {
   error ImageHashIsZero();
   error InvalidSignatureType(bytes1 _type);
 
-  constructor(address _factory, address _turn) {
+  constructor(address _factory, address _stage2) {
     // Build init code hash of the deployed wallets using that module
     bytes32 initCodeHash = keccak256(abi.encodePacked(Wallet.creationCode, uint256(uint160(address(this)))));
 
     INIT_CODE_HASH = initCodeHash;
     FACTORY = _factory;
-    TURN_IMPLEMENTATION = _turn;
+    STAGE_2_IMPLEMENTATION = _stage2;
   }
 
   function _updateImageHash(
@@ -40,8 +40,8 @@ contract FixedAuth is BaseAuth, Implementation {
     Storage.writeBytes32(IMAGE_HASH_KEY, _imageHash);
     emit ImageHashUpdated(_imageHash);
 
-    // Update wallet implementation to turn version
-    _updateImplementation(TURN_IMPLEMENTATION);
+    // Update wallet implementation to stage2 version
+    _updateImplementation(STAGE_2_IMPLEMENTATION);
   }
 
   function _isValidImage(
