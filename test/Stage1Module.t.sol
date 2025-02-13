@@ -42,6 +42,10 @@ contract TestStage1Module is AdvTest {
     // Deploy wallet for that config
     address wallet = factory.deploy(address(stage1Module), configHash);
 
+    // Should predict the address of the wallet using the SDK
+    address predictedWallet = PrimitivesRPC.getAddress(vm, configHash, address(factory), address(stage1Module));
+    assertEq(wallet, predictedWallet);
+
     Payload.Decoded memory payload;
     payload.kind = Payload.KIND_DIGEST;
     payload.digest = _digest;

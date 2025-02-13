@@ -318,4 +318,64 @@ library PrimitivesRPC {
     return rawResponse;
   }
 
+  // ----------------------------------------------------------------
+  // wallet
+  // ----------------------------------------------------------------
+
+  function getAddress(Vm _vm, bytes32 _configHash, address _factory, address _module) internal returns (address) {
+    string memory params = string.concat(
+      '{"imageHash":"',
+      _vm.toString(_configHash),
+      '","factory":"',
+      _vm.toString(_factory),
+      '","module":"',
+      _vm.toString(_module),
+      '"}'
+    );
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "address_calculate", params);
+    // Convert the raw response (a non-padded hex string) into an address
+    string memory addrStr = _vm.toString(rawResponse);
+    return parseAddress(addrStr);
+  }
+
+  function parseAddress(
+    string memory _a
+  ) internal pure returns (address) {
+    bytes memory b = bytes(_a);
+    require(b.length == 42, "Invalid address format"); // "0x" + 40 hex characters
+    uint160 addr = 0;
+    for (uint256 i = 2; i < 42; i += 2) {
+      addr *= 256;
+      uint8 b1 = uint8(b[i]);
+      uint8 b2 = uint8(b[i + 1]);
+      uint8 nib1;
+      uint8 nib2;
+      // Convert first hex character
+      if (b1 >= 48 && b1 <= 57) {
+        // '0'-'9'
+        nib1 = b1 - 48;
+      } else if (b1 >= 65 && b1 <= 70) {
+        // 'A'-'F'
+        nib1 = b1 - 55;
+      } else if (b1 >= 97 && b1 <= 102) {
+        // 'a'-'f'
+        nib1 = b1 - 87;
+      } else {
+        revert("Invalid hex char");
+      }
+      // Convert second hex character
+      if (b2 >= 48 && b2 <= 57) {
+        nib2 = b2 - 48;
+      } else if (b2 >= 65 && b2 <= 70) {
+        nib2 = b2 - 55;
+      } else if (b2 >= 97 && b2 <= 102) {
+        nib2 = b2 - 87;
+      } else {
+        revert("Invalid hex char");
+      }
+      addr += uint160(nib1 * 16 + nib2);
+    }
+    return address(addr);
+  }
+
 }
