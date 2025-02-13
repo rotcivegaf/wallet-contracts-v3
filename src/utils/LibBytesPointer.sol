@@ -11,6 +11,13 @@ pragma solidity ^0.8.18;
  */
 library LibBytesPointer {
 
+  function readBool(bytes calldata _data, uint256 _index) internal pure returns (bool a, uint256 newPointer) {
+    assembly {
+      a := calldataload(add(_index, _data.offset))
+      newPointer := add(_index, 1)
+    }
+  }
+
   function readFirstUint8(
     bytes calldata _data
   ) internal pure returns (uint8 a, uint256 newPointer) {

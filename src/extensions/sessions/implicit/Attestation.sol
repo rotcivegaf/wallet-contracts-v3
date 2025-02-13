@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import { LibBytesPointer } from "../../utils/LibBytesPointer.sol";
-import { LibOptim } from "../../utils/LibOptim.sol";
-import { ACCEPT_IMPLICIT_REQUEST_MAGIC_PREFIX } from "./implicit/ISignalsImplicitMode.sol";
+import { LibBytesPointer } from "../../../utils/LibBytesPointer.sol";
+import { LibOptim } from "../../../utils/LibOptim.sol";
+import { ACCEPT_IMPLICIT_REQUEST_MAGIC_PREFIX } from "./ISignalsImplicitMode.sol";
 
 using LibBytesPointer for bytes;
 using LibOptim for bytes;
@@ -19,12 +19,18 @@ struct Attestation {
 
 library LibAttestation {
 
+  /// @notice Hashes an attestation
   function toHash(
     Attestation memory attestation
   ) internal pure returns (bytes32) {
     return keccak256(toPacked(attestation));
   }
 
+  /// @notice Decodes an attestation from a packed bytes array
+  /// @param encoded The packed bytes array
+  /// @param pointer The pointer to the start of the attestation
+  /// @return attestation The decoded attestation
+  /// @return newPointer The new pointer to the end of the attestation
   function fromPacked(
     bytes calldata encoded,
     uint256 pointer
@@ -43,9 +49,12 @@ library LibAttestation {
     return (attestation, pointer);
   }
 
+  /// @notice Encodes an attestation into a packed bytes array
+  /// @param attestation The attestation to encode
+  /// @return encoded The packed bytes array
   function toPacked(
     Attestation memory attestation
-  ) internal pure returns (bytes memory) {
+  ) internal pure returns (bytes memory encoded) {
     return abi.encodePacked(
       attestation.approvedSigner,
       attestation.identityType,

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import { Attestation, LibAttestation } from "src/extensions/sessions/Attestation.sol";
+import { Attestation, LibAttestation } from "src/extensions/sessions/implicit/Attestation.sol";
 
 import { ISignalsImplicitMode } from "src/extensions/sessions/implicit/ISignalsImplicitMode.sol";
 import { Payload } from "src/modules/interfaces/ISapient.sol";

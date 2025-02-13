@@ -181,7 +181,7 @@ library Payload {
     }
   }
 
-  function _hashCall(
+  function hashCall(
     Call memory c
   ) internal pure returns (bytes32) {
     return keccak256(
@@ -191,14 +191,14 @@ library Payload {
     );
   }
 
-  function _hashCalls(
+  function hashCalls(
     Call[] memory calls
   ) internal pure returns (bytes32) {
     // In EIP712, an array is often hashed as the keccak256 of the concatenated
     // hashes of each item. So we hash each Call, pack them, and hash again.
     bytes memory encoded;
     for (uint256 i = 0; i < calls.length; i++) {
-      bytes32 callHash = _hashCall(calls[i]);
+      bytes32 callHash = hashCall(calls[i]);
       encoded = abi.encodePacked(encoded, callHash);
     }
     return keccak256(encoded);
@@ -223,7 +223,7 @@ library Payload {
     bytes32 walletsHash = _hashParentWallets(_decoded.parentWallets);
 
     if (_decoded.kind == KIND_TRANSACTIONS) {
-      bytes32 callsHash = _hashCalls(_decoded.calls);
+      bytes32 callsHash = hashCalls(_decoded.calls);
       // The top-level struct for Calls might be something like:
       // Calls(bytes32 callsHash,uint256 space,uint256 nonce,bytes32 walletsHash)
       return keccak256(abi.encode(CALLS_TYPEHASH, callsHash, _decoded.space, _decoded.nonce, walletsHash));

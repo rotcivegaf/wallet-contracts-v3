@@ -1,85 +1,54 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import { LibBytes } from "../../../utils/LibBytes.sol";
-import { LibBytesPointer } from "../../../utils/LibBytesPointer.sol";
-import { Attestation, LibAttestation } from "../Attestation.sol";
+import { Payload } from "../../../modules/Payload.sol";
 
-import { ISapient, Payload } from "../../../modules/interfaces/ISapient.sol";
-import { IImplicitSessionManager, ImplicitSessionSignature } from "./IImplicitSessionManager.sol";
+import { SessionErrors } from "../SessionErrors.sol";
+import { Attestation, LibAttestation } from "./Attestation.sol";
 import { ISignalsImplicitMode } from "./ISignalsImplicitMode.sol";
-import { ImplicitSessionSig } from "./ImplicitSessionSig.sol";
 
-using LibBytesPointer for bytes;
-using LibBytes for bytes;
-using LibAttestation for Attestation;
+abstract contract ImplicitSessionManager {
 
-contract ImplicitSessionManager is ImplicitSessionSig, IImplicitSessionManager {
+  using LibAttestation for Attestation;
 
-  /// @inheritdoc ISapient
-  /// @dev The image hash derived from the global signer and session configuration
-  function isValidSapientSignature(
-    Payload.Decoded calldata payload,
-    bytes calldata encodedSignature
-  ) external view returns (bytes32) {
-    // Recover the session manager signature
-    ImplicitSessionSignature memory signature = _recoverSignature(payload, encodedSignature);
-
-    // Validate the session using recovered permissions
-    address wallet = msg.sender;
-    _validateSession(wallet, payload, signature);
-
-    // Generate and return the image hash
-    return getImageHash(signature);
-  }
-
-  /// @notice Generates an image hash for the given session manager decoded signature
-  /// @param signature The session manager signature
-  /// @return bytes32 The generated image hash
-  function getImageHash(
-    ImplicitSessionSignature memory signature
-  ) public pure returns (bytes32) {
-    return keccak256(abi.encode(signature.globalSigner, signature.implicitBlacklist));
-  }
-
-  /// @notice Validates the implicit session
+  /// @notice Validates a call in implicit mode
+  /// @param call The call to validate
   /// @param wallet The wallet's address
-  /// @param payload The decoded payload containing calls
-  /// @param signature The session signature data
-  function _validateSession(
+  /// @param sessionSigner The session signer's address
+  /// @param attestation The session attestation
+  function _validateImplicitCall(
+    Payload.Call calldata call,
     address wallet,
-    Payload.Decoded calldata payload,
-    ImplicitSessionSignature memory signature
+    address sessionSigner,
+    Attestation memory attestation,
+    address[] memory blacklist
   ) internal view {
-    // Validate blacklist
-    address[] memory blacklist = signature.implicitBlacklist;
-
-    // Check each call's target address against blacklist
-    for (uint256 i = 0; i < payload.calls.length; i++) {
-      if (payload.calls[i].delegateCall) {
-        // Delegate calls are not allowed
-        revert InvalidDelegateCall();
-      }
-      if (_isAddressBlacklisted(payload.calls[i].to, blacklist)) {
-        revert BlacklistedAddress(payload.calls[i].to);
-      }
-      // No value
-      if (payload.calls[i].value > 0) {
-        revert InvalidValue();
-      }
+    // Validate the session signer is attested
+    if (sessionSigner != attestation.approvedSigner) {
+      revert SessionErrors.InvalidSessionSigner(sessionSigner);
     }
 
-    bytes32 attestationMagic = signature.attestation.generateImplicitRequestMagic(wallet);
-    bytes32 redirectUrlHash = keccak256(abi.encodePacked(signature.attestation.authData));
+    // Delegate calls are not allowed
+    if (call.delegateCall) {
+      revert SessionErrors.InvalidDelegateCall();
+    }
+    // Check if the target address is blacklisted
+    if (_isAddressBlacklisted(call.to, blacklist)) {
+      revert SessionErrors.BlacklistedAddress(call.to);
+    }
+    // No value
+    if (call.value > 0) {
+      revert SessionErrors.InvalidValue();
+    }
 
-    for (uint256 i = 0; i < payload.calls.length; i++) {
-      // Validate implicit mode
-      bytes32 result = ISignalsImplicitMode(payload.calls[i].to).acceptImplicitRequest(
-        wallet, signature.attestation, redirectUrlHash, payload.calls[i]
-      );
-      if (result != attestationMagic) {
-        revert InvalidImplicitResult();
-      }
+    // Validate the implicit request
+    bytes32 attestationMagic = attestation.generateImplicitRequestMagic(wallet);
+    bytes32 redirectUrlHash = keccak256(abi.encodePacked(attestation.authData));
+
+    // Validate implicit mode
+    bytes32 result = ISignalsImplicitMode(call.to).acceptImplicitRequest(wallet, attestation, redirectUrlHash, call);
+    if (result != attestationMagic) {
+      revert SessionErrors.InvalidImplicitResult();
     }
   }
 
@@ -105,14 +74,6 @@ contract ImplicitSessionManager is ImplicitSessionSig, IImplicitSessionManager {
     }
 
     return false;
-  }
-
-  /// @notice Returns true if the contract implements the given interface
-  /// @param interfaceId The interface identifier
-  function supportsInterface(
-    bytes4 interfaceId
-  ) public pure returns (bool) {
-    return interfaceId == type(ISapient).interfaceId || interfaceId == type(IImplicitSessionManager).interfaceId;
   }
 
 }

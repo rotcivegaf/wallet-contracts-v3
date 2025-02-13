@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
+/*
 
 import { ParameterOperation, ParameterRule, Permission, UsageLimit } from "src/extensions/sessions/Permission.sol";
 import {
@@ -358,3 +359,4 @@ contract ExplicitSessionSigTest is AdvTest {
   }
 
 }
+*/

@@ -1,21 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import { Attestation } from "../Attestation.sol";
-
-import { ISapient, Payload } from "../../../modules/interfaces/ISapient.sol";
-import { Permission, UsageLimit } from "../Permission.sol";
-import { PermissionValidator } from "../PermissionValidator.sol";
-
-/// @notice Represents a decoded signature for an explicit session
-struct ExplicitSessionSignature {
-  /// @notice The permissions root for the session in this configuration
-  bytes32 permissionsRoot;
-  /// @notice Session permissions for the session signer
-  SessionPermissions sessionPermissions;
-  /// @notice Indices of permissions used for this request
-  uint8[] permissionIdxPerCall;
-}
+import { Permission, UsageLimit } from "./Permission.sol";
 
 /// @notice Permissions configuration for a specific session signer
 struct SessionPermissions {
@@ -29,39 +15,17 @@ struct SessionPermissions {
   Permission[] permissions;
 }
 
-/// @notice Signals for the session manager
-interface IExplicitSessionManagerSignals {
-
-  /// @notice Invalid signature from session signer
-  error InvalidSessionSignature();
-
-  /// @notice Invalid delegate call
-  error InvalidDelegateCall();
-
-  /// @notice Invalid value
-  error InvalidValue();
-
-  /// @notice Missing permissions for the given signer
-  error MissingPermissions(address signer);
-
-  /// @notice Missing required permission for function call
-  error MissingPermission(uint256 callIdx);
-
-  /// @notice Invalid permission
-  error InvalidPermission(uint256 callIdx);
-
-  /// @notice Missing limit usage increment
-  error MissingLimitUsageIncrement();
-
-  /// @notice Invalid limit usage increment
-  error InvalidLimitUsageIncrement();
-
-  /// @notice Session has expired
-  error SessionExpired(uint256 deadline);
-
+/// @notice Usage limits configuration for a specific session signer
+struct SessionUsageLimits {
+  /// @notice Address of the session signer these limits apply to
+  address signer;
+  /// @notice Array of usage limits
+  UsageLimit[] limits;
+  /// @notice Total native token value used
+  uint256 totalValueUsed;
 }
 
-interface IExplicitSessionManager is ISapient, IExplicitSessionManagerSignals {
+interface IExplicitSessionManager {
 
   /// @notice Increment usage for a caller's given session and target
   /// @param limits Array of limit/session/target combinations

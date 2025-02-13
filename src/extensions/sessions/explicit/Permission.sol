@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import { ISapient, Payload } from "../../modules/interfaces/ISapient.sol";
-import { LibBytesPointer } from "../../utils/LibBytesPointer.sol";
-import { Attestation } from "./Attestation.sol";
-import { PermissionValidator } from "./PermissionValidator.sol";
-
-import { console } from "forge-std/console.sol";
+import { LibBytesPointer } from "../../../utils/LibBytesPointer.sol";
 
 struct Permission {
   address target;
@@ -37,55 +32,61 @@ library LibPermission {
 
   using LibBytesPointer for bytes;
 
+  /// @notice Hashes a permission
+  /// @param permission The permission to hash
+  /// @return The hash of the permission
   function toHash(
     Permission memory permission
   ) internal pure returns (bytes32) {
     return keccak256(abi.encode(permission));
   }
 
+  /// @notice Reads a permission from a packed bytes array
+  /// @param encoded The packed bytes array
+  /// @param pointer The pointer to the start of the permission
+  /// @return permission The decoded permission
+  /// @return newPointer The new pointer to the end of the permission
   function readPermission(
     bytes calldata encoded,
     uint256 pointer
   ) internal pure returns (Permission memory permission, uint256 newPointer) {
     // Target
     (permission.target, pointer) = encoded.readAddress(pointer);
-    console.log("permission.target", permission.target);
     // Rules
     uint256 rulesLength;
     (rulesLength, pointer) = encoded.readUint24(pointer);
-    console.log("rulesLength", rulesLength);
     permission.rules = new ParameterRule[](rulesLength);
     for (uint256 i = 0; i < rulesLength; i++) {
       uint8 operationCumulative;
       (operationCumulative, pointer) = encoded.readUint8(pointer);
-      console.log("operationCumulative", operationCumulative);
       // 000X: cumulative
       permission.rules[i].cumulative = operationCumulative & 1 != 0;
       // XXX0: operation
       permission.rules[i].operation = ParameterOperation(operationCumulative >> 1);
 
       (permission.rules[i].value, pointer) = encoded.readBytes32(pointer);
-      console.log("permission.rules[i].value");
-      console.logBytes32(permission.rules[i].value);
       (permission.rules[i].offset, pointer) = encoded.readUint256(pointer);
-      console.log("permission.rules[i].offset", permission.rules[i].offset);
       (permission.rules[i].mask, pointer) = encoded.readBytes32(pointer);
-      console.log("permission.rules[i].mask");
-      console.logBytes32(permission.rules[i].mask);
     }
     return (permission, pointer);
   }
 
+  /// @notice Encodes a permission into a packed bytes array
+  /// @param permission The permission to encode
+  /// @return packed The packed bytes array
   function toPacked(
     Permission calldata permission
   ) internal pure returns (bytes memory packed) {
-    bytes memory encoded = abi.encodePacked(permission.target, uint24(permission.rules.length));
+    packed = abi.encodePacked(permission.target, uint24(permission.rules.length));
     for (uint256 i = 0; i < permission.rules.length; i++) {
-      encoded = abi.encodePacked(encoded, ruleToPacked(permission.rules[i]));
+      packed = abi.encodePacked(packed, ruleToPacked(permission.rules[i]));
     }
-    return encoded;
+    return packed;
   }
 
+  /// @notice Encodes a rule into a packed bytes array
+  /// @param rule The rule to encode
+  /// @return packed The packed bytes array
   function ruleToPacked(
     ParameterRule calldata rule
   ) internal pure returns (bytes memory packed) {

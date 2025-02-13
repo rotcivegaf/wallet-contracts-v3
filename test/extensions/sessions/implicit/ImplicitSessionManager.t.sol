@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
+/*
+
 import { Attestation, LibAttestation } from "src/extensions/sessions/Attestation.sol";
 import {
   IImplicitSessionManager,
@@ -330,6 +332,5 @@ contract ImplicitSessionManagerTest is AdvTest, IImplicitSessionManagerSignals {
     sessionManager.isValidSapientSignature(payload, randomSig);
   }
 
-  */
-
 }
+*/

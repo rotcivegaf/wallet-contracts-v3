@@ -1,22 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import { LibBytes } from "../../../utils/LibBytes.sol";
+import { ISapient, Payload } from "../../../modules/interfaces/ISapient.sol";
 import { LibBytesPointer } from "../../../utils/LibBytesPointer.sol";
 
-import { Permission, UsageLimit } from "../Permission.sol";
+import { SessionErrors } from "../SessionErrors.sol";
+import { IExplicitSessionManager, SessionPermissions, SessionUsageLimits } from "./IExplicitSessionManager.sol";
+import { Permission, UsageLimit } from "./Permission.sol";
+import { PermissionValidator } from "./PermissionValidator.sol";
 
-import { ExplicitSessionSignature, IExplicitSessionManager, SessionPermissions } from "./IExplicitSessionManager.sol";
+abstract contract ExplicitSessionManager is IExplicitSessionManager, PermissionValidator {
 
-import { ISapient, Payload } from "../../../modules/interfaces/ISapient.sol";
-
-import { PermissionValidator } from "../PermissionValidator.sol";
-import { ExplicitSessionSig } from "./ExplicitSessionSig.sol";
-
-using LibBytesPointer for bytes;
-using LibBytes for bytes;
-
-contract ExplicitSessionManager is ExplicitSessionSig, PermissionValidator, IExplicitSessionManager {
+  using LibBytesPointer for bytes;
 
   // Special address used for tracking native token value limits
   address public constant VALUE_TRACKING_ADDRESS = address(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
@@ -30,154 +25,129 @@ contract ExplicitSessionManager is ExplicitSessionSig, PermissionValidator, IExp
     }
   }
 
-  /// @inheritdoc ISapient
-  /// @dev The image hash derived from the global signer and session configuration
-  function isValidSapientSignature(
-    Payload.Decoded calldata payload,
-    bytes calldata encodedSignature
-  ) external view returns (bytes32) {
-    // Recover the session manager signature
-    ExplicitSessionSignature memory signature = _recoverSignature(payload, encodedSignature);
-
-    // Validate the session using recovered permissions
-    address wallet = msg.sender;
-    _validateSession(wallet, payload, signature);
-
-    // Return the permissions root as the image hash
-    return signature.permissionsRoot;
-  }
-
-  /// @notice Validates the explicit session
+  /// @notice Validates an explicit call
+  /// @param payload The decoded payload containing calls
+  /// @param callIdx The index of the call to validate
   /// @param wallet The wallet's address
-  /// @param payload The decoded payload containing calls
-  /// @param signature The session signature data
-  function _validateSession(
+  /// @param sessionSigner The session signer's address
+  /// @param allSessionPermissions All sessions' permissions
+  /// @param permissionIdx The index of the permission to validate
+  /// @param sessionUsageLimits The session usage limits
+  /// @return newSessionUsageLimits The updated session usage limits
+  function _validateExplicitCall(
+    Payload.Decoded calldata payload,
+    uint256 callIdx,
     address wallet,
-    Payload.Decoded calldata payload,
-    ExplicitSessionSignature memory signature
-  ) internal view {
-    SessionPermissions memory sessionPermissions = signature.sessionPermissions;
+    address sessionSigner,
+    SessionPermissions[] memory allSessionPermissions,
+    uint8 permissionIdx,
+    SessionUsageLimits memory sessionUsageLimits
+  ) internal view returns (SessionUsageLimits memory newSessionUsageLimits) {
+    // Find the permissions for the given session signer
+    SessionPermissions memory sessionPermissions;
+    for (uint256 i = 0; i < allSessionPermissions.length; i++) {
+      if (allSessionPermissions[i].signer == sessionSigner) {
+        sessionPermissions = allSessionPermissions[i];
+        break;
+      }
+    }
+    if (sessionPermissions.signer == address(0)) {
+      revert SessionErrors.InvalidSessionSigner(address(0));
+    }
 
-    // Check if session has expired
+    // Check if session has expired.
     if (sessionPermissions.deadline != 0 && block.timestamp > sessionPermissions.deadline) {
-      revert SessionExpired(sessionPermissions.deadline);
+      revert SessionErrors.SessionExpired(sessionPermissions.deadline);
     }
 
-    // Validate calls and track usage
-    bytes32 limitHashPrefix = keccak256(abi.encode(wallet, sessionPermissions.signer));
-    (uint256 totalValueUsed, UsageLimit[] memory limits) =
-      _validateCallsAndTrackUsage(limitHashPrefix, payload, signature);
-
-    // Verify total value is within limit
-    if (totalValueUsed != 0 && totalValueUsed > sessionPermissions.valueLimit) {
-      revert InvalidValue();
+    // Delegate calls are not allowed
+    Payload.Call calldata call = payload.calls[callIdx];
+    if (call.delegateCall) {
+      revert SessionErrors.InvalidDelegateCall();
     }
 
-    // Verify limit usage increment call
-    _verifyLimitUsageIncrement(payload, limits);
-  }
-
-  /// @notice Validates calls and tracks usage
-  /// @param limitHashPrefix The hash prefix for the usage limits
-  /// @param payload The decoded payload containing calls
-  /// @param signature The session manager signature
-  /// @return totalValueUsed The total value used
-  /// @return limits The usage limits
-  function _validateCallsAndTrackUsage(
-    bytes32 limitHashPrefix,
-    Payload.Decoded calldata payload,
-    ExplicitSessionSignature memory signature
-  ) internal view returns (uint256 totalValueUsed, UsageLimit[] memory limits) {
-    UsageLimit[][] memory allLimits = new UsageLimit[][](payload.calls.length + 1);
-    uint256 limitIndex = 0;
-    uint256 validArrays = 0;
-    uint256 permissionIdx = 0;
-
-    for (uint256 i = 0; i < payload.calls.length; i++) {
-      Payload.Call calldata call = payload.calls[i];
-      if (call.delegateCall) {
-        // Delegate calls are not allowed
-        revert InvalidDelegateCall();
-      }
-
-      if (call.to == address(this)) {
-        // Skip validating self calls
-        continue;
-      }
-
-      // Get the permission for the current call
-      permissionIdx = signature.permissionIdxPerCall[i];
-      if (permissionIdx >= signature.sessionPermissions.permissions.length) {
-        revert MissingPermission(i);
-      }
-
-      if (call.value > 0) {
-        // Track native token value
-        totalValueUsed += call.value;
-      }
-
-      // Validate the permission for the current call
-      (bool isValid, UsageLimit[] memory usageLimits) =
-        validatePermission(signature.sessionPermissions.permissions[permissionIdx], call, limitHashPrefix);
-      if (!isValid) {
-        revert InvalidPermission(i);
-      }
-
-      // Track usage limits
-      if (usageLimits.length > 0) {
-        allLimits[validArrays] = usageLimits;
-        limitIndex += usageLimits.length;
-        validArrays++;
+    // Calls to incrementUsageLimit are the only allowed calls to this contract
+    if (call.to == address(this)) {
+      bytes4 selector = bytes4(call.data[0:4]);
+      if (call.value > 0 || selector != this.incrementUsageLimit.selector) {
+        revert SessionErrors.InvalidSelfCall();
       }
     }
 
-    // Create final arrays of exact size needed
-    if (totalValueUsed == 0) {
-      limits = new UsageLimit[](limitIndex);
-    } else {
-      limits = new UsageLimit[](limitIndex + 1);
-      // Add the value tracking hash to the end
-      limits[limitIndex] = UsageLimit({
-        usageHash: keccak256(abi.encode(limitHashPrefix, VALUE_TRACKING_ADDRESS)),
-        usageAmount: totalValueUsed
-      });
+    // Get the permission for the current call
+    if (permissionIdx >= sessionPermissions.permissions.length) {
+      revert SessionErrors.MissingPermission();
+    }
+    Permission memory permission = sessionPermissions.permissions[permissionIdx];
+
+    // Validate the permission for the current call
+    bytes32 limitHashPrefix = keccak256(abi.encode(wallet, sessionSigner));
+    (bool isValid, UsageLimit[] memory limits) =
+      validatePermission(permission, call, limitHashPrefix, sessionUsageLimits.limits);
+    if (!isValid) {
+      revert SessionErrors.InvalidPermission();
+    }
+    sessionUsageLimits.limits = limits;
+
+    // Increment the total value used
+    if (call.value > 0) {
+      sessionUsageLimits.totalValueUsed += call.value;
+    }
+    if (sessionUsageLimits.totalValueUsed > sessionPermissions.valueLimit) {
+      // Value limit exceeded
+      revert SessionErrors.InvalidValue();
     }
 
-    // Flatten arrays
-    limitIndex = 0;
-    for (uint256 i = 0; i < validArrays; i++) {
-      UsageLimit[] memory subLimits = allLimits[i];
-      for (uint256 j = 0; j < subLimits.length; j++) {
-        limits[limitIndex] = subLimits[j];
-        limitIndex++;
-      }
-    }
-
-    return (totalValueUsed, limits);
+    return sessionUsageLimits;
   }
 
   /// @notice Verifies the limit usage increment
-  /// @param payload The decoded payload containing calls
-  /// @param limits The usage limits
+  /// @param call The call to validate
+  /// @param sessionUsageLimits The session usage limits
+  /// @param wallet The wallet's address
   /// @dev Reverts if the required increment call is missing or invalid
-  function _verifyLimitUsageIncrement(Payload.Decoded calldata payload, UsageLimit[] memory limits) internal view {
+  /// @dev If no usage limits are used, this function does nothing
+  function _validateLimitUsageIncrement(
+    Payload.Call calldata call,
+    SessionUsageLimits[] memory sessionUsageLimits,
+    address wallet
+  ) internal view {
     // Limits call is only required if there are usage limits used
-    if (limits.length > 0) {
+    if (sessionUsageLimits.length > 0) {
       // Verify the last call is the increment call
-      Payload.Call memory lastCall = payload.calls[payload.calls.length - 1];
-      if (lastCall.to != address(this)) {
-        revert MissingLimitUsageIncrement();
+      if (call.to != address(this) || call.behaviorOnError != Payload.BEHAVIOR_REVERT_ON_ERROR) {
+        revert SessionErrors.InvalidLimitUsageIncrement();
       }
-      if (lastCall.behaviorOnError != Payload.BEHAVIOR_REVERT_ON_ERROR) {
-        revert InvalidLimitUsageIncrement();
+
+      // Construct expected limit increments
+      uint256 totalLimitsLength = 0;
+      for (uint256 i = 0; i < sessionUsageLimits.length; i++) {
+        totalLimitsLength += sessionUsageLimits[i].limits.length;
+        if (sessionUsageLimits[i].totalValueUsed > 0) {
+          totalLimitsLength++;
+        }
+      }
+      UsageLimit[] memory limits = new UsageLimit[](totalLimitsLength);
+      uint256 limitIndex = 0;
+      for (uint256 i = 0; i < sessionUsageLimits.length; i++) {
+        for (uint256 j = 0; j < sessionUsageLimits[i].limits.length; j++) {
+          limits[limitIndex++] = sessionUsageLimits[i].limits[j];
+        }
+        if (sessionUsageLimits[i].totalValueUsed > 0) {
+          bytes32 limitHashPrefix = keccak256(abi.encode(wallet, sessionUsageLimits[i].signer));
+          limits[limitIndex++] = UsageLimit({
+            usageHash: keccak256(abi.encode(limitHashPrefix, VALUE_TRACKING_ADDRESS)),
+            usageAmount: sessionUsageLimits[i].totalValueUsed
+          });
+        }
       }
 
       // Verify the increment call data
       bytes memory expectedData = abi.encodeWithSelector(this.incrementUsageLimit.selector, limits);
       bytes32 expectedDataHash = keccak256(expectedData);
-      bytes32 actualDataHash = keccak256(lastCall.data);
+      bytes32 actualDataHash = keccak256(call.data);
       if (actualDataHash != expectedDataHash) {
-        revert InvalidLimitUsageIncrement();
+        revert SessionErrors.InvalidLimitUsageIncrement();
       }
     }
   }
@@ -186,7 +156,7 @@ contract ExplicitSessionManager is ExplicitSessionSig, PermissionValidator, IExp
   /// @param interfaceId The interface identifier
   function supportsInterface(
     bytes4 interfaceId
-  ) public pure returns (bool) {
+  ) public pure virtual returns (bool) {
     return interfaceId == type(ISapient).interfaceId || interfaceId == type(IExplicitSessionManager).interfaceId;
   }
 

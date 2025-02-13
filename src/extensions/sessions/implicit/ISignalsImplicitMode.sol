@@ -2,19 +2,25 @@
 pragma solidity ^0.8.27;
 
 import { Payload } from "../../../modules/Payload.sol";
-import { Attestation } from "../Attestation.sol";
+import { Attestation } from "./Attestation.sol";
 
 bytes32 constant ACCEPT_IMPLICIT_REQUEST_MAGIC_PREFIX = keccak256(abi.encodePacked("acceptImplicitRequest"));
 
 interface ISignalsImplicitMode {
 
+  /// @notice Accepts an implicit request
+  /// @param wallet The wallet's address
+  /// @param attestation The attestation data
+  /// @param redirectUrlHash The redirect URL hash
+  /// @param call The call to validate
+  /// @return The hash of the implicit request if valid
   function acceptImplicitRequest(
-    address _wallet,
+    address wallet,
     // Attestation data
-    Attestation calldata _attestation,
-    bytes32 _redirectUrlHash, // Decoded from _attestation._authData as common usage expected
+    Attestation calldata attestation,
+    bytes32 redirectUrlHash, // Decoded from _attestation._authData as common usage expected
     // Transaction data
-    Payload.Call calldata _call
+    Payload.Call calldata call
   ) external view returns (bytes32);
 
 }
