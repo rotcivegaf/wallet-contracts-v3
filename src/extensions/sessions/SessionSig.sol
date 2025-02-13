@@ -8,11 +8,10 @@ import { SessionPermissions } from "./explicit/IExplicitSessionManager.sol";
 import { LibPermission, Permission } from "./explicit/Permission.sol";
 import { Attestation, LibAttestation } from "./implicit/Attestation.sol";
 
-library SessionSig {
+using LibBytesPointer for bytes;
+using LibAttestation for Attestation;
 
-  using LibBytesPointer for bytes;
-  using LibOptim for bytes;
-  using LibAttestation for Attestation;
+library SessionSig {
 
   uint256 internal constant FLAG_PERMISSIONS = 0;
   uint256 internal constant FLAG_NODE = 1;
@@ -47,7 +46,7 @@ library SessionSig {
   ///     - if is_implicit: implicit_signature: [<Attestation encoded>, <attestation_signature>, <session_signature>]
   ///     - if !is_implicit: explicit_signature: [uint8 session_permission, <session_signature>]
   function recoverSignature(
-    Payload.Decoded memory payload,
+    Payload.Decoded calldata payload,
     bytes calldata encodedSignature
   ) internal pure returns (DecodedSignature memory sig) {
     uint256 pointer = 0;
@@ -164,9 +163,11 @@ library SessionSig {
 
     // Read permissions count
     uint256 permissionsCount;
-    (permissionsCount, pointer) = encoded.readUint24(pointer);
-    permissions = new SessionPermissions[](permissionsCount);
-    permissionsCount = 0;
+    {
+      (permissionsCount, pointer) = encoded.readUint24(pointer);
+      permissions = new SessionPermissions[](permissionsCount);
+      permissionsCount = 0;
+    }
 
     while (pointer < encoded.length) {
       // First byte is the flag (top 4 bits) and additional data (bottom 4 bits)
@@ -190,13 +191,13 @@ library SessionSig {
         (nodePermissions.deadline, pointer) = encoded.readUint256(pointer);
 
         // Read permissions array
-        uint256 nrindex;
-        (nodePermissions.permissions, nrindex) = _decodePermissions(encoded[pointer:], 0);
-        pointer += nrindex;
+        (nodePermissions.permissions, pointer) = _decodePermissions(encoded, pointer);
 
         // Update root
-        bytes32 node = _leafForPermissions(nodePermissions);
-        root = root != bytes32(0) ? LibOptim.fkeccak256(root, node) : node;
+        {
+          bytes32 node = _leafForPermissions(nodePermissions);
+          root = root != bytes32(0) ? LibOptim.fkeccak256(root, node) : node;
+        }
 
         // Push node permissions to the permissions array
         permissions[permissionsCount++] = nodePermissions;
@@ -216,24 +217,28 @@ library SessionSig {
 
       // Branch (0x02)
       if (flag == FLAG_BRANCH) {
-        // Read branch size
-        uint256 sizeSize = uint8(firstByte & 0x0f);
-        uint256 size;
-        (size, pointer) = encoded.readUintX(pointer, sizeSize);
+        {
+          // Read branch size
+          uint256 size;
+          {
+            uint256 sizeSize = uint8(firstByte & 0x0f);
+            (size, pointer) = encoded.readUintX(pointer, sizeSize);
+          }
 
-        // Process branch
-        uint256 nrindex = pointer + size;
-        (bytes32 branchRoot, SessionPermissions[] memory branchPermissions) =
-          _recoverSessionPermissions(encoded[pointer:nrindex]);
+          // Process branch
+          uint256 nrindex = pointer + size;
+          (bytes32 branchRoot, SessionPermissions[] memory branchPermissions) =
+            _recoverSessionPermissions(encoded[pointer:nrindex]);
+          pointer = nrindex;
 
-        // Push all branch permissions to the permissions array
-        for (uint256 i = 0; i < branchPermissions.length; i++) {
-          permissions[permissionsCount++] = branchPermissions[i];
+          // Push all branch permissions to the permissions array
+          for (uint256 i = 0; i < branchPermissions.length; i++) {
+            permissions[permissionsCount++] = branchPermissions[i];
+          }
+
+          // Update root
+          root = root != bytes32(0) ? LibOptim.fkeccak256(root, branchRoot) : branchRoot;
         }
-
-        // Update root
-        root = root != bytes32(0) ? LibOptim.fkeccak256(root, branchRoot) : branchRoot;
-        pointer = nrindex;
         continue;
       }
 

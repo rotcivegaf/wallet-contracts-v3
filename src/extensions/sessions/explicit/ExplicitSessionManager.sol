@@ -9,9 +9,9 @@ import { IExplicitSessionManager, SessionPermissions, SessionUsageLimits } from 
 import { Permission, UsageLimit } from "./Permission.sol";
 import { PermissionValidator } from "./PermissionValidator.sol";
 
-abstract contract ExplicitSessionManager is IExplicitSessionManager, PermissionValidator {
+using LibBytesPointer for bytes;
 
-  using LibBytesPointer for bytes;
+abstract contract ExplicitSessionManager is IExplicitSessionManager, PermissionValidator {
 
   // Special address used for tracking native token value limits
   address public constant VALUE_TRACKING_ADDRESS = address(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);

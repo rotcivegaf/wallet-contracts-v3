@@ -10,7 +10,6 @@ import { IERC1271, IERC1271_MAGIC_VALUE } from "../interfaces/IERC1271.sol";
 import { ISapient, ISapientCompact } from "../interfaces/ISapient.sol";
 
 using LibBytesPointer for bytes;
-using LibOptim for bytes;
 using Payload for Payload.Decoded;
 
 library BaseSig {

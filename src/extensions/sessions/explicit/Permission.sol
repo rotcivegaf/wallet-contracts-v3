@@ -28,9 +28,9 @@ struct UsageLimit {
   uint256 usageAmount;
 }
 
-library LibPermission {
+using LibBytesPointer for bytes;
 
-  using LibBytesPointer for bytes;
+library LibPermission {
 
   /// @notice Hashes a permission
   /// @param permission The permission to hash

@@ -5,9 +5,9 @@ import { Payload } from "../../../modules/interfaces/ISapient.sol";
 import { LibBytes } from "../../../utils/LibBytes.sol";
 import { ParameterOperation, ParameterRule, Permission, UsageLimit } from "./Permission.sol";
 
-abstract contract PermissionValidator {
+using LibBytes for bytes;
 
-  using LibBytes for bytes;
+abstract contract PermissionValidator {
 
   mapping(bytes32 => uint256) public limitUsage;
 

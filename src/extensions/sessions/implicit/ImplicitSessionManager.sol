@@ -7,9 +7,9 @@ import { SessionErrors } from "../SessionErrors.sol";
 import { Attestation, LibAttestation } from "./Attestation.sol";
 import { ISignalsImplicitMode } from "./ISignalsImplicitMode.sol";
 
-abstract contract ImplicitSessionManager {
+using LibAttestation for Attestation;
 
-  using LibAttestation for Attestation;
+abstract contract ImplicitSessionManager {
 
   /// @notice Validates a call in implicit mode
   /// @param call The call to validate

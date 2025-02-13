@@ -2,11 +2,9 @@
 pragma solidity ^0.8.27;
 
 import { LibBytesPointer } from "../../../utils/LibBytesPointer.sol";
-import { LibOptim } from "../../../utils/LibOptim.sol";
 import { ACCEPT_IMPLICIT_REQUEST_MAGIC_PREFIX } from "./ISignalsImplicitMode.sol";
 
 using LibBytesPointer for bytes;
-using LibOptim for bytes;
 
 struct Attestation {
   address approvedSigner;

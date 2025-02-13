@@ -16,9 +16,9 @@ import {
 import { Permission, UsageLimit } from "./explicit/Permission.sol";
 import { ImplicitSessionManager } from "./implicit/ImplicitSessionManager.sol";
 
-contract SessionManager is ISapient, ImplicitSessionManager, ExplicitSessionManager {
+using LibBytesPointer for bytes;
 
-  using LibBytesPointer for bytes;
+contract SessionManager is ISapient, ImplicitSessionManager, ExplicitSessionManager {
 
   error InvalidPayloadKind();
   error InvalidCallSignaturesLength();
