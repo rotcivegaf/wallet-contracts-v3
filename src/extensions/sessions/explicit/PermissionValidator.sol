@@ -5,10 +5,11 @@ import { Payload } from "../../../modules/interfaces/ISapient.sol";
 import { LibBytes } from "../../../utils/LibBytes.sol";
 import { ParameterOperation, ParameterRule, Permission, UsageLimit } from "./Permission.sol";
 
-using LibBytes for bytes;
-
 abstract contract PermissionValidator {
 
+  using LibBytes for bytes;
+
+  /// @notice Mapping of usage limit hashes to their usage amounts
   mapping(bytes32 => uint256) public limitUsage;
 
   /// @notice Validates a rules permission
@@ -39,11 +40,6 @@ abstract contract PermissionValidator {
     for (uint256 i = 0; i < permission.rules.length; i++) {
       ParameterRule memory rule = permission.rules[i];
 
-      // Ensure call data is long enough
-      if (call.data.length < rule.offset + 32) {
-        return (false, usageLimits);
-      }
-
       // Extract value from calldata at offset
       bytes32 value = call.data.readBytes32(rule.offset);
 
@@ -56,14 +52,19 @@ abstract contract PermissionValidator {
         // Find the usage limit for the current rule
         bytes32 usageHash = keccak256(abi.encode(limitHashPrefix, permission, i));
         uint256 previousUsage;
-        for (actualLimitsCount = 0; actualLimitsCount < usageLimits.length; actualLimitsCount++) {
-          if (usageLimits[actualLimitsCount].usageHash == bytes32(0)) {
+        UsageLimit memory usageLimit;
+        for (uint256 j = 0; j < newUsageLimits.length; j++) {
+          if (newUsageLimits[j].usageHash == bytes32(0)) {
             // Initialize new usage limit
-            newUsageLimits[actualLimitsCount] = UsageLimit({ usageHash: usageHash, usageAmount: 0 });
+            usageLimit = UsageLimit({ usageHash: usageHash, usageAmount: 0 });
+            newUsageLimits[j] = usageLimit;
+            actualLimitsCount = j + 1;
             break;
           }
-          if (usageLimits[actualLimitsCount].usageHash == usageHash) {
-            previousUsage = usageLimits[actualLimitsCount].usageAmount;
+          if (newUsageLimits[j].usageHash == usageHash) {
+            // Value exists, use it
+            usageLimit = newUsageLimits[j];
+            previousUsage = usageLimit.usageAmount;
             break;
           }
         }
@@ -73,9 +74,7 @@ abstract contract PermissionValidator {
         }
         // Cumulate usage
         value256 += previousUsage;
-        if (previousUsage != 0) {
-          newUsageLimits[actualLimitsCount].usageAmount = value256;
-        }
+        usageLimit.usageAmount = value256;
         // Use the cumulative value for comparison
         value = bytes32(value256);
       }

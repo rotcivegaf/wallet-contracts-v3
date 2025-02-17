@@ -9,9 +9,9 @@ import { IExplicitSessionManager, SessionPermissions, SessionUsageLimits } from 
 import { Permission, UsageLimit } from "./Permission.sol";
 import { PermissionValidator } from "./PermissionValidator.sol";
 
-using LibBytesPointer for bytes;
-
 abstract contract ExplicitSessionManager is IExplicitSessionManager, PermissionValidator {
+
+  using LibBytesPointer for bytes;
 
   // Special address used for tracking native token value limits
   address public constant VALUE_TRACKING_ADDRESS = address(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
@@ -21,7 +21,11 @@ abstract contract ExplicitSessionManager is IExplicitSessionManager, PermissionV
     UsageLimit[] calldata limits
   ) external {
     for (uint256 i = 0; i < limits.length; i++) {
-      limitUsage[limits[i].usageHash] += limits[i].usageAmount;
+      if (limits[i].usageAmount < limitUsage[limits[i].usageHash]) {
+        // Cannot decrement usage limit
+        revert SessionErrors.InvalidLimitUsageIncrement();
+      }
+      limitUsage[limits[i].usageHash] = limits[i].usageAmount;
     }
   }
 
@@ -69,7 +73,7 @@ abstract contract ExplicitSessionManager is IExplicitSessionManager, PermissionV
     // Calls to incrementUsageLimit are the only allowed calls to this contract
     if (call.to == address(this)) {
       bytes4 selector = bytes4(call.data[0:4]);
-      if (call.value > 0 || selector != this.incrementUsageLimit.selector) {
+      if (call.value > 0 || selector != IExplicitSessionManager.incrementUsageLimit.selector) {
         revert SessionErrors.InvalidSelfCall();
       }
     }
