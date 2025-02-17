@@ -195,17 +195,47 @@ library PrimitivesRPC {
   }
 
   // ----------------------------------------------------------------
-  // session explicit
+  // session
   // ----------------------------------------------------------------
 
-  function emptyExplicitSession(
-    Vm _vm
-  ) internal returns (string memory) {
-    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_explicit_empty", "{}");
+  function sessionEmpty(Vm _vm, address globalSigner) internal returns (string memory) {
+    string memory params = string.concat('{"globalSigner":"', _vm.toString(globalSigner), '"}');
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_empty", params);
     return string(rawResponse);
   }
 
-  function addExplicitSession(
+  function sessionEncodeCallSignatures(
+    Vm _vm,
+    string memory topologyInput,
+    string[] memory callSignatures,
+    bool includesImplicitSignature
+  ) internal returns (bytes memory) {
+    string memory callSignaturesJson = '["';
+    for (uint256 i = 0; i < callSignatures.length; i++) {
+      callSignaturesJson = string.concat(callSignaturesJson, callSignatures[i], '"');
+      if (i < callSignatures.length - 1) {
+        callSignaturesJson = string.concat(callSignaturesJson, ',"');
+      }
+    }
+    callSignaturesJson = string.concat(callSignaturesJson, "]");
+    string memory params = string.concat(
+      '{"sessionTopology":',
+      topologyInput,
+      ',"callSignatures":',
+      callSignaturesJson,
+      ',"includesImplicitSignature":',
+      includesImplicitSignature ? "true" : "false",
+      "}"
+    );
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_encodeCallSignatures", params);
+    return rawResponse;
+  }
+
+  // ----------------------------------------------------------------
+  // session explicit
+  // ----------------------------------------------------------------
+
+  function sessionExplicitAdd(
     Vm _vm,
     string memory sessionInput,
     string memory topologyInput
@@ -215,7 +245,7 @@ library PrimitivesRPC {
     return string(rawResponse);
   }
 
-  function removeExplicitSession(
+  function sessionExplicitRemove(
     Vm _vm,
     address explicitSessionAddress,
     string memory topologyInput
@@ -227,49 +257,22 @@ library PrimitivesRPC {
     return string(rawResponse);
   }
 
-  function useSessionExplicit(
+  function sessionExplicitEncodeCallSignature(
     Vm _vm,
     string memory signatureInput,
-    uint8[] memory _permissionIdxPerCall,
-    string memory topologyInput
+    uint8 permissionIdx
   ) internal returns (bytes memory) {
-    string memory permissionIdxPerCall = "";
-    for (uint256 i = 0; i < _permissionIdxPerCall.length; i++) {
-      permissionIdxPerCall =
-        string(abi.encodePacked(permissionIdxPerCall, i > 0 ? "," : "", _vm.toString(_permissionIdxPerCall[i])));
-    }
-
-    string memory params = string.concat(
-      '{"signature":"',
-      signatureInput,
-      '","permissionIndexes":"',
-      permissionIdxPerCall,
-      '","sessionTopology":',
-      topologyInput,
-      "}"
-    );
-    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_explicit_use", params);
-    return (rawResponse);
-  }
-
-  function toPackedSessionTopology(Vm _vm, string memory topologyInput) internal returns (bytes memory) {
-    string memory params = string.concat('{"sessionTopology":', topologyInput, "}");
-    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_explicit_toPackedTopology", params);
-    return (rawResponse);
+    string memory params =
+      string.concat('{"signature":"', signatureInput, '","permissionIndex":', _vm.toString(permissionIdx), "}");
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_explicit_encodeCallSignature", params);
+    return rawResponse;
   }
 
   // ----------------------------------------------------------------
   // session implicit
   // ----------------------------------------------------------------
 
-  function emptyImplicitSession(
-    Vm _vm
-  ) internal returns (string memory) {
-    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_implicit_empty", "{}");
-    return string(rawResponse);
-  }
-
-  function addImplicitSessionBlacklist(
+  function sessionImplicitAddBlacklistAddress(
     Vm _vm,
     string memory implicitSessionJson,
     address addressToAdd
@@ -281,7 +284,7 @@ library PrimitivesRPC {
     return string(rawResponse);
   }
 
-  function removeImplicitSessionBlacklist(
+  function sessionImplicitRemoveBlacklistAddress(
     Vm _vm,
     string memory implicitSessionJson,
     address addressToRemove
@@ -293,12 +296,11 @@ library PrimitivesRPC {
     return string(rawResponse);
   }
 
-  function useImplicitSession(
+  function sessionImplicitEncodeCallSignature(
     Vm _vm,
     string memory sessionSignature,
     string memory globalSignature,
-    string memory attestationJson,
-    string memory implicitSessionJson
+    string memory attestationJson
   ) internal returns (bytes memory) {
     string memory params = string.concat(
       '{"sessionSignature":"',
@@ -309,12 +311,9 @@ library PrimitivesRPC {
       '",',
       '"attestation":',
       attestationJson,
-      ",",
-      '"sessionConfiguration":',
-      implicitSessionJson,
       "}"
     );
-    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_implicit_use", params);
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_implicit_encodeCallSignature", params);
     return rawResponse;
   }
 

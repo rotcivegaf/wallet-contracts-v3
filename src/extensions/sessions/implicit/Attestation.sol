@@ -33,18 +33,19 @@ library LibAttestation {
     bytes calldata encoded,
     uint256 pointer
   ) internal pure returns (Attestation memory attestation, uint256 newPointer) {
-    (attestation.approvedSigner, pointer) = encoded.readAddress(pointer);
-    (attestation.identityType, pointer) = encoded.readBytes4(pointer);
-    (attestation.issuerHash, pointer) = encoded.readBytes32(pointer);
-    (attestation.audienceHash, pointer) = encoded.readBytes32(pointer);
+    newPointer = pointer;
+    (attestation.approvedSigner, newPointer) = encoded.readAddress(newPointer);
+    (attestation.identityType, newPointer) = encoded.readBytes4(newPointer);
+    (attestation.issuerHash, newPointer) = encoded.readBytes32(newPointer);
+    (attestation.audienceHash, newPointer) = encoded.readBytes32(newPointer);
     uint256 dataSize;
-    (dataSize, pointer) = encoded.readUint24(pointer);
-    attestation.authData = encoded[pointer:pointer + dataSize];
-    pointer += dataSize;
-    (dataSize, pointer) = encoded.readUint24(pointer);
-    attestation.applicationData = encoded[pointer:pointer + dataSize];
-    pointer += dataSize;
-    return (attestation, pointer);
+    (dataSize, newPointer) = encoded.readUint24(newPointer);
+    attestation.authData = encoded[newPointer:newPointer + dataSize];
+    newPointer += dataSize;
+    (dataSize, newPointer) = encoded.readUint24(newPointer);
+    attestation.applicationData = encoded[newPointer:newPointer + dataSize];
+    newPointer += dataSize;
+    return (attestation, newPointer);
   }
 
   /// @notice Encodes an attestation into a packed bytes array

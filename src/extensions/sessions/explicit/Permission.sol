@@ -54,7 +54,7 @@ library LibPermission {
     (permission.target, pointer) = encoded.readAddress(pointer);
     // Rules
     uint256 rulesLength;
-    (rulesLength, pointer) = encoded.readUint24(pointer);
+    (rulesLength, pointer) = encoded.readUint8(pointer);
     permission.rules = new ParameterRule[](rulesLength);
     for (uint256 i = 0; i < rulesLength; i++) {
       uint8 operationCumulative;

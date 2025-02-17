@@ -39,12 +39,13 @@ library SessionSig {
   /// - flags: [uint8]
   ///   - bit 0: infer global signer from implicit_signature
   /// - globalSigner: [address] - skipped if bit 0 of flags is not set
-  /// - explicit_config: [uint24 length, <SessionPermissions encoded>]
   /// - implicit_config: [uint24 blacklistLength, blacklist addresses...]
+  /// - explicit_config: [uint24 length, <SessionPermissions encoded>]
   /// - call_signatures: [<CallSignature encoded>] - Size is payload.calls.length
-  ///   - call_signature: [bool is_implicit, <data encoded>]
-  ///     - if is_implicit: implicit_signature: [<Attestation encoded>, <attestation_signature>, <session_signature>]
-  ///     - if !is_implicit: explicit_signature: [uint8 session_permission, <session_signature>]
+  ///   - call_signature: [uint8 call_flags, <data encoded>]
+  ///       - call_flags: [bool is_implicit, <see_below>]
+  ///     - if call_flags.is_implicit: implicit_signature: [<Attestation encoded>, <attestation_signature>, <session_signature>]
+  ///     - if !call_flags.is_implicit: explicit_signature: [uint (call_flag 7 bits) session_permission, <session_signature>]
   function recoverSignature(
     Payload.Decoded calldata payload,
     bytes calldata encodedSignature
@@ -58,7 +59,7 @@ library SessionSig {
       (flags, pointer) = encodedSignature.readUint8(pointer);
       bool inferGlobalSigner = flags & 1 != 0;
 
-      if (inferGlobalSigner) {
+      if (!inferGlobalSigner) {
         (globalSigner, pointer) = encodedSignature.readAddress(pointer);
       }
     }
@@ -78,7 +79,7 @@ library SessionSig {
     {
       // Blacklist addresses length and array
       uint256 dataSize;
-      (dataSize, pointer) = encodedSignature.readUint24(pointer);
+      (dataSize, pointer) = encodedSignature.readUint8(pointer); //FIXME big enough?
       sig.implicitBlacklist = new address[](dataSize);
       for (uint256 i = 0; i < dataSize; i++) {
         (sig.implicitBlacklist[i], pointer) = encodedSignature.readAddress(pointer);
@@ -96,8 +97,11 @@ library SessionSig {
         for (uint256 i = 0; i < dataSize; i++) {
           CallSignature memory callSignature;
           // Determine signature type
-          (callSignature.isImplicit, pointer) = encodedSignature.readBool(pointer);
+          uint8 flag;
+          (flag, pointer) = encodedSignature.readUint8(pointer);
+          callSignature.isImplicit = flag & 0x80 != 0;
           if (callSignature.isImplicit) {
+            //TODO Find a way to wrap up multiple uses of the same attestation and global signature
             // Read attestation
             (callSignature.attestation, pointer) = LibAttestation.fromPacked(encodedSignature, pointer);
             // Read attestation global signature
@@ -118,8 +122,8 @@ library SessionSig {
               }
             }
           } else {
-            // Read session permission used for the call
-            (callSignature.sessionPermission, pointer) = encodedSignature.readUint8(pointer);
+            // Session permission idx is the flag (first bit 0)
+            callSignature.sessionPermission = flag;
           }
           // Read session signature and recover the signer
           {
@@ -149,7 +153,7 @@ library SessionSig {
 
   /// @notice Recovers the session permissions tree from the encoded data.
   /// The encoded layout is:
-  /// - permissions_count: [uint24]
+  /// - permissions_count: [uint8]
   /// - permissions_tree_element: [flag, <data>]
   ///   - flag: [uint8]
   ///   - data: [data]
@@ -159,21 +163,19 @@ library SessionSig {
   function _recoverSessionPermissions(
     bytes calldata encoded
   ) internal pure returns (bytes32 root, SessionPermissions[] memory permissions) {
-    uint256 pointer = 0;
-
-    // Read permissions count
+    uint256 pointer;
     uint256 permissionsCount;
+
+    // Guess maximum permissions size by bytes length
     {
-      (permissionsCount, pointer) = encoded.readUint24(pointer);
-      permissions = new SessionPermissions[](permissionsCount);
-      permissionsCount = 0;
+      uint256 maxPermissionsSize = encoded.length / 88; // 88 is min bytes per permission
+      permissions = new SessionPermissions[](maxPermissionsSize);
     }
 
     while (pointer < encoded.length) {
       // First byte is the flag (top 4 bits) and additional data (bottom 4 bits)
       uint256 firstByte;
       (firstByte, pointer) = encoded.readUint8(pointer);
-
       // The top 4 bits are the flag
       uint256 flag = (firstByte & 0xf0) >> 4;
 
@@ -245,12 +247,8 @@ library SessionSig {
       revert InvalidNodeType(flag);
     }
 
-    // Truncate permissions array to the actual number of permissions
-    //FIXME Or should this throw an error?
-    if (permissionsCount < permissions.length) {
-      assembly {
-        mstore(permissions, permissionsCount)
-      }
+    assembly {
+      mstore(permissions, permissionsCount)
     }
 
     return (root, permissions);
@@ -262,7 +260,7 @@ library SessionSig {
     uint256 pointer
   ) internal pure returns (Permission[] memory permissions, uint256 newPointer) {
     uint256 length;
-    (length, pointer) = encoded.readUint24(pointer);
+    (length, pointer) = encoded.readUint8(pointer);
     permissions = new Permission[](length);
     for (uint256 i = 0; i < length; i++) {
       (permissions[i], pointer) = LibPermission.readPermission(encoded, pointer);
@@ -289,14 +287,14 @@ library SessionSig {
   function _leafForBlacklist(
     address[] memory blacklist
   ) internal pure returns (bytes32) {
-    return keccak256(abi.encodePacked(blacklist));
+    return keccak256(abi.encodePacked("Blacklist:\n", blacklist));
   }
 
   /// @notice Hashes the global signer into a leaf node.
   function _leafForGlobalSigner(
     address globalSigner
   ) internal pure returns (bytes32) {
-    return keccak256(abi.encodePacked(globalSigner));
+    return keccak256(abi.encodePacked("Global signer:\n", globalSigner));
   }
 
 }
