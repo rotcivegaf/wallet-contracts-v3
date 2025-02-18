@@ -98,6 +98,17 @@ contract SessionManager is ISapient, ImplicitSessionManager, ExplicitSessionMana
       }
     }
 
+    // Reduce the size of the sessionUsageLimits array
+    uint256 actualSize;
+    for (actualSize = 0; actualSize < sessionUsageLimits.length; actualSize++) {
+      if (sessionUsageLimits[actualSize].signer == address(0)) {
+        break;
+      }
+    }
+    assembly {
+      mstore(sessionUsageLimits, actualSize)
+    }
+
     // Bulk validate the updated usage limits
     Payload.Call calldata lastCall = payload.calls[payload.calls.length - 1];
     _validateLimitUsageIncrement(lastCall, sessionUsageLimits, wallet);

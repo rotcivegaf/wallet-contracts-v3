@@ -29,6 +29,7 @@ contract ExplicitSessionManagerTest is SessionTestBase {
 
   /// @dev Test a valid explicit call.
   function testValidateExplicitCall_Succeeds(address target, bytes4 selector, bytes memory callData) public view {
+    vm.assume(target != address(harness));
     // Build a payload with one call.
     Payload.Decoded memory payload = _buildPayload(1);
     // Prepend the selector to the call data.

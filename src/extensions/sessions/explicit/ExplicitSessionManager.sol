@@ -76,6 +76,8 @@ abstract contract ExplicitSessionManager is IExplicitSessionManager, PermissionV
       if (call.value > 0 || selector != IExplicitSessionManager.incrementUsageLimit.selector) {
         revert SessionErrors.InvalidSelfCall();
       }
+      // No permissions required
+      return sessionUsageLimits;
     }
 
     // Get the permission for the current call
