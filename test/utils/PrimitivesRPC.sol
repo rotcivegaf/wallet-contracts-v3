@@ -208,27 +208,31 @@ library PrimitivesRPC {
     Vm _vm,
     string memory topologyInput,
     string[] memory callSignatures,
-    bool includesImplicitSignature
+    address[] memory explicitSigners,
+    address[] memory implicitSigners
   ) internal returns (bytes memory) {
-    string memory callSignaturesJson = '["';
-    for (uint256 i = 0; i < callSignatures.length; i++) {
-      callSignaturesJson = string.concat(callSignaturesJson, callSignatures[i], '"');
-      if (i < callSignatures.length - 1) {
-        callSignaturesJson = string.concat(callSignaturesJson, ',"');
-      }
-    }
-    callSignaturesJson = string.concat(callSignaturesJson, "]");
+    string memory callSignaturesJson = _toJson(_vm, callSignatures);
+    string memory explicitSignersJson = _toJson(_vm, explicitSigners);
+    string memory implicitSignersJson = _toJson(_vm, implicitSigners);
     string memory params = string.concat(
       '{"sessionTopology":',
       topologyInput,
       ',"callSignatures":',
       callSignaturesJson,
-      ',"includesImplicitSignature":',
-      includesImplicitSignature ? "true" : "false",
+      ',"explicitSigners":',
+      explicitSignersJson,
+      ',"implicitSigners":',
+      implicitSignersJson,
       "}"
     );
     bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_encodeCallSignatures", params);
     return rawResponse;
+  }
+
+  function sessionImageHash(Vm _vm, string memory sessionTopologyInput) internal returns (bytes32) {
+    string memory params = string.concat('{"sessionTopology":', sessionTopologyInput, "}");
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_imageHash", params);
+    return abi.decode(rawResponse, (bytes32));
   }
 
   // ----------------------------------------------------------------
@@ -375,6 +379,38 @@ library PrimitivesRPC {
       addr += uint160(nib1 * 16 + nib2);
     }
     return address(addr);
+  }
+
+  // ----------------------------------------------------------------
+  // utils
+  // ----------------------------------------------------------------
+
+  function _toJson(Vm _vm, address[] memory _addresses) internal pure returns (string memory) {
+    if (_addresses.length == 0) {
+      return "[]";
+    }
+    string memory json = '["';
+    for (uint256 i = 0; i < _addresses.length; i++) {
+      json = string.concat(json, _vm.toString(_addresses[i]), '"');
+      if (i < _addresses.length - 1) {
+        json = string.concat(json, ',"');
+      }
+    }
+    return string.concat(json, "]");
+  }
+
+  function _toJson(Vm, string[] memory _strings) internal pure returns (string memory) {
+    if (_strings.length == 0) {
+      return "[]";
+    }
+    string memory json = '["';
+    for (uint256 i = 0; i < _strings.length; i++) {
+      json = string.concat(json, _strings[i], '"');
+      if (i < _strings.length - 1) {
+        json = string.concat(json, ',"');
+      }
+    }
+    return string.concat(json, "]");
   }
 
 }

@@ -100,11 +100,16 @@ contract SessionManagerTest is SessionTestBase {
     callSignatures[1] = vm.toString(PrimitivesRPC.sessionExplicitEncodeCallSignature(vm, sessionSignature, 0));
 
     // Encode the full signature (explicit mode, so false).
-    bytes memory encodedSig = PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, false);
+    address[] memory explicitSigners = new address[](0);
+    address[] memory implicitSigners = new address[](1);
+    implicitSigners[0] = sessionWallet.addr;
+    bytes memory encodedSig =
+      PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, explicitSigners, implicitSigners);
 
     // --- Validate the Payload Signature ---
     bytes32 imageHash = sessionManager.isValidSapientSignature(payload, encodedSig);
-    assertTrue(imageHash != bytes32(0), "Valid explicit session signature should yield nonzero image hash");
+    bytes32 expectedImageHash = PrimitivesRPC.sessionImageHash(vm, topology);
+    assertEq(imageHash, expectedImageHash);
   }
 
   /// @notice Test that a call using delegateCall reverts.
@@ -129,7 +134,11 @@ contract SessionManagerTest is SessionTestBase {
     // Supply a valid (empty) hex string instead of "dummy" for the call signature.
     string[] memory callSignatures = new string[](1);
     callSignatures[0] = "0x";
-    bytes memory encodedSig = PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, false);
+    address[] memory explicitSigners = new address[](0);
+    address[] memory implicitSigners = new address[](1);
+    implicitSigners[0] = sessionWallet.addr;
+    bytes memory encodedSig =
+      PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, explicitSigners, implicitSigners);
 
     vm.expectRevert(SessionErrors.InvalidDelegateCall.selector);
     sessionManager.isValidSapientSignature(payload, encodedSig);
@@ -197,7 +206,11 @@ contract SessionManagerTest is SessionTestBase {
     callSignatures[0] = vm.toString(callSig0);
     callSignatures[1] = vm.toString(callSig1);
 
-    bytes memory encodedSig = PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, false);
+    address[] memory explicitSigners = new address[](0);
+    address[] memory implicitSigners = new address[](1);
+    implicitSigners[0] = sessionWallet.addr;
+    bytes memory encodedSig =
+      PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, explicitSigners, implicitSigners);
 
     vm.expectRevert(SessionErrors.InvalidSelfCall.selector);
     sessionManager.isValidSapientSignature(payload, encodedSig);
@@ -237,11 +250,16 @@ contract SessionManagerTest is SessionTestBase {
     callSignatures[0] = callSignature;
 
     // Encode the full signature with the implicit flag set to true.
-    bytes memory encodedSig = PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, true);
+    address[] memory explicitSigners = new address[](0);
+    address[] memory implicitSigners = new address[](1);
+    implicitSigners[0] = sessionWallet.addr;
+    bytes memory encodedSig =
+      PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, explicitSigners, implicitSigners);
 
     // Validate the signature.
     bytes32 imageHash = sessionManager.isValidSapientSignature(payload, encodedSig);
-    assertTrue(imageHash != bytes32(0), "Valid implicit session signature should yield nonzero image hash");
+    bytes32 expectedImageHash = PrimitivesRPC.sessionImageHash(vm, topology);
+    assertEq(imageHash, expectedImageHash);
   }
 
 }

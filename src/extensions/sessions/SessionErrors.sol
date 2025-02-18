@@ -11,6 +11,8 @@ library SessionErrors {
   error InvalidDelegateCall();
   /// @notice Invalid value
   error InvalidValue();
+  /// @notice Invalid node type in session configuration
+  error InvalidNodeType(uint256 flag);
 
   // ---- Explicit session errors ----
 
@@ -29,5 +31,9 @@ library SessionErrors {
   error BlacklistedAddress(address target);
   /// @notice Invalid implicit result
   error InvalidImplicitResult();
+  /// @notice Invalid global signer
+  error InvalidGlobalSigner();
+  /// @notice Invalid blacklist
+  error InvalidBlacklist();
 
 }

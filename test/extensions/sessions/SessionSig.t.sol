@@ -23,6 +23,12 @@ contract SessionSigHarness {
     return SessionSig.recoverSignature(payload, signature);
   }
 
+  function recoverConfiguration(
+    bytes calldata encoded
+  ) external pure returns (SessionSig.DecodedSignature memory, bool hasBlacklist) {
+    return SessionSig.recoverConfiguration(encoded);
+  }
+
 }
 
 contract SessionSigTest is SessionTestBase {
@@ -93,7 +99,11 @@ contract SessionSigTest is SessionTestBase {
     {
       string[] memory callSignatures = new string[](1);
       callSignatures[0] = vm.toString(callSignature);
-      encoded = PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, false);
+      address[] memory explicitSigners = new address[](1);
+      explicitSigners[0] = sessionWallet.addr;
+      address[] memory implicitSigners = new address[](0);
+      encoded =
+        PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, explicitSigners, implicitSigners);
     }
 
     // Recover and validate.
@@ -106,6 +116,9 @@ contract SessionSigTest is SessionTestBase {
       assertEq(sig.implicitBlacklist.length, 0, "Blacklist should be empty");
       assertEq(sig.sessionPermissions.length, 1, "Session permissions length");
       assertEq(sig.sessionPermissions[0].signer, sessionWallet.addr, "Session permission signer");
+
+      bytes32 imageHash = PrimitivesRPC.sessionImageHash(vm, topology);
+      assertEq(sig.imageHash, imageHash, "Image hash");
     }
   }
 
@@ -151,7 +164,11 @@ contract SessionSigTest is SessionTestBase {
     {
       string[] memory callSignatures = new string[](1);
       callSignatures[0] = callSignature;
-      encoded = PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, true);
+      address[] memory explicitSigners = new address[](0);
+      address[] memory implicitSigners = new address[](1);
+      implicitSigners[0] = sessionWallet.addr;
+      encoded =
+        PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, explicitSigners, implicitSigners);
     }
 
     // Recover and validate.
@@ -163,6 +180,9 @@ contract SessionSigTest is SessionTestBase {
       assertEq(callSig.attestation.approvedSigner, sessionWallet.addr, "Recovered attestation signer");
       assertEq(sig.implicitBlacklist.length, 0, "Blacklist should be empty");
       assertEq(sig.sessionPermissions.length, 0, "Session permissions should be empty");
+
+      bytes32 imageHash = PrimitivesRPC.sessionImageHash(vm, topology);
+      assertEq(sig.imageHash, imageHash, "Image hash");
     }
   }
 
@@ -212,7 +232,11 @@ contract SessionSigTest is SessionTestBase {
     // Create the encoded signature
     bytes memory encoded;
     {
-      encoded = PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, true);
+      address[] memory explicitSigners = new address[](0);
+      address[] memory implicitSigners = new address[](1);
+      implicitSigners[0] = sessionWallet.addr;
+      encoded =
+        PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, explicitSigners, implicitSigners);
     }
 
     // Recover and validate
@@ -228,6 +252,9 @@ contract SessionSigTest is SessionTestBase {
 
       assertEq(sig.implicitBlacklist.length, 0, "Blacklist should be empty");
       assertEq(sig.sessionPermissions.length, 0, "Session permissions should be empty");
+
+      bytes32 imageHash = PrimitivesRPC.sessionImageHash(vm, topology);
+      assertEq(sig.imageHash, imageHash, "Image hash");
     }
   }
 
@@ -295,7 +322,12 @@ contract SessionSigTest is SessionTestBase {
       for (uint256 i = 0; i < callSignatures.length; i++) {
         callSignaturesStr[i] = vm.toString(callSignatures[i]);
       }
-      encoded = PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignaturesStr, false);
+      address[] memory explicitSigners = new address[](2);
+      explicitSigners[0] = sessionWallet.addr;
+      explicitSigners[1] = sessionWallet2.addr;
+      address[] memory implicitSigners = new address[](0);
+      encoded =
+        PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignaturesStr, explicitSigners, implicitSigners);
     }
 
     // Recover and validate
@@ -315,6 +347,89 @@ contract SessionSigTest is SessionTestBase {
       assertEq(sig.sessionPermissions.length, 2, "Session permissions length");
       assertEq(sig.sessionPermissions[1].signer, sessionWallet.addr, "Session permission signer 0");
       assertEq(sig.sessionPermissions[0].signer, sessionWallet2.addr, "Session permission signer 1");
+
+      bytes32 imageHash = PrimitivesRPC.sessionImageHash(vm, topology);
+      assertEq(sig.imageHash, imageHash, "Image hash");
+    }
+  }
+
+  function testLargeTopology(
+    address[] memory explicitSigners,
+    uint256 signersIncludeCount,
+    bool includeImplicitSigner,
+    address[] memory implicitBlacklist
+  ) public {
+    // Reduce size to max 20
+    if (explicitSigners.length > 20) {
+      assembly {
+        mstore(explicitSigners, 20)
+      }
+    }
+    if (implicitBlacklist.length > 5) {
+      assembly {
+        mstore(implicitBlacklist, 5)
+      }
+    }
+    signersIncludeCount = bound(signersIncludeCount, 0, explicitSigners.length);
+
+    // Add session permissions and blacklist to the topology
+    SessionPermissions memory sessionPerms;
+    string memory topology = PrimitivesRPC.sessionEmpty(vm, globalWallet.addr);
+    for (uint256 i = 0; i < explicitSigners.length; i++) {
+      sessionPerms.signer = explicitSigners[i];
+      string memory sessionPermsJson = _sessionPermissionsToJSON(sessionPerms);
+      topology = PrimitivesRPC.sessionExplicitAdd(vm, sessionPermsJson, topology);
+    }
+    for (uint256 i = 0; i < implicitBlacklist.length; i++) {
+      topology = PrimitivesRPC.sessionImplicitAddBlacklistAddress(vm, topology, implicitBlacklist[i]);
+    }
+
+    // Set signers to include in the configuration
+    assembly {
+      mstore(explicitSigners, signersIncludeCount)
+    }
+    address[] memory implicitSigners = new address[](includeImplicitSigner ? 1 : 0);
+    if (includeImplicitSigner) {
+      implicitSigners[0] = sessionWallet.addr;
+    }
+    // Call encodeCallSignatures with empty call signatures to encode the topology
+    bytes memory encoded =
+      PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, new string[](0), explicitSigners, implicitSigners);
+    assertGt(encoded.length, 3, "Encoded signature should not be empty");
+
+    // Strip the first 3 bytes (size)
+    bytes memory encodedWithoutSize = new bytes(encoded.length - 3);
+    for (uint256 i = 0; i < encodedWithoutSize.length; i++) {
+      encodedWithoutSize[i] = encoded[i + 3];
+    }
+
+    // Recover the configuration
+    (SessionSig.DecodedSignature memory sig, bool hasBlacklist) = harness.recoverConfiguration(encodedWithoutSize);
+    assertEq(sig.globalSigner, globalWallet.addr, "Global signer");
+    assertEq(sig.sessionPermissions.length, explicitSigners.length, "Session permissions length"); // Truncated list
+    for (uint256 i = 0; i < explicitSigners.length; i++) {
+      bool found = false;
+      for (uint256 j = 0; j < sig.sessionPermissions.length; j++) {
+        if (sig.sessionPermissions[j].signer == explicitSigners[i]) {
+          found = true;
+          break;
+        }
+      }
+      assertTrue(found, "Session permission signer not found");
+    }
+    if (includeImplicitSigner) {
+      assertEq(hasBlacklist, includeImplicitSigner, "Blacklist not included with implicit signer");
+      assertEq(sig.implicitBlacklist.length, implicitBlacklist.length, "Implicit blacklist length");
+      for (uint256 i = 0; i < implicitBlacklist.length; i++) {
+        bool found = false;
+        for (uint256 j = 0; j < sig.implicitBlacklist.length; j++) {
+          if (sig.implicitBlacklist[j] == implicitBlacklist[i]) {
+            found = true;
+            break;
+          }
+        }
+        assertTrue(found, "Implicit blacklist address not found");
+      }
     }
   }
 
