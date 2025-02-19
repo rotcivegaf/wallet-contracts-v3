@@ -365,6 +365,15 @@ contract SessionSigTest is SessionTestBase {
         mstore(explicitSigners, 20)
       }
     }
+    for (uint256 i = 0; i < explicitSigners.length; i++) {
+      vm.assume(explicitSigners[i] != address(0));
+      // Ensure there are no duplicates.
+      for (uint256 j = 0; j < explicitSigners.length; j++) {
+        if (i != j) {
+          vm.assume(explicitSigners[i] != explicitSigners[j]);
+        }
+      }
+    }
     if (implicitBlacklist.length > 5) {
       assembly {
         mstore(implicitBlacklist, 5)

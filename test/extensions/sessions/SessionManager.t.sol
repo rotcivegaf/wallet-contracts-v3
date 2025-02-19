@@ -99,10 +99,10 @@ contract SessionManagerTest is SessionTestBase {
     sessionSignature = _signAndEncodeRSV(Payload.hashCall(payload.calls[1]), sessionWallet);
     callSignatures[1] = vm.toString(PrimitivesRPC.sessionExplicitEncodeCallSignature(vm, sessionSignature, 0));
 
-    // Encode the full signature (explicit mode, so false).
-    address[] memory explicitSigners = new address[](0);
-    address[] memory implicitSigners = new address[](1);
-    implicitSigners[0] = sessionWallet.addr;
+    // Encode the full signature.
+    address[] memory explicitSigners = new address[](1);
+    explicitSigners[0] = sessionWallet.addr;
+    address[] memory implicitSigners = new address[](0);
     bytes memory encodedSig =
       PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, explicitSigners, implicitSigners);
 
@@ -206,9 +206,9 @@ contract SessionManagerTest is SessionTestBase {
     callSignatures[0] = vm.toString(callSig0);
     callSignatures[1] = vm.toString(callSig1);
 
-    address[] memory explicitSigners = new address[](0);
-    address[] memory implicitSigners = new address[](1);
-    implicitSigners[0] = sessionWallet.addr;
+    address[] memory explicitSigners = new address[](1);
+    explicitSigners[0] = sessionWallet.addr;
+    address[] memory implicitSigners = new address[](0);
     bytes memory encodedSig =
       PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, explicitSigners, implicitSigners);
 
