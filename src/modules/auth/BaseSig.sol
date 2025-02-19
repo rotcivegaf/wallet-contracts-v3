@@ -22,7 +22,7 @@ library BaseSig {
   uint256 internal constant FLAG_SUBDIGEST = 5;
   uint256 internal constant FLAG_NESTED = 6;
   uint256 internal constant FLAG_SIGNATURE_ETH_SIGN = 7;
-  uint256 internal constant FLAG_SIGNATURE_EIP712 = 8;
+  uint256 internal constant FLAG_SIGNATURE_ANY_ADDRESS_SUBDIGEST = 8;
   uint256 internal constant FLAG_SIGNATURE_SAPIENT = 9;
   uint256 internal constant FLAG_SIGNATURE_SAPIENT_COMPACT = 10;
 
@@ -48,6 +48,12 @@ library BaseSig {
     bytes32 _subdigest
   ) internal pure returns (bytes32) {
     return keccak256(abi.encodePacked("Sequence static digest:\n", _subdigest));
+  }
+
+  function _leafForAnyAddressSubdigest(
+    bytes32 _anyAddressSubdigest
+  ) internal pure returns (bytes32) {
+    return keccak256(abi.encodePacked("Sequence any address subdigest:\n", _anyAddressSubdigest));
   }
 
   function recover(
@@ -400,10 +406,23 @@ library BaseSig {
           continue;
         }
 
-        // Signature EIP712 (0x08)
-        if (flag == FLAG_SIGNATURE_EIP712) {
-          // TODO: Implement EIP712 signature recovery
-          // DELETE? EIP712 hash as subdigest may be enough
+        // Signature Any address subdigest (0x08)
+        // similar to subdigest, but allows for counter-factual payloads
+        if (flag == FLAG_SIGNATURE_ANY_ADDRESS_SUBDIGEST) {
+          // Free bits left unused
+
+          // A hardcoded always accepted digest
+          // it pushes the weight to the maximum
+          bytes32 hardcoded;
+          (hardcoded, rindex) = _signature.readBytes32(rindex);
+          bytes32 anyAddressOpHash = _payload.hashFor(address(0));
+          if (hardcoded == anyAddressOpHash) {
+            weight = type(uint256).max;
+          }
+
+          bytes32 node = _leafForAnyAddressSubdigest(anyAddressOpHash);
+          root = root != bytes32(0) ? LibOptim.fkeccak256(root, node) : node;
+          continue;
         }
 
         // Signature Sapient (0x09)
