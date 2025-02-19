@@ -361,8 +361,8 @@ When the **cumulative** flag is set on a permission rule:
 3. **Follow-up Update:**  
    Because cumulative values persist across multiple calls, a follow-up call to `incrementUsageLimit` is required. This call updates the on-chain storage with the new cumulative total, ensuring that future validations reflect the updated usage.
 
-> [!WARNING] > **Cumulative Usage Requires Follow-up:**  
-> Always ensure that an `incrementUsageLimit` call is made after processing a cumulative permission rule to update the stored cumulative usage. Failure to do so may result in incorrect validations on subsequent calls.
+> [!WARNING]
+> Cumulative Usage Requires Follow-up: Always ensure that an `incrementUsageLimit` call is made after processing a cumulative permission rule to update the stored cumulative usage. Failure to do so may result in incorrect validations on subsequent calls.
 
 ### Example: ERC20.transfer
 
@@ -398,9 +398,8 @@ function transfer(address to, uint256 amount) returns (bool);
 - **Cumulative Flag (optional):**  
   If you want to enforce a cumulative limit (e.g., a daily cap), set the cumulative flag. Each transfer's amount is then added to a cumulative total that must not exceed the threshold, with an `incrementUsageLimit` call required to update the stored value.
 
-> [!INFO] > **ERC20.transfer Example Recap:**  
-> The permission rule extracts the `amount` parameter from call data at offset 36, applies a mask to isolate the full value, and verifies that the value is less than or equal to 100 \* 10^18. Optionally, if the cumulative flag is set, it enforces a cumulative limit across multiple calls.
-> In practice, the permission would also include a rule to check the function selector, ensuring that the call is to the `transfer` function.
+> [!INFO]
+> ERC20.transfer Example Recap: The permission rule extracts the `amount` parameter from call data at offset 36, applies a mask to isolate the full value, and verifies that the value is less than or equal to 100 \* 10^18. Optionally, if the cumulative flag is set, it enforces a cumulative limit across multiple calls. In practice, the permission would also include a rule to check the function selector, ensuring that the call is to the `transfer` function.
 
 ---
 
@@ -445,21 +444,20 @@ The Attestation data obtained during authentication. The `Identity Type` is the 
 
 Several improvements can be made
 
-> [!INFO] > **Configuration Flexibility:**  
-> Introduce versioning or additional flags in the configuration encoding to support new features while preserving backward compatibility. Allow dynamic adjustments without breaking the merkle tree-based image hash structure.
+> [!INFO]
+> Configuration Flexibility: Introduce versioning or additional flags in the configuration encoding to support new features while preserving backward compatibility. Allow dynamic adjustments without breaking the merkle tree-based image hash structure.
 
-> [!INFO] > **Gas Optimization:**  
-> Optimize the recursive encoding/decoding logic for configurations with a large number of permissions or deep branch nesting to reduce gas costs.
+> [!INFO]
+> Gas Optimization: Optimize the recursive encoding/decoding logic for configurations with a large number of permissions or deep branch nesting to reduce gas costs.
 
-> [!INFO] > **Call Signature Optimization:**
-> Optimize the call signature encoding to reduce the size of the calldata.
-> A potential target for optimization is to remove repeated encodings of the same attestation data.
+> [!INFO]
+> Call Signature Optimization: Optimize the call signature encoding to reduce the size of the calldata. A potential target for optimization is to remove repeated encodings of the same attestation data.
 
-> [!INFO] > **Advanced Permission Rules:**  
-> Extend the permission system to support more complex conditional checks or dynamic rule adjustments. Provide improved error messages and diagnostic tools for failed validations.
+> [!INFO]
+> Advanced Permission Rules: Extend the permission system to support more complex conditional checks or dynamic rule adjustments. Provide improved error messages and diagnostic tools for failed validations.
 
-> [!INFO] > **Implicit Session Revocation:**  
-> Implement a mechanism to revoke implicit session signers independently from the global signer. This could be achieved by extending the implicit blacklist to include not only target addresses but also signer addresses, or by maintaining a separate blacklist array specifically for revoking implicit session signers. This feature would allow revocation of access for a compromised signer without necessitating an update to the global signer.
+> [!INFO]
+> Implicit Session Revocation: Implement a mechanism to revoke implicit session signers independently from the global signer. This could be achieved by extending the implicit blacklist to include not only target addresses but also signer addresses, or by maintaining a separate blacklist array specifically for revoking implicit session signers. This feature would allow revocation of access for a compromised signer without necessitating an update to the global signer.
 
 ---
 
