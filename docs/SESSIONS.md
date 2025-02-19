@@ -112,7 +112,7 @@ Parameter Rule Encoding:
  └──────────────────────────────────────────────────────────────┘
 ```
 
-> [!NOTE]
+> [!TIP]
 > A permission with an empty rules array is treated as _open_, granting unrestricted access to the target, subject only to other constraints such as value limits and deadlines.
 
 #### Node (FLAG 0x01)
@@ -147,10 +147,10 @@ The **Size Indicator** specifies the total number of bytes that the branch occup
 - These individual hashes are then combined (e.g., using `LibOptim.fkeccak256`) to produce a single cumulative hash representing the entire branch.
 - This branch hash is then integrated into the parent configuration’s image hash, ensuring that all the nested information contributes to the final cryptographic fingerprint.
 
-> [!INFO]
+> [!TIP]
 > Branch nodes are especially useful for modularizing the configuration structure. They allow logically related nodes to be grouped together, which not only improves organization but also potentially reduces the overall size of the calldata by allowing unused leaves to be rolled up into a single node.
 
-> [!INFO]
+> [!NOTE]
 > The branch size is determined by bits in the additional data portion of the flag byte. Ensure that branch sizes do not exceed the limits imposed by the `uintX` size field.
 
 #### Blacklist (FLAG 0x03)
@@ -196,15 +196,16 @@ The **image hash** serves as a cryptographic fingerprint of the entire configura
    - **Blacklist Node:** Compute a leaf hash by hashing the sorted blacklist addresses.
    - **Global Signer:** Compute a leaf hash using the global signer’s address.
    - **Node (Pre-hashed value):** Use the provided 32-byte node hash directly.
-     > [!INFO]
-     > The node is used as an optimization to hide unused or redundant permissions or branches, reducing the calldata size while still contributing to the complete image hash.
+
+> [!TIP]
+> The node is used as an optimization to hide unused or redundant permissions or branches, reducing the calldata size while still contributing to the complete image hash.
 
 2. **Hash Combination:**
    - Start with an empty image hash.
    - For each node encountered, if an image hash already exists, compute a new hash from the concatenation of the current image hash and the node’s leaf hash.
    - If no image hash exists, the first leaf hash becomes the current image hash.
 
-> [!INFO]
+> [!TIP]
 > The configuration tree can be sparse. Only the nodes that are present (even if not contiguous) are used in deriving the image hash. This design, including the node optimization, ensures that optional or omitted nodes do not affect the computed fingerprint.
 
 ---
@@ -300,7 +301,7 @@ Parameter Rule:
  └────────────────────────────────────────────────────────────┘
 ```
 
-> [!NOTE]
+> [!TIP]
 > A permission with an empty rules array is treated as _open_, granting unrestricted access to the target, subject only to other constraints such as value limits and deadlines.
 
 ---
@@ -345,7 +346,7 @@ For each rule, the validation function performs the following steps:
    - **GREATER_THAN_OR_EQUAL:** The masked value must be greater than or equal to the expected value.
    - **NOT_EQUAL:** The masked value must not equal the expected value.
 
-> [!NOTE]
+> [!TIP]
 > This approach allows validation on any field within the call data regardless of its format or position.
 
 ### The Cumulative Flag
@@ -398,7 +399,7 @@ function transfer(address to, uint256 amount) returns (bool);
 - **Cumulative Flag (optional):**  
   If you want to enforce a cumulative limit (e.g., a daily cap), set the cumulative flag. Each transfer's amount is then added to a cumulative total that must not exceed the threshold, with an `incrementUsageLimit` call required to update the stored value.
 
-> [!INFO]
+> [!NOTE]
 > ERC20.transfer Example Recap: The permission rule extracts the `amount` parameter from call data at offset 36, applies a mask to isolate the full value, and verifies that the value is less than or equal to 100 \* 10^18. Optionally, if the cumulative flag is set, it enforces a cumulative limit across multiple calls. In practice, the permission would also include a rule to check the function selector, ensuring that the call is to the `transfer` function.
 
 ---
@@ -425,7 +426,7 @@ Attestation Encoding:
 
 The Attestation data obtained during authentication. The `Identity Type` is the type of identity that was used to authenticate the user. The `Issuer Hash` is the hash of the issuer. The `Audience Hash` is the hash of the audience. The `Auth Data` is the data obtained during authentication. The `Application Data` can be provided by the dapp.
 
-> [!INFO]
+> [!WARNING]
 > Both `Auth Data` and `Application Data` lengths are encoded using a `uint24`, imposing a maximum size of approximately 16MB per field. Ensure that data lengths are within these limits.
 
 ### Attestation Validation
@@ -444,19 +445,19 @@ The Attestation data obtained during authentication. The `Identity Type` is the 
 
 Several improvements can be made
 
-> [!INFO]
+> [!NOTE]
 > Configuration Flexibility: Introduce versioning or additional flags in the configuration encoding to support new features while preserving backward compatibility. Allow dynamic adjustments without breaking the merkle tree-based image hash structure.
 
-> [!INFO]
+> [!NOTE]
 > Gas Optimization: Optimize the recursive encoding/decoding logic for configurations with a large number of permissions or deep branch nesting to reduce gas costs.
 
-> [!INFO]
+> [!NOTE]
 > Call Signature Optimization: Optimize the call signature encoding to reduce the size of the calldata. A potential target for optimization is to remove repeated encodings of the same attestation data.
 
-> [!INFO]
+> [!NOTE]
 > Advanced Permission Rules: Extend the permission system to support more complex conditional checks or dynamic rule adjustments. Provide improved error messages and diagnostic tools for failed validations.
 
-> [!INFO]
+> [!NOTE]
 > Implicit Session Revocation: Implement a mechanism to revoke implicit session signers independently from the global signer. This could be achieved by extending the implicit blacklist to include not only target addresses but also signer addresses, or by maintaining a separate blacklist array specifically for revoking implicit session signers. This feature would allow revocation of access for a compromised signer without necessitating an update to the global signer.
 
 ---
