@@ -1,207 +1,469 @@
-# **Technical Document: Sequence Session Management**
+# Ecosystem Wallets Smart Sessions Documentation
 
-This document describes how Sequence sessions work, focusing on the permission system and validation modes (implicit vs explicit). It explains the core concepts, permission types, and validation logic.
-
----
-
-## **1. Overview**
-
-Sequence sessions provide a flexible way to delegate specific permissions to session signers. The system supports two distinct validation modes, controlled by the **Session Manager**.
-
-- **Implicit Mode**: Simplified validation using contract-level approval and user defined blacklists
-- **Explicit Mode**: Detailed permission-based validation with configurable limits
+This document provides an in‐depth overview of the smart sessions system in Ecosystem wallets. It explains the encoding of signatures and configurations, details the permissions system, and distinguishes between explicit sessions and implicit sessions.
 
 ---
 
-## **2. Session Manager**
+## Overview
 
-The **Session Manager** is Sapient Signer for the wallet. In the default configuration, this signer has infinite weight and any payload is accepted provided the validations pass.
+Ecosystem wallets smart sessions enable batched call authorization via signed payloads. Two primary session modes are supported:
 
-The Session Manager uses the provided attestation signature to derive a **Global Signer**. This, the explicit session configurations, and the implicit session blacklist are used to generate an image hash for the configuration. The image hash is rolled up to the wallet and validated as part of the derived image hash of the wallet. To use an updated image hash, the wallet's configuration must also be updated.
+- **Explicit Sessions:**  
+  Explicit sessions are part of the wallet's configuration. Their permissions are granted counter factually - derived from signature calldata. These permissions can be added or removed with a configuration update. As the configuration is tied to the wallet's image hash, any change to the wallet (and thus its image hash) immediately affects which explicit session permissions remain valid.
+
+- **Implicit Sessions:**  
+  Implicit sessions are automatically able to sign on behalf of the wallet when they present an attestation that is signed by the wallet's global signer. This mode leverages off-chain attestations and enforces additional constraints (e.g., blacklisting) to protect against misuse.
 
 ---
 
-## **3. Implicit Mode**
+## Signature Encoding
 
-Upon login, the client will generate a session key and provide additional context to the wallet. The wallet will then approve the session and attest to the data provided.
+Signature encoding consists of two main parts:
 
-Permissions to access functions defined under this approach are automatically granted to the session signer. This way, a session signer can non-interactively sign and transmit payloads without calling the wallet. Permissions outside this mode must be granted with explicit approval.
+1. **Session Configuration Encoding**
+2. **Call Signatures Encoding**
 
-To enable implicit permissions, an application's contract must implement the `ISignalsImplicitMode` interface.
+Each part uses a specific layout and bit-level structure to efficiently encode the required data.
+
+---
+
+### 1. Session Configuration Encoding
+
+The session configuration is embedded within the signature as follows:
+
+```
+┌─────────────────────────────────────────────────────┐
+│ uint24 dataSize                                     │
+│ ┌───────────────────────────────────────────────┐   │
+│ │ Session Configuration Bytes (dataSize bytes)  │   │
+│ └───────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────┘
+```
+
+Within these configuration bytes, the data is structured as a series of tagged nodes. Each node begins with a flag byte that indicates the node type and any associated metadata.
+
+#### Flag Byte Structure
+
+```
+ ┌───────────────────────────────┐
+ │  Bits 7..4: FLAG              │  (Identifies the node type)
+ │  Bits 3..0: Additional Data   │  (Depends on the FLAG)
+ └───────────────────────────────┘
+```
+
+The following flags are defined:
+
+- **0x00: Permissions Node**
+- **0x01: Node (Pre-hashed 32-byte value)**
+- **0x02: Branch (Nested encoding)**
+- **0x03: Blacklist**
+- **0x04: Global Signer**
+
+> [!IMPORTANT]
+> There must be exactly **one** Global Signer and **at most one** Blacklist node. Multiple entries will trigger a validation error.
+
+#### Permissions Node (FLAG 0x00)
+
+This node encodes session permissions for a specific signer:
+
+```
+Permissions Node Layout:
+ ┌─────────────────────────────────────────────┐
+ │ Signer (address)                            │
+ │ Value Limit (uint256)                       │
+ │ Deadline (uint256)                          │
+ │ Permissions Array (encoded permissions)     │
+ └─────────────────────────────────────────────┘
+```
+
+##### Permission Object Encoding
+
+Each permission object is structured as follows:
+
+```
+Permission Encoding:
+ ┌─────────────────────────────┐
+ │ Target Address              │
+ │ Rules Count (uint8)         │
+ │ ┌─────────────────────────┐ │
+ │ │ Parameter Rule 1        │ │
+ │ │ Parameter Rule 2        │ │  ... (if any)
+ │ └─────────────────────────┘ │
+ └─────────────────────────────┘
+```
+
+If the **Rules Count** is zero, the permission is considered _open_, allowing any call that targets the specified address without additional parameter restrictions.
+
+##### Parameter Rule Encoding
+
+Each parameter rule enforces conditions on the call data:
+
+```
+Parameter Rule Encoding:
+ ┌──────────────────────────────────────────────────────────────┐
+ │ Operation & Cumulative Flag (1 byte)                         │
+ │   ┌────────────────────────────────────────────────────────┐ │
+ │   │ Bit 7 (0x80): Cumulative flag (1 = cumulative)         │ │
+ │   │ Bits 6..0  (0x7F): Operation (e.g., 0 = EQUAL, etc.)   │ │
+ │   └────────────────────────────────────────────────────────┘ │
+ │ Value (bytes32)                                              │
+ │ Offset (uint256)                                             │
+ │ Mask (bytes32)                                               │
+ └──────────────────────────────────────────────────────────────┘
+```
+
+> [!TIP]
+> A permission with an empty rules array is treated as _open_, granting unrestricted access to the target, subject only to other constraints such as value limits and deadlines.
+
+#### Node (FLAG 0x01)
+
+This node includes a 32-byte pre-hashed value:
+
+```
+Node Layout:
+ ┌─────────────────────────────┐
+ │ Node Hash (bytes32)         │
+ └─────────────────────────────┘
+```
+
+This node is an optimization to reduce the size of the configuration tree in calldata. By using this node, unused permissions or configuration segments can be hidden, while still allowing the complete image hash to be derived.
+
+#### Branch (FLAG 0x02)
+
+Branches allow for the recursive grouping of nested configuration nodes into a single unit. They are used to bundle together multiple nodes - such as several permissions nodes or even other branch nodes - so that the entire collection can be processed as one entity. This design minimizes redundancy and optimizes the calldata size by avoiding repeated encoding of common structures.
+
+```
+Branch Node Layout:
+ ┌─────────────────────────────────────────────┐
+ │ Size Indicator (uintX, determined by flag)  │
+ │ Branch Data (nested configuration bytes)    │
+ └─────────────────────────────────────────────┘
+```
+
+The **Size Indicator** specifies the total number of bytes that the branch occupies. The branch data that follows can include a mix of permissions nodes, pre-hashed nodes, blacklists, and even other branches. When processing a branch:
+
+- The branch data is parsed recursively, with each nested node being processed according to its own flag.
+- The leaf hashes of all nested nodes are computed.
+- These individual hashes are then combined (e.g., using `LibOptim.fkeccak256`) to produce a single cumulative hash representing the entire branch.
+- This branch hash is then integrated into the parent configuration’s image hash, ensuring that all the nested information contributes to the final cryptographic fingerprint.
+
+> [!TIP]
+> Branch nodes are especially useful for modularizing the configuration structure. They allow logically related nodes to be grouped together, which not only improves organization but also potentially reduces the overall size of the calldata by allowing unused leaves to be rolled up into a single node.
+
+> [!NOTE]
+> The branch size is determined by bits in the additional data portion of the flag byte. Ensure that branch sizes do not exceed the limits imposed by the `uintX` size field.
+
+#### Blacklist (FLAG 0x03)
+
+The blacklist node specifies addresses that are disallowed for implicit sessions.
+
+```
+Blacklist Node Layout:
+ ┌──────────────────────────────────────────────┐
+ │ Blacklist Count (uint24, with overflow check)│
+ │ Blacklisted Addresses (sorted array)         │
+ └──────────────────────────────────────────────┘
+```
+
+> [!WARNING]
+> For implicit sessions, the blacklist is mandatory. Absence or incorrect formatting of the blacklist will result in a validation error.
+
+#### Global Signer (FLAG 0x04)
+
+Specifies the global signer used for attestation verification:
+
+```
+Global Signer Layout:
+ ┌─────────────────────────────┐
+ │ Global Signer (address)     │
+ └─────────────────────────────┘
+```
+
+> [!IMPORTANT]
+> The configuration must include exactly one global signer. Duplicate or missing entries trigger an error.
+
+---
+
+### Image Hash Derivation
+
+The **image hash** serves as a cryptographic fingerprint of the entire configuration tree. As each node is processed, its corresponding leaf hash is derived and combined into a cumulative hash using a function such as `LibOptim.fkeccak256`.
+
+**Process Overview:**
+
+1. **Leaf Hash Computation:**
+
+   - **Permissions Node:** Compute a leaf hash from the raw encoded permissions data.
+   - **Blacklist Node:** Compute a leaf hash by hashing the sorted blacklist addresses.
+   - **Global Signer:** Compute a leaf hash using the global signer’s address.
+   - **Node (Pre-hashed value):** Use the provided 32-byte node hash directly.
+
+> [!TIP]
+> The node is used as an optimization to hide unused or redundant permissions or branches, reducing the calldata size while still contributing to the complete image hash.
+
+2. **Hash Combination:**
+   - Start with an empty image hash.
+   - For each node encountered, if an image hash already exists, compute a new hash from the concatenation of the current image hash and the node’s leaf hash.
+   - If no image hash exists, the first leaf hash becomes the current image hash.
+
+> [!TIP]
+> The configuration tree can be sparse. Only the nodes that are present (even if not contiguous) are used in deriving the image hash. This design, including the node optimization, ensures that optional or omitted nodes do not affect the computed fingerprint.
+
+---
+
+### 2. Call Signatures Encoding
+
+Each call in the payload is accompanied by a call signature. The encoding differs slightly for explicit sessions and implicit sessions.
+
+#### Call Signature Structure
+
+```
+Call Signature Layout:
+ ┌─────────────────────────────────────────────────────────────┐
+ │ Flag Byte                                                   │
+ │   ┌────────────────────────────────────────────────────────┐│
+ │   │ Bit 7 (0x80): isImplicit flag                          ││
+ │   │ Bits 6..0 (0x7F): For explicit sessions, encodes       ││
+ │   │               permission index; for implicit, reserved ││
+ │   │               for additional flags                     ││
+ │   └────────────────────────────────────────────────────────┘│
+ │ [If Implicit]                                               │
+ │   ├─ Attestation (encoded as described below)               │
+ │   ├─ Attestation Signature (EIP-2098 compact: see below)    │
+ │ [Both Explicit & Implicit]                                  │
+ │   └─ Session Signature (EIP-2098 compact: see below)        │
+ └─────────────────────────────────────────────────────────────┘
+```
+
+> [!IMPORTANT]
+> The flag byte is critical for distinguishing call types. For implicit sessions, the most significant bit (Bit 7) must be set. For explicit sessions, the lower 7 bits represent the permission index.
+
+#### EIP-2098 Compact Signature Encoding
+
+Both the attestation and session signatures follow the [EIP-2098](https://eip.tools/eip/2098) compact signature format. In this format, the signature is encoded as follows:
+
+```
+EIP-2098 Compact Encoding:
+ ┌─────────────────────────────────────────────────────────────┐
+ │ 256-bit r value                                             │
+ │ 1-bit yParity (encoded into s)                              │
+ │ 255-bit s value                                             │
+ └─────────────────────────────────────────────────────────────┘
+```
+
+This encoding merges the `v` value into the `s` value, reducing the overall signature size while maintaining full signature recovery capability.
+
+---
+
+## Permissions System
+
+The permissions system governs what actions a session signer is allowed to execute within explicit sessions. It is designed to be flexible, allowing validations on any field within the call data through the use of **value**, **offset**, and **mask** parameters.
+
+### Session Permissions (Explicit Sessions)
+
+Defined in the `SessionPermissions` struct, these include:
+
+- **Signer:** Authorized session signer.
+- **Value Limit:** Maximum native token value allowed.
+- **Deadline:** Expiration timestamp (0 indicates no deadline).
+- **Permissions Array:** List of permission objects.
+
+> [!WARNING]
+> If a session's deadline is set and the current block timestamp exceeds it, the session is considered expired and all calls will be rejected.
+
+### Permission Object and Parameter Rules
+
+Each permission object specifies a target contract and a set of rules that define acceptable call parameters.
+
+#### Permission Object Recap
+
+```
+Permission Object:
+ ┌────────────────────────────────┐
+ │ Target Address                 │
+ │ Rules Count (uint8)            │
+ │ Rules (array of ParameterRule) │
+ └────────────────────────────────┘
+```
+
+#### Parameter Rule Recap
+
+```
+Parameter Rule:
+ ┌────────────────────────────────────────────────────────────┐
+ │ Operation & Cumulative Flag (1 byte)                       │
+ │   ┌──────────────────────────────────────────────────────┐ │
+ │   │ Bit 7 (0x80): Cumulative flag (1 = cumulative)       │ │
+ │   │ Bits 6..0 (0x7F): Operation (e.g., 0 = EQUAL, etc.)  │ │
+ │   └──────────────────────────────────────────────────────┘ │
+ │ Value (bytes32)                                            │
+ │ Offset (uint256)                                           │
+ │ Mask (bytes32)                                             │
+ └────────────────────────────────────────────────────────────┘
+```
+
+> [!TIP]
+> A permission with an empty rules array is treated as _open_, granting unrestricted access to the target, subject only to other constraints such as value limits and deadlines.
+
+---
+
+## Detailed Permission Rules and Validation
+
+The permission rules mechanism provides a powerful and flexible method to validate any field within the call data. Here's a detailed look at how the rules work:
+
+### Components of a Permission Rule
+
+- **Value:**  
+  The expected value (stored as a `bytes32`) used for comparison.
+
+- **Offset:**  
+  The byte offset in the call data from which the 32-byte parameter is extracted.
+
+- **Mask:**  
+  A bitmask applied to the extracted data. This isolates the relevant bits, allowing validation even when the field is embedded within a larger data structure.
+
+### Validation Process
+
+For each rule, the validation function performs the following steps:
+
+1. **Extraction:**  
+   Read 32 bytes from the call data starting at the specified offset:
+
+   ```solidity
+   bytes32 extracted_value = call.data.readBytes32(rule.offset);
+   ```
+
+2. **Masking:**  
+   Apply the mask to isolate the target bits:
+
+   ```solidity
+   bytes32 masked_value = extracted_value & rule.mask;
+   ```
+
+3. **Comparison:**  
+   Compare the masked value with the expected value using the defined operation:
+   - **EQUAL:** The masked value must exactly equal the expected value.
+   - **LESS_THAN_OR_EQUAL:** The masked value must be less than or equal to the expected value.
+   - **GREATER_THAN_OR_EQUAL:** The masked value must be greater than or equal to the expected value.
+   - **NOT_EQUAL:** The masked value must not equal the expected value.
+
+> [!TIP]
+> This approach allows validation on any field within the call data regardless of its format or position.
+
+### The Cumulative Flag
+
+When the **cumulative** flag is set on a permission rule:
+
+1. **Cumulative Calculation:**  
+   The value extracted from the current call is added to a previously recorded usage amount (stored in the payload's usage limits or persistent storage).
+
+2. **Threshold Comparison:**  
+   The cumulative total (current value plus previous usage) is compared against the threshold defined by the rule.
+
+3. **Follow-up Update:**  
+   Because cumulative values persist across multiple calls, a follow-up call to `incrementUsageLimit` is required. This call updates the on-chain storage with the new cumulative total, ensuring that future validations reflect the updated usage.
+
+> [!WARNING]
+> Cumulative Usage Requires Follow-up: Always ensure that an `incrementUsageLimit` call is made after processing a cumulative permission rule to update the stored cumulative usage. Failure to do so may result in incorrect validations on subsequent calls.
+
+### Example: ERC20.transfer
+
+Consider an ERC20 token `transfer` function:
 
 ```solidity
-interface ISignalsImplicitMode {
-    function acceptImplicitRequest(
-        address _wallet,
-        Attestation calldata _attestation,
-        bytes32 _redirectUrlHash,
-        Payload.Call calldata _call
-    ) external view returns (bytes32);
-}
+function transfer(address to, uint256 amount) returns (bool);
 ```
 
-This function is called by the Session Manager when a payload is received. The contract must validate the attestation and the call to ensure it is valid for the scope of the session.
+**Call Data Layout:**
 
-At a minimum, it is expected that the application will validate the `_redirectUrlHash` to ensure the request is coming from a trusted source. Particular functions and parameters may be validated by checking the `_call` content.
+- **4 bytes:** Function selector.
+- **32 bytes:** Encoded `to` address.
+- **32 bytes:** Encoded `amount`.
 
-The application may also validate additional data provided in the `_attestation`. This may be app data, such as offchain state.
+**Permission Rule Setup:**
 
-The configuration includes a blacklist of addresses that are not allowed to be called in implicit mode. This is used to prevent the session signer from calling any of these addresses.
+- **Target:**  
+  The ERC20 token contract address.
 
-Calls made via implicit mode are not allowed to transfer value.
+- **Offset:**  
+  `36` bytes (4 bytes for the function selector + 32 bytes for the `to` address) – this is where the `amount` parameter begins.
+
+- **Mask:**  
+  A full mask (`0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF`) to extract the entire 32-byte value.
+
+- **Value:**  
+  `100 * 10^18` (expressed as a `bytes32` value) to represent a maximum transfer amount of 100 tokens (assuming 18 decimals).
+
+- **Operation:**  
+  `LESS_THAN_OR_EQUAL` – ensuring the transfer amount does not exceed the threshold.
+
+- **Cumulative Flag (optional):**  
+  If you want to enforce a cumulative limit (e.g., a daily cap), set the cumulative flag. Each transfer's amount is then added to a cumulative total that must not exceed the threshold, with an `incrementUsageLimit` call required to update the stored value.
+
+> [!NOTE]
+> ERC20.transfer Example Recap: The permission rule extracts the `amount` parameter from call data at offset 36, applies a mask to isolate the full value, and verifies that the value is less than or equal to 100 \* 10^18. Optionally, if the cumulative flag is set, it enforces a cumulative limit across multiple calls. In practice, the permission would also include a rule to check the function selector, ensuring that the call is to the `transfer` function.
 
 ---
 
-## **4. Explicit Mode**
+## Attestation (Implicit Sessions)
 
-Explicit mode provides granular control through specific permissions. These permissions are encoded into the session configuration. In order to use this mode, the wallet must sign a transaction to update the configuration of the wallet to include the sessions with the given permissions. This is done interactively and requires the wallet to be unlocked.
+Implicit sessions use an attestation to verify that the session signer is approved. The attestation is encoded and then validated by the target contract.
 
-Each session signer has a set of encoded permissions defined by rules. Each call in the payload is validated against the permissions of the session signer. The session signer also has an optional deadline outside of which the call is not valid.
+### Attestation Encoding
 
-## **4.1. Rules-Based Permissions**
-
-The permission system uses a flexible rules-based approach where each permission consists of:
-
-1. A target contract address
-2. An array of parameter rules that validate the calldata
-
-Each parameter rule validates as follows:
-
-1. Retrieve a `bytes32` value from the calldata at the specified `offset`
-2. Apply the `mask` to the value
-3. Compare the value to the `value` using the specified `operation`
-4. Optionally track cumulative usage for the rule
-
-The operations available for comparison are:
-
-```solidity
-enum ParameterOperation {
-    EQUAL,
-    NOT_EQUAL,
-    GREATER_THAN_OR_EQUAL,
-    LESS_THAN_OR_EQUAL
-}
+```
+Attestation Encoding:
+ ┌──────────────────────────────────────────────┐
+ │ Approved Signer (address)                    │
+ │ Identity Type (bytes4)                       │
+ │ Issuer Hash (bytes32)                        │
+ │ Audience Hash (bytes32)                      │
+ │ Auth Data Length (uint24)                    │
+ │ Auth Data (variable bytes)                   │
+ │ Application Data Length (uint24)             │
+ │ Application Data (variable bytes)            │
+ └──────────────────────────────────────────────┘
 ```
 
-Using a calldata offset and mask enables validation of any element within the calldata. This includes:
+The Attestation data obtained during authentication. The `Identity Type` is the type of identity that was used to authenticate the user. The `Issuer Hash` is the hash of the issuer. The `Audience Hash` is the hash of the audience. The `Auth Data` is the data obtained during authentication. The `Application Data` can be provided by the dapp.
 
-- Function selectors
-- Parameter values
-- Array lengths
-- Tightly packed values
-- Token amounts
-- Token IDs
+> [!WARNING]
+> Both `Auth Data` and `Application Data` lengths are encoded using a `uint24`, imposing a maximum size of approximately 16MB per field. Ensure that data lengths are within these limits.
 
-### **4.1.1 Cumulative Usage Tracking**
+### Attestation Validation
 
-Rules can be marked as cumulative to track usage of a specific parameter across multiple calls. For these rules:
+- The attestation's **approved signer** must match the session signer.
+- A magic value is generated using a combination of a prefix, the wallet address, the attestation's audience hash, and issuer hash.
+- The attestation signature is validated against the global signer from the configuration.
+- The target contract's `acceptImplicitRequest` function must return the expected magic value; otherwise, the call is rejected.
 
-1. The current value is added to previous usage
-2. The total is compared against the rule's value limit
-3. Usage is tracked per wallet-session-permission combination
-
-When a transaction includes any cumulative rules, it **must** include a call to `incrementUsageLimit` as the last operation in the payload. This requirement ensures atomic updates to usage tracking. Specifically:
-
-1. The last call in the payload must be to the SessionManager contract
-2. It must call the `incrementUsageLimit` function
-3. The call must use `BEHAVIOR_REVERT_ON_ERROR`
-4. The call must include all usage limits from the transaction
-
-For example, if a transaction includes transfers that use cumulative rules, the payload would look like:
-
-```solidity
-calls = [
-    // Transfer operations
-    transferCall1,
-    transferCall2,
-    // Required final call
-    {
-        to: sessionManager,
-        data: incrementUsageLimit(usageLimits),
-        behaviorOnError: BEHAVIOR_REVERT_ON_ERROR
-    }
-]
-```
-
-If this call is missing or incorrect, the transaction will revert.
+> [!WARNING]
+> Implicit sessions require a properly encoded blacklist in the configuration. Calls to a blacklisted address will be rejected, and missing blacklist data will cause validation errors.
 
 ---
 
-## **5. Security Considerations**
+## Future Improvements
 
-In all cases, the **Session Manager** will block uses of delegate calls.
+Several improvements can be made
+
+> [!NOTE]
+> Configuration Flexibility: Introduce versioning or additional flags in the configuration encoding to support new features while preserving backward compatibility. Allow dynamic adjustments without breaking the merkle tree-based image hash structure.
+
+> [!NOTE]
+> Gas Optimization: Optimize the recursive encoding/decoding logic for configurations with a large number of permissions or deep branch nesting to reduce gas costs.
+
+> [!NOTE]
+> Call Signature Optimization: Optimize the call signature encoding to reduce the size of the calldata. A potential target for optimization is to remove repeated encodings of the same attestation data.
+
+> [!NOTE]
+> Advanced Permission Rules: Extend the permission system to support more complex conditional checks or dynamic rule adjustments. Provide improved error messages and diagnostic tools for failed validations.
+
+> [!NOTE]
+> Implicit Session Revocation: Implement a mechanism to revoke implicit session signers independently from the global signer. This could be achieved by extending the implicit blacklist to include not only target addresses but also signer addresses, or by maintaining a separate blacklist array specifically for revoking implicit session signers. This feature would allow revocation of access for a compromised signer without necessitating an update to the global signer.
 
 ---
 
-## **6. Signature Format**
+## Conclusion
 
-The session signature is encoded as a compact byte array containing all necessary components for validation. The components are encoded sequentially as follows:
+The smart sessions system in Ecosystem wallets offers a flexible framework for authorizing batched operations via signed payloads. By leveraging detailed encoding schemes for configuration, permissions, and attestations - and by deriving an image hash that cryptographically fingerprints the configuration tree (even when sparse) - the system supports both explicit sessions and implicit sessions while ensuring robust validation. The detailed permission rules, including the use of **value**, **offset**, and **mask**, provide granular control over call data validation, and the cumulative flag facilitates persistent limits across calls. The outlined future improvements aim to enhance security, efficiency, and usability as the system evolves.
 
-### **6.1 Basic Structure**
-
-1. Session Signature (64 bytes) - Compact ERC-2098 format
-
-   - r (32 bytes): Signature component
-   - sv (32 bytes): Combined s-value and v-parity bit
-
-2. Attestation (variable length)
-
-   - approvedSigner (20 bytes): Address of the approved signer
-   - identityType (4 bytes): Type of identity
-   - issuerHash (32 bytes): Hash of the issuer
-   - audienceHash (32 bytes): Hash of the audience
-   - authData (variable):
-     - length (3 bytes): Length of auth data
-     - data (variable): Authentication data
-   - applicationData (variable):
-     - length (3 bytes): Length of application data
-     - data (variable): Application-specific data
-
-3. Global Signer Signature (64 bytes) - Compact ERC-2098 format
-
-   - r (32 bytes): Signature component
-   - sv (32 bytes): Combined s-value and v-parity bit
-
-4. Encoded Permissions Tree
-
-   - length (3 bytes): Length of encoded permissions data
-   - data (variable): Encoded permissions tree containing:
-     - Flag (4 bits): Indicates node type (0=Permissions, 1=Node, 2=Branch)
-     - Extra (4 bits): Reserved for future use
-     - Node-specific data (variable)
-
-5. Implicit Blacklist
-
-   - length (3 bytes): Number of blacklisted addresses
-   - addresses (20 bytes each): Array of blacklisted addresses
-
-6. Permission Indices
-   - length (3 bytes): Number of permission indices
-   - indices (1 byte each): Array of permission indices per call
-
-### **6.2 Example**
-
-```
-[Session Sig (r,sv)][Attestation][Global Sig (r,sv)][Permissions len][Permissions data][Blacklist len][Blacklist addrs][Indices len][Indices]
-```
-
-### **6.3 Decoding**
-
-The signature is decoded sequentially using pointer arithmetic, advancing the pointer after reading each component. This format allows for efficient reading of components without requiring ABI decoding.
-
-The decoded components are used to:
-
-1. Recover the session signer from the payload signature and verify it matches the attestation's approved signer
-2. Verify the global signer's attestation using the attestation hash
-3. Recover the permissions tree and find the signer's permissions
-4. Set implicit mode if no permissions are found
-
-### **6.4 Permissions Tree Structure**
-
-The permissions tree is encoded as a series of nodes, each starting with a flag byte:
-
-- **Permissions Node (0x0-)**: Contains signer address, value limit, deadline, and permissions array
-- **Hash Node (0x1-)**: Contains a pre-computed hash
-- **Branch Node (0x2-)**: Contains a nested permissions tree
-
-Each node contributes to the final permissions root through sequential hashing.
+This documentation serves as a technical guide for developers integrating and extending the smart sessions framework, providing both detailed encoding breakdowns and practical considerations for deployment and further development.
