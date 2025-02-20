@@ -211,7 +211,7 @@ library PrimitivesRPC {
     address[] memory explicitSigners,
     address[] memory implicitSigners
   ) internal returns (bytes memory) {
-    string memory callSignaturesJson = _toJson(_vm, callSignatures);
+    string memory callSignaturesJson = _toJsonUnwrapped(_vm, callSignatures);
     string memory explicitSignersJson = _toJson(_vm, explicitSigners);
     string memory implicitSignersJson = _toJson(_vm, implicitSigners);
     string memory params = string.concat(
@@ -261,17 +261,6 @@ library PrimitivesRPC {
     return string(rawResponse);
   }
 
-  function sessionExplicitEncodeCallSignature(
-    Vm _vm,
-    string memory signatureInput,
-    uint8 permissionIdx
-  ) internal returns (bytes memory) {
-    string memory params =
-      string.concat('{"signature":"', signatureInput, '","permissionIndex":', _vm.toString(permissionIdx), "}");
-    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_explicit_encodeCallSignature", params);
-    return rawResponse;
-  }
-
   // ----------------------------------------------------------------
   // session implicit
   // ----------------------------------------------------------------
@@ -298,27 +287,6 @@ library PrimitivesRPC {
     );
     bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_implicit_removeBlacklistAddress", params);
     return string(rawResponse);
-  }
-
-  function sessionImplicitEncodeCallSignature(
-    Vm _vm,
-    string memory sessionSignature,
-    string memory globalSignature,
-    string memory attestationJson
-  ) internal returns (bytes memory) {
-    string memory params = string.concat(
-      '{"sessionSignature":"',
-      sessionSignature,
-      '",',
-      '"globalSignature":"',
-      globalSignature,
-      '",',
-      '"attestation":',
-      attestationJson,
-      "}"
-    );
-    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_implicit_encodeCallSignature", params);
-    return rawResponse;
   }
 
   // ----------------------------------------------------------------
@@ -399,6 +367,7 @@ library PrimitivesRPC {
     return string.concat(json, "]");
   }
 
+  // For lists of strings
   function _toJson(Vm, string[] memory _strings) internal pure returns (string memory) {
     if (_strings.length == 0) {
       return "[]";
@@ -408,6 +377,21 @@ library PrimitivesRPC {
       json = string.concat(json, _strings[i], '"');
       if (i < _strings.length - 1) {
         json = string.concat(json, ',"');
+      }
+    }
+    return string.concat(json, "]");
+  }
+
+  // For lists of JSONified strings
+  function _toJsonUnwrapped(Vm, string[] memory _strings) internal pure returns (string memory) {
+    if (_strings.length == 0) {
+      return "[]";
+    }
+    string memory json = "[";
+    for (uint256 i = 0; i < _strings.length; i++) {
+      json = string.concat(json, _strings[i]);
+      if (i < _strings.length - 1) {
+        json = string.concat(json, ",");
       }
     }
     return string.concat(json, "]");
