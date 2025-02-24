@@ -112,6 +112,25 @@ library PrimitivesRPC {
     return (rawResponse);
   }
 
+  function hashForPayload(
+    Vm _vm,
+    address _wallet,
+    uint64 _chainId,
+    Payload.Decoded memory _decoded
+  ) internal returns (bytes32) {
+    string memory params = string.concat(
+      '{"wallet":"',
+      _vm.toString(_wallet),
+      '","chainId":"',
+      _vm.toString(_chainId),
+      '","payload":"',
+      _vm.toString(abi.encode(_decoded)),
+      '"}'
+    );
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "payload_hashFor", params);
+    return abi.decode(rawResponse, (bytes32));
+  }
+
   // ----------------------------------------------------------------
   // config
   // ----------------------------------------------------------------
