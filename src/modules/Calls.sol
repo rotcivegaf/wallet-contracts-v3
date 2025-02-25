@@ -18,7 +18,7 @@ abstract contract Calls is BaseAuth, Nonce {
   error InvalidSignature(Payload.Decoded _payload, bytes _signature);
   error NotEnoughGas(Payload.Decoded _payload, uint256 _index, uint256 _gasLeft);
 
-  function execute(bytes calldata _payload, bytes calldata _signature) external virtual {
+  function execute(bytes calldata _payload, bytes calldata _signature) external payable virtual {
     Payload.Decoded memory decoded = Payload.fromPackedCalls(_payload);
 
     _consumeNonce(decoded.space, decoded.nonce);
@@ -33,7 +33,7 @@ abstract contract Calls is BaseAuth, Nonce {
 
   function selfExecute(
     bytes calldata _payload
-  ) external virtual onlySelf {
+  ) external payable virtual onlySelf {
     Payload.Decoded memory decoded = Payload.fromPackedCalls(_payload);
     bytes32 opHash = Payload.hash(decoded);
     _execute(opHash, decoded);
