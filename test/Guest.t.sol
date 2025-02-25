@@ -37,7 +37,7 @@ contract GuestTest is AdvTest {
     guest = new Guest();
   }
 
-  function test_fallbackZeroPrefix(
+  function test_fallback(
     GuestPayload memory p
   ) external {
     vm.assume(p.calls.length < 5 && p.calls.length > 0);
@@ -51,7 +51,6 @@ contract GuestTest is AdvTest {
     }
 
     bytes memory packed = PrimitivesRPC.toPackedPayload(vm, decoded);
-    bytes memory finalData = abi.encodePacked(bytes1(0x00), packed);
 
     bytes32 opHash = Payload.hashFor(decoded, address(guest));
     for (uint256 i = 0; i < decoded.calls.length; i++) {
@@ -64,7 +63,7 @@ contract GuestTest is AdvTest {
         emit Success(opHash, i);
       }
     }
-    (bool ok,) = address(guest).call(finalData);
+    (bool ok,) = address(guest).call(packed);
     assertTrue(ok);
   }
 

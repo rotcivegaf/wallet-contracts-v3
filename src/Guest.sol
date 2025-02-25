@@ -17,13 +17,10 @@ contract Guest {
   fallback() external {
     bytes calldata calls;
 
-    // Check if the first byte is 0x00
-    // if so, then just use the data as is
-    if (msg.data[0] == 0x00) {
-      calls = msg.data[1:];
-    } else {
-      // Fallback to the `execute` structure
-      // from the `Calls` module
+    // Check if the first byte is 0x1f (same as on the `execute` structure)
+    if (msg.data[0] == 0x1f) {
+      // Interpret the data as if it were a call
+      // to the `execute` function of the `Calls` module
       uint256 callsOffset;
       uint256 callsLength;
       assembly {
@@ -35,6 +32,11 @@ contract Guest {
         callsOffset := calls.offset
         callsLength := calls.length
       }
+    } else {
+      // Fallback to reading the data as a packed payload directly
+      // this should not be a problem since `0x1f` does not make sense
+      // as a global flag for the Guest Module
+      calls = msg.data;
     }
 
     Payload.Decoded memory decoded = Payload.fromPackedCalls(calls);
