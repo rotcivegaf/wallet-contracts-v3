@@ -28,10 +28,10 @@ contract GuestTest is AdvTest {
 
   Guest public guest;
 
-  event Success(bytes32 _opHash, uint256 _index);
-  event Failed(bytes32 _opHash, uint256 _index);
-  event Aborted(bytes32 _opHash, uint256 _index);
-  event Skipped(bytes32 _opHash, uint256 _index);
+  event CallSuccess(bytes32 _opHash, uint256 _index);
+  event CallFailed(bytes32 _opHash, uint256 _index);
+  event CallAborted(bytes32 _opHash, uint256 _index);
+  event CallSkipped(bytes32 _opHash, uint256 _index);
 
   function setUp() external {
     guest = new Guest();
@@ -56,11 +56,11 @@ contract GuestTest is AdvTest {
     for (uint256 i = 0; i < decoded.calls.length; i++) {
       if (decoded.calls[i].onlyFallback) {
         vm.expectEmit(true, true, true, true);
-        emit Skipped(opHash, i);
+        emit CallSkipped(opHash, i);
       } else {
         vm.expectCall(decoded.calls[i].to, decoded.calls[i].data);
         vm.expectEmit(true, true, true, true);
-        emit Success(opHash, i);
+        emit CallSuccess(opHash, i);
       }
     }
     (bool ok,) = address(guest).call(packed);
@@ -84,11 +84,11 @@ contract GuestTest is AdvTest {
     for (uint256 i = 0; i < decoded.calls.length; i++) {
       if (decoded.calls[i].onlyFallback) {
         vm.expectEmit(true, true, true, true);
-        emit Skipped(opHash, i);
+        emit CallSkipped(opHash, i);
       } else {
         vm.expectCall(decoded.calls[i].to, decoded.calls[i].data);
         vm.expectEmit(true, true, true, true);
-        emit Success(opHash, i);
+        emit CallSuccess(opHash, i);
       }
     }
 

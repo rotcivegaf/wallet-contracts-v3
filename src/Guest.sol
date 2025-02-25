@@ -55,7 +55,7 @@ contract Guest {
       // then we can skip the call
       if (call.onlyFallback && !errorFlag) {
         errorFlag = false;
-        emit Calls.Skipped(_opHash, i);
+        emit Calls.CallSkipped(_opHash, i);
         continue;
       }
 
@@ -72,7 +72,7 @@ contract Guest {
       if (!success) {
         if (call.behaviorOnError == Payload.BEHAVIOR_IGNORE_ERROR) {
           errorFlag = true;
-          emit Calls.Failed(_opHash, i);
+          emit Calls.CallFailed(_opHash, i);
           continue;
         }
 
@@ -81,12 +81,12 @@ contract Guest {
         }
 
         if (call.behaviorOnError == Payload.BEHAVIOR_ABORT_ON_ERROR) {
-          emit Calls.Aborted(_opHash, i);
+          emit Calls.CallAborted(_opHash, i);
           break;
         }
       }
 
-      emit Calls.Success(_opHash, i);
+      emit Calls.CallSuccess(_opHash, i);
     }
   }
 
