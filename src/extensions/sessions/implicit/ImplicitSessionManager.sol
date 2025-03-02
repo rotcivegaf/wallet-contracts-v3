@@ -32,6 +32,10 @@ abstract contract ImplicitSessionManager {
     if (call.delegateCall) {
       revert SessionErrors.InvalidDelegateCall();
     }
+    // Check if the signer is blacklisted
+    if (_isAddressBlacklisted(sessionSigner, blacklist)) {
+      revert SessionErrors.BlacklistedAddress(sessionSigner);
+    }
     // Check if the target address is blacklisted
     if (_isAddressBlacklisted(call.to, blacklist)) {
       revert SessionErrors.BlacklistedAddress(call.to);
