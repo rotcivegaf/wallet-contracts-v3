@@ -72,7 +72,10 @@ contract Passkeys is ISapientCompact {
         (_webAuthnAuth.typeIndex, pointer) = LibBytesPointer.readUintX(_signature, pointer, bytesTypeIndex);
 
         (_webAuthnAuth.r, pointer) = LibBytesPointer.readBytes32(_signature, pointer);
-        _webAuthnAuth.s = LibBytes.readBytes32(_signature, pointer);
+        (_webAuthnAuth.s, pointer) = LibBytesPointer.readBytes32(_signature, pointer);
+
+        (_x, pointer) = LibBytesPointer.readBytes32(_signature, pointer);
+        _y = LibBytes.readBytes32(_signature, pointer);
       } else {
         (_webAuthnAuth, _requireUserVerification, _x, _y) =
           abi.decode(_signature[1:], (WebAuthn.WebAuthnAuth, bool, bytes32, bytes32));
