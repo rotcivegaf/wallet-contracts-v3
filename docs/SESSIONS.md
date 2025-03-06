@@ -238,11 +238,13 @@ Call Signature Layout:
 > [!IMPORTANT]
 > The flag byte is critical for distinguishing call types. For implicit sessions, the most significant bit (Bit 7) must be set. For explicit sessions, the lower 7 bits represent the permission index.
 
+The session signature is an ECDSA signature of the call and replay protection information in the payload (nonce, space and chainId).
+
 No attestation data is embedded here for implicit calls; instead, each implicit call references an attestation by index from the Attestation List.
 
 #### EIP-2098 Compact Signature Encoding
 
-The session signature follows the [EIP-2098](https://eip.tools/eip/2098) compact signature format. In this format, the signature is encoded as follows:
+Compact signatures follows the [EIP-2098](https://eip.tools/eip/2098) compact signature format. In this format, the signature is encoded as follows:
 
 ```
 EIP-2098 Compact Encoding:
