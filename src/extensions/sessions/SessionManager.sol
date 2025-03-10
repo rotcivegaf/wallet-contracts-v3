@@ -36,7 +36,6 @@ contract SessionManager is ISapient, ImplicitSessionManager, ExplicitSessionMana
     if (payload.calls.length == 0) {
       revert InvalidCallsLength();
     }
-    //FIXME Valdate noChainId, space, nonce, message, imageHash, digest, parentWallets...
 
     // Decode signature
     SessionSig.DecodedSignature memory sig = SessionSig.recoverSignature(payload, encodedSignature);
@@ -57,8 +56,6 @@ contract SessionManager is ISapient, ImplicitSessionManager, ExplicitSessionMana
       if (call.delegateCall) {
         revert SessionErrors.InvalidDelegateCall();
       }
-
-      //FIXME Validate onlyFallback, behaviorOnError...
 
       // Validate call signature
       SessionSig.CallSignature memory callSignature = sig.callSignatures[i];
