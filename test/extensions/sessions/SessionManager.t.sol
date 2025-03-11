@@ -107,7 +107,7 @@ contract SessionManagerTest is SessionTestBase {
       PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, explicitSigners, implicitSigners);
 
     // --- Validate the Payload Signature ---
-    bytes32 imageHash = sessionManager.isValidSapientSignature(payload, encodedSig);
+    bytes32 imageHash = sessionManager.recoverSapientSignature(payload, encodedSig);
     bytes32 expectedImageHash = PrimitivesRPC.sessionImageHash(vm, topology);
     assertEq(imageHash, expectedImageHash);
   }
@@ -141,7 +141,7 @@ contract SessionManagerTest is SessionTestBase {
       PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, explicitSigners, implicitSigners);
 
     vm.expectRevert(SessionErrors.InvalidDelegateCall.selector);
-    sessionManager.isValidSapientSignature(payload, encodedSig);
+    sessionManager.recoverSapientSignature(payload, encodedSig);
   }
 
   /// @notice Test that a self–call with nonzero value reverts with InvalidSelfCall.
@@ -213,7 +213,7 @@ contract SessionManagerTest is SessionTestBase {
       PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, explicitSigners, implicitSigners);
 
     vm.expectRevert(SessionErrors.InvalidSelfCall.selector);
-    sessionManager.isValidSapientSignature(payload, encodedSig);
+    sessionManager.recoverSapientSignature(payload, encodedSig);
   }
 
   /// @notice Valid implicit session test.
@@ -251,7 +251,7 @@ contract SessionManagerTest is SessionTestBase {
       PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, explicitSigners, implicitSigners);
 
     // Validate the signature.
-    bytes32 imageHash = sessionManager.isValidSapientSignature(payload, encodedSig);
+    bytes32 imageHash = sessionManager.recoverSapientSignature(payload, encodedSig);
     bytes32 expectedImageHash = PrimitivesRPC.sessionImageHash(vm, topology);
     assertEq(imageHash, expectedImageHash);
   }

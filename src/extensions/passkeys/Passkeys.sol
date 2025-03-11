@@ -100,7 +100,7 @@ contract Passkeys is ISapientCompact {
     }
   }
 
-  function isValidSapientSignatureCompact(bytes32 _digest, bytes calldata _signature) external view returns (bytes32) {
+  function recoverSapientSignatureCompact(bytes32 _digest, bytes calldata _signature) external view returns (bytes32) {
     (
       WebAuthn.WebAuthnAuth memory _webAuthnAuth,
       bool _requireUserVerification,

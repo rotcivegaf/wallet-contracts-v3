@@ -25,7 +25,7 @@ contract SessionManager is ISapient, ImplicitSessionManager, ExplicitSessionMana
   error InvalidCallsLength();
 
   /// @inheritdoc ISapient
-  function isValidSapientSignature(
+  function recoverSapientSignature(
     Payload.Decoded calldata payload,
     bytes calldata encodedSignature
   ) external view returns (bytes32) {

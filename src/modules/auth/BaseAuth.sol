@@ -81,7 +81,7 @@ abstract contract BaseAuth is IAuth, ISapient, IERC1271, SelfAuth {
     isValid = _isValidImage(imageHash);
   }
 
-  function isValidSapientSignature(
+  function recoverSapientSignature(
     Payload.Decoded memory _payload,
     bytes calldata _signature
   ) external view returns (bytes32) {
