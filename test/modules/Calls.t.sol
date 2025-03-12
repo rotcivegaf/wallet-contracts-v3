@@ -52,6 +52,29 @@ contract CallsImp is Calls {
 
 }
 
+contract MockDelegatecall {
+
+  event OpHash(bytes32 _opHash);
+  event StartingGas(uint256 _startingGas);
+  event Index(uint256 _index);
+  event NumCalls(uint256 _numCalls);
+  event Space(uint256 _space);
+  event Data(bytes _data);
+
+  fallback() external {
+    (bytes32 opHash, uint256 startingGas, uint256 i, uint256 numCalls, uint256 space, bytes memory data) =
+      abi.decode(msg.data, (bytes32, uint256, uint256, uint256, uint256, bytes));
+
+    emit OpHash(opHash);
+    emit StartingGas(startingGas);
+    emit Index(i);
+    emit NumCalls(numCalls);
+    emit Space(space);
+    emit Data(data);
+  }
+
+}
+
 struct CallsPayload {
   bool noChainId;
   Payload.Call[] calls;
@@ -76,6 +99,8 @@ contract CallsTest is AdvTest {
   event CallSkipped(bytes32 _opHash, uint256 _index);
 
   function test_execute(bytes32 _opHash, CallsPayload memory _payload, bytes calldata _signature) external {
+    vm.assume(_payload.calls.length < 3);
+    address mockDelegatecall = address(new MockDelegatecall());
     Payload.Decoded memory decoded = toDecodedPayload(_payload);
 
     uint256 totalEther;
@@ -88,6 +113,12 @@ contract CallsTest is AdvTest {
       if (!decoded.calls[i].delegateCall && !decoded.calls[i].onlyFallback) {
         totalEther += decoded.calls[i].value;
       }
+
+      if (decoded.calls[i].delegateCall && decoded.calls[i].gasLimit != 0) {
+        decoded.calls[i].gasLimit = bound(decoded.calls[i].gasLimit, 100_000, 1_000_000_000);
+      }
+
+      vm.assume(decoded.calls[i].to != address(calls));
     }
 
     vm.deal(address(calls), totalEther);
@@ -101,11 +132,29 @@ contract CallsTest is AdvTest {
 
     for (uint256 i = 0; i < decoded.calls.length; i++) {
       if (decoded.calls[i].onlyFallback) {
-        vm.expectEmit(true, true, true, true);
+        vm.expectEmit(true, true, true, true, address(calls));
         emit CallSkipped(_opHash, i);
       } else {
         vm.deal(decoded.calls[i].to, 0);
-        vm.expectCall(decoded.calls[i].to, decoded.calls[i].data);
+
+        if (decoded.calls[i].delegateCall) {
+          vm.etch(decoded.calls[i].to, mockDelegatecall.code);
+          vm.expectEmit(true, true, true, true, address(calls));
+          emit MockDelegatecall.OpHash(_opHash);
+          // Can't test gasleft() because memory expansion makes it not so reliable
+          // emit MockDelegatecall.StartingGas(gasleft());
+          vm.expectEmit(true, true, true, true, address(calls));
+          emit MockDelegatecall.Index(i);
+          vm.expectEmit(true, true, true, true, address(calls));
+          emit MockDelegatecall.NumCalls(decoded.calls.length);
+          vm.expectEmit(true, true, true, true, address(calls));
+          emit MockDelegatecall.Space(decoded.space);
+          vm.expectEmit(true, true, true, true, address(calls));
+          emit MockDelegatecall.Data(decoded.calls[i].data);
+        } else {
+          vm.expectCall(decoded.calls[i].to, decoded.calls[i].data);
+        }
+
         emit CallSuccess(_opHash, i);
       }
     }
@@ -138,6 +187,9 @@ contract CallsTest is AdvTest {
   function test_self_execute(
     CallsPayload memory _payload
   ) external {
+    vm.assume(_payload.calls.length < 3);
+    address mockDelegatecall = address(new MockDelegatecall());
+
     Payload.Decoded memory decoded = toDecodedPayload(_payload);
 
     uint256 totalEther;
@@ -147,9 +199,15 @@ contract CallsTest is AdvTest {
       decoded.calls[i].value = bound(decoded.calls[i].value, 0, 100_000_000_000_000 ether);
       decoded.calls[i].gasLimit = bound(decoded.calls[i].gasLimit, 0, 1_000_000_000);
 
+      if (decoded.calls[i].delegateCall && decoded.calls[i].gasLimit != 0) {
+        decoded.calls[i].gasLimit = bound(decoded.calls[i].gasLimit, 100_000, 1_000_000_000);
+      }
+
       if (!decoded.calls[i].delegateCall && !decoded.calls[i].onlyFallback) {
         totalEther += decoded.calls[i].value;
       }
+
+      vm.assume(decoded.calls[i].to != address(calls));
     }
 
     vm.deal(address(calls), totalEther);
@@ -161,13 +219,27 @@ contract CallsTest is AdvTest {
 
     for (uint256 i = 0; i < decoded.calls.length; i++) {
       if (decoded.calls[i].onlyFallback) {
-        vm.expectEmit(true, true, true, true);
+        vm.expectEmit(true, true, true, true, address(calls));
         emit CallSkipped(opHash, i);
       } else {
         vm.deal(decoded.calls[i].to, 0);
-        vm.expectCall(decoded.calls[i].to, decoded.calls[i].data);
-
-        vm.expectEmit(true, true, true, true);
+        if (decoded.calls[i].delegateCall) {
+          vm.etch(decoded.calls[i].to, mockDelegatecall.code);
+          vm.expectEmit(true, true, true, true, address(calls));
+          emit MockDelegatecall.OpHash(opHash);
+          // Can't reliably test gasleft() due to memory expansion changes
+          vm.expectEmit(true, true, true, true, address(calls));
+          emit MockDelegatecall.Index(i);
+          vm.expectEmit(true, true, true, true, address(calls));
+          emit MockDelegatecall.NumCalls(decoded.calls.length);
+          vm.expectEmit(true, true, true, true, address(calls));
+          emit MockDelegatecall.Space(decoded.space);
+          vm.expectEmit(true, true, true, true, address(calls));
+          emit MockDelegatecall.Data(decoded.calls[i].data);
+        } else {
+          vm.expectCall(decoded.calls[i].to, decoded.calls[i].data);
+        }
+        vm.expectEmit(true, true, true, true, address(calls));
         emit CallSuccess(opHash, i);
       }
     }
@@ -177,13 +249,11 @@ contract CallsTest is AdvTest {
 
     assertEq(address(calls).balance, 0);
 
-    // Assert balance of each destination contract
     for (uint256 i = 0; i < decoded.calls.length; i++) {
       if (
         !decoded.calls[i].delegateCall && decoded.calls[i].to.balance != decoded.calls[i].value
           && !decoded.calls[i].onlyFallback
       ) {
-        // We need to do a full recount because maybe the contract is duplicated so multiple transfers are done
         uint256 totalTransferred = 0;
         for (uint256 j = 0; j < decoded.calls.length; j++) {
           if (
