@@ -63,8 +63,11 @@ abstract contract Calls is BaseAuth, Nonce {
 
       bool success;
       if (call.delegateCall) {
-        (success) =
-          LibOptim.delegatecall(call.to, gasLimit == 0 ? gasleft() : gasLimit, abi.encode(_startingGas, call.data));
+        (success) = LibOptim.delegatecall(
+          call.to,
+          gasLimit == 0 ? gasleft() : gasLimit,
+          abi.encode(_opHash, _startingGas, i, numCalls, _decoded.space, call.data)
+        );
       } else {
         (success) = LibOptim.call(call.to, call.value, gasLimit == 0 ? gasleft() : gasLimit, call.data);
       }
