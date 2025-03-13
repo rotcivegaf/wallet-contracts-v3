@@ -7,7 +7,10 @@ import { Payload } from "../../src/modules/Payload.sol";
 import { AdvTest } from "../utils/TestUtils.sol";
 
 import { Payload } from "../../src/modules/Payload.sol";
+
+import { IDelegatedExtension } from "../../src/modules/interfaces/IDelegatedExtension.sol";
 import { PrimitivesRPC } from "../utils/PrimitivesRPC.sol";
+
 import "forge-std/console.sol";
 
 contract CallsImp is Calls {
@@ -52,7 +55,7 @@ contract CallsImp is Calls {
 
 }
 
-contract MockDelegatecall {
+contract MockDelegatecall is IDelegatedExtension {
 
   event OpHash(bytes32 _opHash);
   event StartingGas(uint256 _startingGas);
@@ -61,16 +64,20 @@ contract MockDelegatecall {
   event Space(uint256 _space);
   event Data(bytes _data);
 
-  fallback() external {
-    (bytes32 opHash, uint256 startingGas, uint256 i, uint256 numCalls, uint256 space, bytes memory data) =
-      abi.decode(msg.data, (bytes32, uint256, uint256, uint256, uint256, bytes));
-
-    emit OpHash(opHash);
-    emit StartingGas(startingGas);
-    emit Index(i);
-    emit NumCalls(numCalls);
-    emit Space(space);
-    emit Data(data);
+  function handleSequenceDelegateCall(
+    bytes32 _opHash,
+    uint256 _startingGas,
+    uint256 _index,
+    uint256 _numCalls,
+    uint256 _space,
+    bytes calldata _data
+  ) external {
+    emit OpHash(_opHash);
+    emit StartingGas(_startingGas);
+    emit Index(_index);
+    emit NumCalls(_numCalls);
+    emit Space(_space);
+    emit Data(_data);
   }
 
 }

@@ -6,6 +6,7 @@ import { Nonce } from "./Nonce.sol";
 import { Payload } from "./Payload.sol";
 import { BaseAuth } from "./auth/BaseAuth.sol";
 import { SelfAuth } from "./auth/SelfAuth.sol";
+import { IDelegatedExtension } from "./interfaces/IDelegatedExtension.sol";
 
 abstract contract Calls is BaseAuth, Nonce {
 
@@ -66,7 +67,15 @@ abstract contract Calls is BaseAuth, Nonce {
         (success) = LibOptim.delegatecall(
           call.to,
           gasLimit == 0 ? gasleft() : gasLimit,
-          abi.encode(_opHash, _startingGas, i, numCalls, _decoded.space, call.data)
+          abi.encodeWithSelector(
+            IDelegatedExtension.handleSequenceDelegateCall.selector,
+            _opHash,
+            _startingGas,
+            i,
+            numCalls,
+            _decoded.space,
+            call.data
+          )
         );
       } else {
         (success) = LibOptim.call(call.to, call.value, gasLimit == 0 ? gasleft() : gasLimit, call.data);
