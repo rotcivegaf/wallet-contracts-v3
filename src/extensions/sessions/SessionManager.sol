@@ -95,20 +95,24 @@ contract SessionManager is ISapient, ImplicitSessionManager, ExplicitSessionMana
       }
     }
 
-    // Reduce the size of the sessionUsageLimits array
-    uint256 actualSize;
-    for (actualSize = 0; actualSize < sessionUsageLimits.length; actualSize++) {
-      if (sessionUsageLimits[actualSize].signer == address(0)) {
-        break;
+    {
+      // Reduce the size of the sessionUsageLimits array
+      SessionUsageLimits[] memory actualSessionUsageLimits = new SessionUsageLimits[](sessionUsageLimits.length);
+      uint256 actualSize;
+      for (uint256 i = 0; i < sessionUsageLimits.length; i++) {
+        if (sessionUsageLimits[i].limits.length > 0 || sessionUsageLimits[i].totalValueUsed > 0) {
+          actualSessionUsageLimits[actualSize] = sessionUsageLimits[i];
+          actualSize++;
+        }
       }
-    }
-    assembly {
-      mstore(sessionUsageLimits, actualSize)
-    }
+      assembly {
+        mstore(actualSessionUsageLimits, actualSize)
+      }
 
-    // Bulk validate the updated usage limits
-    Payload.Call calldata lastCall = payload.calls[payload.calls.length - 1];
-    _validateLimitUsageIncrement(lastCall, sessionUsageLimits, wallet);
+      // Bulk validate the updated usage limits
+      Payload.Call calldata lastCall = payload.calls[payload.calls.length - 1];
+      _validateLimitUsageIncrement(lastCall, actualSessionUsageLimits, wallet);
+    }
 
     // Return the image hash
     return sig.imageHash;
