@@ -26,7 +26,6 @@ library BaseSig {
   uint256 internal constant FLAG_SIGNATURE_SAPIENT = 9;
   uint256 internal constant FLAG_SIGNATURE_SAPIENT_COMPACT = 10;
 
-  error LowWeightSignature(bytes _signature, uint256 _threshold, uint256 _weight);
   error LowWeightChainedSignature(bytes _signature, uint256 _threshold, uint256 _weight);
   error InvalidNestedSignature(Payload.Decoded _payload, bytes32 _subdigest, address _signer, bytes _signature);
   error WrongChainedCheckpointOrder(uint256 _nextCheckpoint, uint256 _checkpoint);
@@ -121,11 +120,6 @@ library BaseSig {
     // Recover the tree
     opHash = _payload.hash();
     (weight, imageHash) = recoverBranch(_payload, opHash, _signature[rindex:]);
-
-    // Validate the weight
-    if (weight < threshold) {
-      revert LowWeightSignature(_signature, threshold, weight);
-    }
 
     imageHash = LibOptim.fkeccak256(imageHash, bytes32(threshold));
     imageHash = LibOptim.fkeccak256(imageHash, bytes32(checkpoint));

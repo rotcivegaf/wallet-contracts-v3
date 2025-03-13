@@ -8,7 +8,6 @@ import { Stage2Module } from "../src/Stage2Module.sol";
 import { Payload } from "../src/modules/Payload.sol";
 
 import { BaseAuth } from "../src/modules/auth/BaseAuth.sol";
-import { BaseSig } from "../src/modules/auth/BaseSig.sol";
 import { PrimitivesRPC } from "./utils/PrimitivesRPC.sol";
 import { AdvTest } from "./utils/TestUtils.sol";
 
@@ -52,8 +51,8 @@ contract TestStage1Module is AdvTest {
     // Create a signature with only nodes
     bytes memory signature = PrimitivesRPC.toEncodedSignature(vm, config, "", !_noChainId);
 
-    // Call isValidSignature and expect it to revert
-    vm.expectRevert(abi.encodeWithSelector(BaseSig.LowWeightSignature.selector, signature, _threshold, 0));
+    // Call isValidSignature and expect it to fail
+    vm.expectRevert(abi.encodeWithSelector(BaseAuth.InvalidSignatureWeight.selector, _threshold, 0));
     Stage1Module(wallet).isValidSignature(_digest, signature);
   }
 
