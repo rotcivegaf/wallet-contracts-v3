@@ -73,6 +73,7 @@ contract PayloadTest is AdvTest {
     _payload.message = _message;
     bytes32 contractHash = Payload.hashFor(_payload, address(this));
     bytes32 payloadHash = PrimitivesRPC.hashForPayload(vm, address(this), uint64(block.chainid), _payload);
+    assertEq(contractHash, payloadHash);
   }
 
   function test_hashFor_kindConfigUpdate(
@@ -83,6 +84,7 @@ contract PayloadTest is AdvTest {
     _payload.imageHash = _imageHash;
     bytes32 contractHash = Payload.hashFor(_payload, address(this));
     bytes32 payloadHash = PrimitivesRPC.hashForPayload(vm, address(this), uint64(block.chainid), _payload);
+    assertEq(contractHash, payloadHash);
   }
 
   function test_hashFor_kindTransactions(
@@ -123,6 +125,7 @@ contract PayloadTest is AdvTest {
 
     bytes32 contractHash = Payload.hashFor(_payload, address(this));
     bytes32 payloadHash = PrimitivesRPC.hashForPayload(vm, address(this), uint64(block.chainid), _payload);
+    assertEq(contractHash, payloadHash);
   }
 
   function test_hashFor_kindTransactions(Payload.Call[] memory _calls, uint256 _space, uint256 _nonce) external {
@@ -137,15 +140,7 @@ contract PayloadTest is AdvTest {
 
     bytes32 contractHash = Payload.hashFor(_payload, address(this));
     bytes32 payloadHash = PrimitivesRPC.hashForPayload(vm, address(this), uint64(block.chainid), _payload);
-  }
-
-  function test_hashFor_payload(
-    Payload.Decoded memory _payload
-  ) external {
-    boundToLegalPayload(_payload);
-
-    bytes32 contractHash = Payload.hashFor(_payload, address(this));
-    bytes32 payloadHash = PrimitivesRPC.hashForPayload(vm, address(this), uint64(block.chainid), _payload);
+    assertEq(contractHash, payloadHash);
   }
 
 }
