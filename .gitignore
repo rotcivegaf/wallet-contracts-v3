@@ -56,3 +56,7 @@ gas-report.txt
 .notes/
 .todo/
 flat
+
+# Coverage
+lcov.info
+/report
