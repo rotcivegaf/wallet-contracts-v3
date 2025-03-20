@@ -98,6 +98,10 @@ contract PayloadTest is AdvTest {
     uint256 _space,
     uint256 _nonce
   ) external {
+    // Convert nonce into legal range
+    _nonce = bound(_nonce, 0, type(uint56).max);
+    _space = bound(_space, 0, type(uint160).max);
+
     Payload.Decoded memory _payload;
     _payload.kind = Payload.KIND_TRANSACTIONS;
     _payload.calls = new Payload.Call[](2);
@@ -129,6 +133,10 @@ contract PayloadTest is AdvTest {
   }
 
   function test_hashFor_kindTransactions(Payload.Call[] memory _calls, uint256 _space, uint256 _nonce) external {
+    // Convert nonce into legal range
+    _nonce = bound(_nonce, 0, type(uint56).max);
+    _space = bound(_space, 0, type(uint160).max);
+
     Payload.Decoded memory _payload;
     _payload.kind = Payload.KIND_TRANSACTIONS;
     _payload.calls = _calls;
