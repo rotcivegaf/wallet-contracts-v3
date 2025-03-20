@@ -2,9 +2,11 @@
 pragma solidity ^0.8.27;
 
 import { Vm } from "forge-std/Test.sol";
+import { console } from "forge-std/console.sol";
 import { SessionTestBase } from "test/extensions/sessions/SessionTestBase.sol";
 import { PrimitivesRPC } from "test/utils/PrimitivesRPC.sol";
 
+import { SessionErrors } from "src/extensions/sessions/SessionErrors.sol";
 import { SessionSig } from "src/extensions/sessions/SessionSig.sol";
 import { SessionPermissions } from "src/extensions/sessions/explicit/IExplicitSessionManager.sol";
 import { ParameterOperation, ParameterRule, Permission } from "src/extensions/sessions/explicit/Permission.sol";
@@ -43,11 +45,6 @@ contract SessionSigTest is SessionTestBase {
     identityWallet = vm.createWallet("identity");
   }
 
-  // -------------------------------------------------------------------------
-  // TESTS
-  // -------------------------------------------------------------------------
-
-  /// @notice Tests the case for an explicit call signature.
   function testSingleExplicitSignature() public {
     Payload.Decoded memory payload = _buildPayload(1);
     {
@@ -246,7 +243,6 @@ contract SessionSigTest is SessionTestBase {
     }
   }
 
-  /// @notice Tests the case for multiple explicit call signatures with different signers.
   function testMultipleExplicitSignatures() public {
     // Create a second session wallet
     Vm.Wallet memory sessionWallet2 = vm.createWallet("session2");
@@ -347,6 +343,193 @@ contract SessionSigTest is SessionTestBase {
       bytes32 imageHash = PrimitivesRPC.sessionImageHash(vm, topology);
       assertEq(sig.imageHash, imageHash, "Image hash");
     }
+  }
+
+  function testRecover_invalidIdentitySigner_unset() public {
+    // Create a topology with an invalid identity signer
+    string memory topology = PrimitivesRPC.sessionEmpty(vm, address(0));
+    Payload.Decoded memory payload = _buildPayload(1);
+    payload.calls[0] = Payload.Call({
+      to: address(0xBEEF),
+      value: 123,
+      data: "test",
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    // Create a call signature
+    bytes memory encoded =
+      PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, new string[](0), new address[](0), new address[](0));
+
+    // Recover the signature
+    vm.expectRevert(SessionErrors.InvalidIdentitySigner.selector);
+    harness.recover(payload, encoded);
+  }
+
+  function testRecover_invalidIdentitySigner_noMatchAttestationSigner(
+    Attestation memory attestation
+  ) public {
+    attestation.approvedSigner = sessionWallet.addr;
+    attestation.authData.redirectUrl = "https://example.com"; // Normalise for safe JSONify
+
+    // Create a topology with an invalid identity signer
+    string memory topology = PrimitivesRPC.sessionEmpty(vm, identityWallet.addr);
+    Payload.Decoded memory payload = _buildPayload(1);
+    payload.calls[0] = Payload.Call({
+      to: address(0xBEEF),
+      value: 123,
+      data: "test",
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    Vm.Wallet memory attestationWallet = vm.createWallet("attestation");
+
+    // Sign the payload.
+    string memory callSignature =
+      _createImplicitCallSignature(payload, 0, sessionWallet, attestationWallet, attestation);
+
+    // Create a call signature
+    string[] memory callSignatures = new string[](1);
+    callSignatures[0] = callSignature;
+    address[] memory implicitSigners = new address[](1);
+    implicitSigners[0] = sessionWallet.addr;
+    bytes memory encoded =
+      PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, new address[](0), implicitSigners);
+
+    // Recover the signature
+    vm.expectRevert(SessionErrors.InvalidIdentitySigner.selector);
+    harness.recover(payload, encoded);
+  }
+
+  function testRecover_invalidIdentitySigner_noSignersEncoded(
+    Attestation memory attestation
+  ) public {
+    attestation.approvedSigner = sessionWallet.addr;
+    attestation.authData.redirectUrl = "https://example.com"; // Normalise for safe JSONify
+
+    // Create a topology with an invalid identity signer
+    string memory topology = PrimitivesRPC.sessionEmpty(vm, address(0));
+    Payload.Decoded memory payload = _buildPayload(1);
+    payload.calls[0] = Payload.Call({
+      to: address(0xBEEF),
+      value: 123,
+      data: "test",
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    Vm.Wallet memory attestationWallet = vm.createWallet("attestation");
+
+    // Sign the payload.
+    string memory callSignature =
+      _createImplicitCallSignature(payload, 0, sessionWallet, attestationWallet, attestation);
+
+    // Create a call signature
+    string[] memory callSignatures = new string[](1);
+    callSignatures[0] = callSignature;
+    bytes memory encoded =
+      PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, new address[](0), new address[](0));
+
+    // Recover the signature
+    vm.expectRevert(SessionErrors.InvalidIdentitySigner.selector);
+    harness.recover(payload, encoded);
+  }
+
+  function testRecover_invalidBlacklist_requiredForImplicitSigner(
+    Attestation memory attestation
+  ) public {
+    attestation.approvedSigner = sessionWallet.addr;
+    attestation.authData.redirectUrl = "https://example.com"; // Normalise for safe JSONify
+
+    string memory topology = PrimitivesRPC.sessionEmpty(vm, identityWallet.addr);
+    Payload.Decoded memory payload = _buildPayload(1);
+    payload.calls[0] = Payload.Call({
+      to: address(0xBEEF),
+      value: 123,
+      data: "test",
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    // Call encodeCallSignatures with empty call signatures to encode the topology
+    bytes memory encodedTopologyWithSize =
+      PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, new string[](0), new address[](0), new address[](0));
+    assertGt(encodedTopologyWithSize.length, 4, "Encoded signature should not be empty");
+
+    // Strip the last byte (attestation count)
+    bytes memory encoded = new bytes(encodedTopologyWithSize.length - 1);
+    for (uint256 i = 0; i < encoded.length; i++) {
+      encoded[i] = encodedTopologyWithSize[i];
+    }
+
+    // Encode the attestation and signature
+    bytes32 attestationHash = attestation.toHash();
+    bytes memory compactSignature = signRSVCompact(attestationHash, identityWallet);
+    encoded = abi.encodePacked(encoded, uint8(1), LibAttestation.toPacked(attestation), compactSignature);
+
+    // We don't bother encoding the call signatures as will fail before then
+
+    // Recover the signature
+    vm.expectRevert(SessionErrors.InvalidBlacklist.selector);
+    harness.recover(payload, encoded);
+  }
+
+  function testRecover_invalidAttestationIndex(Attestation memory attestation, uint256 count, uint256 index) public {
+    attestation.approvedSigner = sessionWallet.addr;
+    attestation.authData.redirectUrl = "https://example.com"; // Normalise for safe JSONify
+    count = bound(count, 1, 10);
+    index = bound(index, count + 1, type(uint8).max / 2); // /2 as top bit used in flag
+
+    string memory topology = PrimitivesRPC.sessionEmpty(vm, identityWallet.addr);
+    Payload.Decoded memory payload = _buildPayload(1);
+    payload.calls[0] = Payload.Call({
+      to: address(0xBEEF),
+      value: 123,
+      data: "test",
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    // Call encodeCallSignatures with empty call signatures to encode the topology
+    address[] memory implicitSigners = new address[](1);
+    implicitSigners[0] = sessionWallet.addr;
+    bytes memory encodedTopologyWithSize =
+      PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, new string[](0), new address[](0), implicitSigners);
+    assertGt(encodedTopologyWithSize.length, 4, "Encoded signature should not be empty");
+
+    // Strip the last byte (attestation count)
+    bytes memory encoded = new bytes(encodedTopologyWithSize.length - 1);
+    for (uint256 i = 0; i < encoded.length; i++) {
+      encoded[i] = encodedTopologyWithSize[i];
+    }
+
+    // Encode the attestations and signatures
+    bytes32 attestationHash = attestation.toHash();
+    bytes memory compactSignature = signRSVCompact(attestationHash, identityWallet);
+    encoded = abi.encodePacked(encoded, uint8(count));
+    for (uint256 i = 0; i < count; i++) {
+      encoded = abi.encodePacked(encoded, LibAttestation.toPacked(attestation), compactSignature);
+    }
+
+    // Encode the call signature with invalid index
+    uint8 implicitFlag = uint8(index | 0x80);
+    encoded = abi.encodePacked(encoded, implicitFlag);
+    // Ignore encoding the signature as will fail before then
+
+    // Recover the signature
+    vm.expectRevert(SessionErrors.InvalidAttestation.selector);
+    harness.recover(payload, encoded);
   }
 
   function testLargeTopology(
