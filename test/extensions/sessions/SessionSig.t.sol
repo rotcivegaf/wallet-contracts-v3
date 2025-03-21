@@ -680,6 +680,18 @@ contract SessionSigTest is SessionTestBase {
     harness.recoverConfiguration(encoded);
   }
 
+  function testConfiguration_invalidNode(
+    uint8 invalidNodeFlag
+  ) public {
+    invalidNodeFlag = uint8(bound(invalidNodeFlag, 0x05, 0x0f));
+
+    bytes memory encoded = abi.encodePacked(invalidNodeFlag << 4);
+
+    // Recover the configuration
+    vm.expectRevert(abi.encodeWithSelector(SessionErrors.InvalidNodeType.selector, invalidNodeFlag));
+    harness.recoverConfiguration(encoded);
+  }
+
   function testLargeTopology(
     address[] memory explicitSigners,
     uint256 signersIncludeCount,
