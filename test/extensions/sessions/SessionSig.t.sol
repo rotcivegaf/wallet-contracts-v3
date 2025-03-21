@@ -535,6 +535,7 @@ contract SessionSigTest is SessionTestBase {
   function testConfiguration_largeBlacklist(
     address[] memory blacklist
   ) public {
+    vm.assume(blacklist.length > 0);
     if (blacklist.length < 0x0f) {
       address[] memory largerBlacklist = new address[](0x0f);
       for (uint256 i = 0; i < largerBlacklist.length; i++) {
