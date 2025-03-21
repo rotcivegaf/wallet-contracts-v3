@@ -532,6 +532,153 @@ contract SessionSigTest is SessionTestBase {
     harness.recover(payload, encoded);
   }
 
+  function testConfiguration_largeBlacklist(
+    address[] memory blacklist
+  ) public {
+    if (blacklist.length < 0x0f) {
+      address[] memory largerBlacklist = new address[](0x0f);
+      for (uint256 i = 0; i < largerBlacklist.length; i++) {
+        largerBlacklist[i] = blacklist[i % blacklist.length];
+      }
+      blacklist = largerBlacklist;
+    } else if (blacklist.length > 0xff) {
+      // Truncate size to max 0xff
+      assembly {
+        mstore(blacklist, 0xff)
+      }
+    }
+
+    // Remove duplicates
+    {
+      address[] memory uniqueBlacklist = new address[](blacklist.length);
+      uint256 uniqueBlacklistIndex = 0;
+      for (uint256 i = 0; i < blacklist.length; i++) {
+        bool found = false;
+        for (uint256 j = 0; j < uniqueBlacklistIndex; j++) {
+          if (blacklist[i] == uniqueBlacklist[j]) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          uniqueBlacklist[uniqueBlacklistIndex++] = blacklist[i];
+        }
+      }
+      blacklist = uniqueBlacklist;
+      assembly {
+        mstore(blacklist, uniqueBlacklistIndex)
+      }
+    }
+
+    // Create a topology
+    string memory topology = PrimitivesRPC.sessionEmpty(vm, identityWallet.addr);
+    for (uint256 i = 0; i < blacklist.length; i++) {
+      topology = PrimitivesRPC.sessionImplicitAddBlacklistAddress(vm, topology, blacklist[i]);
+    }
+
+    // Call encodeCallSignatures with empty call signatures to encode the topology
+    address[] memory implicitSigners = new address[](1);
+    implicitSigners[0] = sessionWallet.addr;
+    bytes memory encoded = PrimitivesRPC.sessionEncodeTopology(vm, topology);
+
+    console.log("blacklist.length", blacklist.length);
+
+    // Recover the configuration
+    (SessionSig.DecodedSignature memory sig, bool hasBlacklist) = harness.recoverConfiguration(encoded);
+    assertEq(sig.implicitBlacklist.length, blacklist.length, "Implicit blacklist length");
+    assertEq(hasBlacklist, true, "Blacklist should be present");
+  }
+
+  function testConfiguration_duplicateBlacklistNodes(
+    address[] memory blacklist
+  ) public {
+    // Reduce size to max 5
+    if (blacklist.length > 5) {
+      assembly {
+        mstore(blacklist, 5)
+      }
+    }
+
+    bytes memory encoded = new bytes(0);
+    for (uint256 i = 0; i < 2; i++) {
+      // Flag is top 4 bits 0x03, lower 4 bits are blacklist count
+      uint8 blacklistFlag = uint8(0x30) | uint8(blacklist.length);
+      encoded = abi.encodePacked(encoded, blacklistFlag);
+      for (uint256 j = 0; j < blacklist.length; j++) {
+        encoded = abi.encodePacked(encoded, blacklist[j]);
+      }
+    }
+
+    // Recover the configuration
+    vm.expectRevert(SessionErrors.InvalidBlacklist.selector);
+    harness.recoverConfiguration(encoded);
+  }
+
+  function testConfiguration_duplicateBlacklistNodes_inBranch(
+    address[] memory blacklist
+  ) public {
+    // Reduce size to max 5
+    if (blacklist.length > 5) {
+      assembly {
+        mstore(blacklist, 5)
+      }
+    }
+
+    bytes memory encoded = new bytes(0);
+    // Blacklist encoding
+    bytes memory blacklistEncoded = new bytes(0);
+    uint8 blacklistFlag = uint8(0x30) | uint8(blacklist.length);
+    blacklistEncoded = abi.encodePacked(blacklistEncoded, blacklistFlag);
+    for (uint256 j = 0; j < blacklist.length; j++) {
+      blacklistEncoded = abi.encodePacked(blacklistEncoded, blacklist[j]);
+    }
+
+    // Branch encoding
+    uint8 branchSize = uint8(blacklistEncoded.length);
+    uint8 branchFlag = uint8(0x21);
+    encoded = abi.encodePacked(encoded, branchFlag, branchSize, blacklistEncoded);
+
+    // Two of these branches
+    encoded = abi.encodePacked(encoded, encoded);
+
+    // Recover the configuration
+    vm.expectRevert(SessionErrors.InvalidBlacklist.selector);
+    harness.recoverConfiguration(encoded);
+  }
+
+  function testConfiguration_duplicateIdentityNodes(address identitySigner1, address identitySigner2) public {
+    vm.assume(identitySigner1 != address(0));
+    vm.assume(identitySigner2 != address(0));
+
+    bytes memory encoded = abi.encodePacked(uint8(0x40), identitySigner1);
+    encoded = abi.encodePacked(encoded, uint8(0x40), identitySigner2);
+
+    // Recover the configuration
+    vm.expectRevert(SessionErrors.InvalidIdentitySigner.selector);
+    harness.recoverConfiguration(encoded);
+  }
+
+  function testConfiguration_duplicateIdentityNodes_inBranch(
+    address identitySigner
+  ) public {
+    vm.assume(identitySigner != address(0));
+
+    // Identity signer encoding
+    bytes memory identityEncoded = abi.encodePacked(uint8(0x40), identitySigner);
+
+    // Branch encoding
+    uint8 branchSize = uint8(identityEncoded.length);
+    uint8 branchFlag = uint8(0x21);
+    bytes memory encoded = abi.encodePacked(branchFlag, branchSize, identityEncoded);
+
+    // Two of these branches
+    encoded = abi.encodePacked(encoded, encoded);
+
+    // Recover the configuration
+    vm.expectRevert(SessionErrors.InvalidIdentitySigner.selector);
+    harness.recoverConfiguration(encoded);
+  }
+
   function testLargeTopology(
     address[] memory explicitSigners,
     uint256 signersIncludeCount,
@@ -588,7 +735,7 @@ contract SessionSigTest is SessionTestBase {
     if (includeImplicitSigner) {
       implicitSigners[0] = sessionWallet.addr;
     }
-    // Call encodeCallSignatures with empty call signatures to encode the topology
+    // Call encodeCallSignatures with empty call signatures to encode the topology (minimised)
     bytes memory encoded =
       PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, new string[](0), explicitSigners, implicitSigners);
     assertGt(encoded.length, 4, "Encoded signature should not be empty");

@@ -207,6 +207,12 @@ library PrimitivesRPC {
     return string(rawResponse);
   }
 
+  function sessionEncodeTopology(Vm _vm, string memory topologyInput) internal returns (bytes memory) {
+    string memory params = string.concat('{"sessionTopology":', topologyInput, "}");
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "session_encodeTopology", params);
+    return rawResponse;
+  }
+
   function sessionEncodeCallSignatures(
     Vm _vm,
     string memory topologyInput,
