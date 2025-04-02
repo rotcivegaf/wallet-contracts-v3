@@ -404,4 +404,32 @@ library PrimitivesRPC {
     return string.concat(json, "]");
   }
 
+  // ----------------------------------------------------------------
+  // recovery
+  // ----------------------------------------------------------------
+
+  function recoveryHashFromLeaves(Vm _vm, string memory leaves) internal returns (bytes32) {
+    string memory params = string.concat('{"leaves":"', leaves, '"}');
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "recovery_hashFromLeaves", params);
+    return abi.decode(rawResponse, (bytes32));
+  }
+
+  function recoveryEncode(Vm _vm, string memory leaves) internal returns (bytes memory) {
+    string memory params = string.concat('{"leaves":"', leaves, '"}');
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "recovery_encode", params);
+    return rawResponse;
+  }
+
+  function recoveryTrim(Vm _vm, string memory leaves, address signer) internal returns (string memory) {
+    string memory params = string.concat('{"leaves":"', leaves, '","signer":"', _vm.toString(signer), '"}');
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "recovery_trim", params);
+    return string(rawResponse);
+  }
+
+  function recoveryHashEncoded(Vm _vm, bytes memory encoded) internal returns (bytes32) {
+    string memory params = string.concat('{"encoded":"', _vm.toString(encoded), '"}');
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "recovery_hashEncoded", params);
+    return abi.decode(rawResponse, (bytes32));
+  }
+
 }
