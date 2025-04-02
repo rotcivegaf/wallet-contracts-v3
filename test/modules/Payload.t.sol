@@ -54,16 +54,17 @@ contract PayloadTest is AdvTest {
     assertEq(abi.encode(input), abi.encode(output));
   }
 
-  function test_hashFor_kindDigest(
-    bytes32 _digest
-  ) external {
-    Payload.Decoded memory _payload;
-    _payload.kind = Payload.KIND_DIGEST;
-    _payload.digest = _digest;
-    bytes32 contractHash = Payload.hashFor(_payload, address(this));
-    bytes32 payloadHash = PrimitivesRPC.hashForPayload(vm, address(this), uint64(block.chainid), _payload);
-    assertEq(contractHash, payloadHash);
-  }
+  // TODO: Re-enable this after the SDK gains support for the digest kind
+  // function test_hashFor_kindDigest(
+  //   bytes32 _digest
+  // ) external {
+  //   Payload.Decoded memory _payload;
+  //   _payload.kind = Payload.KIND_DIGEST;
+  //   _payload.digest = _digest;
+  //   bytes32 contractHash = Payload.hashFor(_payload, address(this));
+  //   bytes32 payloadHash = PrimitivesRPC.hashForPayload(vm, address(this), uint64(block.chainid), _payload);
+  //   assertEq(contractHash, payloadHash);
+  // }
 
   function test_hashFor_kindMessage(
     bytes calldata _message
@@ -74,6 +75,21 @@ contract PayloadTest is AdvTest {
     bytes32 contractHash = Payload.hashFor(_payload, address(this));
     bytes32 payloadHash = PrimitivesRPC.hashForPayload(vm, address(this), uint64(block.chainid), _payload);
     assertEq(contractHash, payloadHash);
+  }
+
+  function test_hashFor_kindMessage_as_digest(
+    bytes calldata _message
+  ) external {
+    bytes32 digest = keccak256(_message);
+    Payload.Decoded memory _payloadDigest;
+    _payloadDigest.kind = Payload.KIND_DIGEST;
+    _payloadDigest.digest = digest;
+    Payload.Decoded memory _payloadMessage;
+    _payloadMessage.kind = Payload.KIND_MESSAGE;
+    _payloadMessage.message = _message;
+    bytes32 contractHashDigest = Payload.hashFor(_payloadDigest, address(this));
+    bytes32 payloadHashMessage = PrimitivesRPC.hashForPayload(vm, address(this), uint64(block.chainid), _payloadMessage);
+    assertEq(contractHashDigest, payloadHashMessage);
   }
 
   function test_hashFor_kindConfigUpdate(
