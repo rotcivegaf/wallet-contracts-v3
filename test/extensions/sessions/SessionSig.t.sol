@@ -2,7 +2,6 @@
 pragma solidity ^0.8.27;
 
 import { Vm } from "forge-std/Test.sol";
-import { console } from "forge-std/console.sol";
 import { SessionTestBase } from "test/extensions/sessions/SessionTestBase.sol";
 import { PrimitivesRPC } from "test/utils/PrimitivesRPC.sol";
 
@@ -581,8 +580,6 @@ contract SessionSigTest is SessionTestBase {
     address[] memory implicitSigners = new address[](1);
     implicitSigners[0] = sessionWallet.addr;
     bytes memory encoded = PrimitivesRPC.sessionEncodeTopology(vm, topology);
-
-    console.log("blacklist.length", blacklist.length);
 
     // Recover the configuration
     (SessionSig.DecodedSignature memory sig, bool hasBlacklist) = harness.recoverConfiguration(encoded);
