@@ -728,4 +728,28 @@ contract BaseSigTest is AdvTest {
     assertEq(imageHash, expectedImageHash);
   }
 
+  function test_recover_invalid_signature_flag(
+    Payload.Decoded memory _payload,
+    uint8 checkpointSize,
+    uint8 thresholdSize,
+    uint8 invalidFlag
+  ) external {
+    boundToLegalPayload(_payload);
+
+    invalidFlag = uint8(bound(invalidFlag, BaseSig.FLAG_SIGNATURE_SAPIENT_COMPACT + 1, 15));
+    checkpointSize = uint8(bound(checkpointSize, 0, 7));
+    thresholdSize = uint8(bound(thresholdSize, 0, 1));
+
+    uint8 signatureFlag = uint8((checkpointSize << 2) | (thresholdSize << 5));
+    uint256 thresholdLen = thresholdSize + 1;
+
+    bytes memory signature = new bytes(1 + checkpointSize + thresholdLen + 1);
+    signature[0] = bytes1(signatureFlag);
+
+    signature[1 + checkpointSize + thresholdLen] = bytes1((invalidFlag << 4));
+
+    vm.expectRevert(abi.encodeWithSelector(BaseSig.InvalidSignatureFlag.selector, invalidFlag));
+    baseSigImp.recoverPub(_payload, signature, false, address(0));
+  }
+
 }

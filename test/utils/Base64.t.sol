@@ -134,6 +134,12 @@ contract Base64Test is Test {
     string memory nonPaddedEncoded = "AQID";
     bytes memory nonPaddedDecoded = Base64.decode(nonPaddedEncoded);
     assertEq(nonPaddedDecoded, nonPaddedData);
+
+    // "AQI" is 3 characters (mod 4 = 3), so it goes down the "non-padded" path in decode
+    string memory nonPadded = "AQI";
+    bytes memory expected = hex"0102"; // This is what "AQI=" would normally decode to
+    decoded = Base64.decode(nonPadded);
+    assertEq(decoded, expected);
   }
 
   // Helper function to remove padding from base64 string
