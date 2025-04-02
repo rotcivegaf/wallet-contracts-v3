@@ -25,8 +25,8 @@ contract FactoryTest is AdvTest {
 
   function test_deployForwardValue(address _mainModule, bytes32 _salt, uint256 _value) external {
     vm.deal(address(this), _value);
-    factory.deploy{ value: _value }(_mainModule, _salt);
-    assertEq(address(factory).balance, _value);
+    address result = factory.deploy{ value: _value }(_mainModule, _salt);
+    assertEq(result.balance, _value);
   }
 
 }

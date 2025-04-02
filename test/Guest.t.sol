@@ -95,4 +95,164 @@ contract GuestTest is AdvTest {
     Calls(address(guest)).execute(packed, signature);
   }
 
+  function test_notEnoughGas(GuestPayload memory p, uint256 callIndex) external {
+    vm.assume(p.calls.length > 0);
+    callIndex = bound(callIndex, 0, p.calls.length - 1);
+
+    Payload.Decoded memory decoded = toDecodedGuestPayload(p);
+    boundToLegalPayload(decoded);
+
+    for (uint256 i = 0; i < decoded.calls.length; i++) {
+      decoded.calls[i].to = boundNoPrecompile(decoded.calls[i].to);
+      decoded.calls[i].value = 0;
+      decoded.calls[i].delegateCall = false;
+
+      if (i == callIndex) {
+        // Only set high gas limit for the specified call
+        uint256 gasLimit = bound(decoded.calls[i].gasLimit, gasleft() + 1, type(uint256).max);
+        decoded.calls[i].gasLimit = gasLimit;
+        decoded.calls[i].onlyFallback = false;
+      } else {
+        // Set normal gas limits for other calls
+        decoded.calls[i].gasLimit = bound(decoded.calls[i].gasLimit, 0, 1_000_000_000);
+      }
+    }
+
+    bytes memory packed = PrimitivesRPC.toPackedPayload(vm, decoded);
+
+    vm.expectRevert();
+    Calls(address(guest)).execute(packed, bytes(""));
+  }
+
+  function test_delegateCallNotAllowed(GuestPayload memory p, uint256 callIndex) external {
+    vm.assume(p.calls.length > 0);
+    callIndex = bound(callIndex, 0, p.calls.length - 1);
+
+    Payload.Decoded memory decoded = toDecodedGuestPayload(p);
+    boundToLegalPayload(decoded);
+
+    for (uint256 i = 0; i < decoded.calls.length; i++) {
+      decoded.calls[i].to = boundNoPrecompile(decoded.calls[i].to);
+      decoded.calls[i].value = 0;
+      decoded.calls[i].gasLimit = bound(decoded.calls[i].gasLimit, 0, 1_000_000_000);
+
+      if (i == callIndex) {
+        // Set delegateCall to true for the specified call
+        decoded.calls[i].delegateCall = true;
+        decoded.calls[i].onlyFallback = false;
+      } else {
+        decoded.calls[i].delegateCall = false;
+      }
+    }
+
+    bytes memory packed = PrimitivesRPC.toPackedPayload(vm, decoded);
+
+    vm.expectRevert(abi.encodeWithSelector(Guest.DelegateCallNotAllowed.selector, callIndex));
+    Calls(address(guest)).execute(packed, bytes(""));
+  }
+
+  function test_callFailsWithIgnoreBehavior(GuestPayload memory p, uint256 callIndex) external {
+    vm.assume(p.calls.length > 0);
+    callIndex = bound(callIndex, 0, p.calls.length - 1);
+
+    Payload.Decoded memory decoded = toDecodedGuestPayload(p);
+    boundToLegalPayload(decoded);
+
+    for (uint256 i = 0; i < decoded.calls.length; i++) {
+      decoded.calls[i].to = boundNoPrecompile(decoded.calls[i].to);
+      decoded.calls[i].value = 0;
+      decoded.calls[i].delegateCall = false;
+      decoded.calls[i].gasLimit = bound(decoded.calls[i].gasLimit, 0, 1_000_000_000);
+
+      if (i == callIndex) {
+        decoded.calls[i].behaviorOnError = Payload.BEHAVIOR_IGNORE_ERROR;
+        decoded.calls[i].onlyFallback = false;
+      }
+    }
+
+    bytes memory packed = PrimitivesRPC.toPackedPayload(vm, decoded);
+    bytes32 opHash = Payload.hashFor(decoded, address(guest));
+
+    // Mock the call to fail with some revert data
+    bytes memory revertData = abi.encodeWithSignature("Error(string)", "Test error");
+    vm.mockCallRevert(decoded.calls[callIndex].to, decoded.calls[callIndex].data, revertData);
+
+    // Expect the failure event
+    vm.expectEmit(true, true, true, true);
+    emit CallFailed(opHash, callIndex, revertData);
+
+    // Expect success events for remaining calls
+    for (uint256 i = callIndex + 1; i < decoded.calls.length; i++) {
+      vm.expectCall(decoded.calls[i].to, decoded.calls[i].data);
+      vm.expectEmit(true, true, true, true);
+      emit CallSucceeded(opHash, i);
+    }
+
+    Calls(address(guest)).execute(packed, bytes(""));
+  }
+
+  function test_callFailsWithRevertBehavior(GuestPayload memory p, uint256 callIndex) external {
+    vm.assume(p.calls.length > 0);
+    callIndex = bound(callIndex, 0, p.calls.length - 1);
+
+    Payload.Decoded memory decoded = toDecodedGuestPayload(p);
+    boundToLegalPayload(decoded);
+
+    for (uint256 i = 0; i < decoded.calls.length; i++) {
+      decoded.calls[i].to = boundNoPrecompile(decoded.calls[i].to);
+      decoded.calls[i].value = 0;
+      decoded.calls[i].delegateCall = false;
+      decoded.calls[i].gasLimit = bound(decoded.calls[i].gasLimit, 0, 1_000_000_000);
+
+      if (i == callIndex) {
+        decoded.calls[i].behaviorOnError = Payload.BEHAVIOR_REVERT_ON_ERROR;
+        decoded.calls[i].onlyFallback = false;
+      }
+    }
+
+    bytes memory packed = PrimitivesRPC.toPackedPayload(vm, decoded);
+
+    // Mock the call to fail with some revert data
+    bytes memory revertData = abi.encodeWithSignature("Error(string)", "Test error");
+    vm.mockCallRevert(decoded.calls[callIndex].to, decoded.calls[callIndex].data, revertData);
+
+    // Expect the revert
+    vm.expectRevert(abi.encodeWithSelector(Calls.Reverted.selector, decoded, callIndex, revertData));
+
+    Calls(address(guest)).execute(packed, bytes(""));
+  }
+
+  function test_callFailsWithAbortBehavior(GuestPayload memory p, uint256 callIndex) external {
+    vm.assume(p.calls.length > 0);
+    callIndex = bound(callIndex, 0, p.calls.length - 1);
+
+    Payload.Decoded memory decoded = toDecodedGuestPayload(p);
+    boundToLegalPayload(decoded);
+
+    for (uint256 i = 0; i < decoded.calls.length; i++) {
+      decoded.calls[i].to = boundNoPrecompile(decoded.calls[i].to);
+      decoded.calls[i].value = 0;
+      decoded.calls[i].delegateCall = false;
+      decoded.calls[i].gasLimit = bound(decoded.calls[i].gasLimit, 0, 1_000_000_000);
+
+      if (i == callIndex) {
+        decoded.calls[i].behaviorOnError = Payload.BEHAVIOR_ABORT_ON_ERROR;
+        decoded.calls[i].onlyFallback = false;
+      }
+    }
+
+    bytes memory packed = PrimitivesRPC.toPackedPayload(vm, decoded);
+    bytes32 opHash = Payload.hashFor(decoded, address(guest));
+
+    // Mock the call to fail with some revert data
+    bytes memory revertData = abi.encodeWithSignature("Error(string)", "Test error");
+    vm.mockCallRevert(decoded.calls[callIndex].to, decoded.calls[callIndex].data, revertData);
+
+    // Expect the abort event
+    vm.expectEmit(true, true, true, true);
+    emit CallAborted(opHash, callIndex, revertData);
+
+    Calls(address(guest)).execute(packed, bytes(""));
+  }
+
 }
