@@ -790,7 +790,6 @@ contract BaseSigTest is AdvTest {
   function test_recover_chained_low_weight_fail(
     test_recover_chained_low_weight_fail_params memory params
   ) external {
-    vm.assume(params.payload.calls.length < 5);
     boundToLegalPayload(params.payload);
     params.weight = bound(params.weight, 0, type(uint8).max);
     params.threshold = bound(params.threshold, params.weight + 1, type(uint16).max);
@@ -893,6 +892,165 @@ contract BaseSigTest is AdvTest {
     vm.expectRevert(
       abi.encodeWithSelector(BaseSig.LowWeightChainedSignature.selector, signatures[1], params.threshold, params.weight)
     );
+    baseSigImp.recoverPub(params.payload, chainedSignature, true, address(0));
+  }
+
+  struct test_recover_chained_wrong_checkpoint_order_fail_params {
+    Payload.Decoded payload;
+    uint256 signer1pk;
+    uint256 signer2pk;
+    uint256 signer3pk;
+    uint256 checkpoint1;
+    uint256 checkpoint2;
+    uint256 checkpoint3;
+  }
+
+  struct test_recover_chained_wrong_checkpoint_order_fail_vars {
+    address signer1addr;
+    address signer2addr;
+    address signer3addr;
+    string config1;
+    string config2;
+    string config3;
+    bytes32 config1Hash;
+    bytes32 config2Hash;
+    bytes32 config3Hash;
+    Payload.Decoded payloadApprove2;
+    Payload.Decoded payloadApprove3;
+    bytes signatureForFinalPayload;
+    bytes signature1to2;
+    bytes signature2to3;
+    uint8 v2;
+    bytes32 r2;
+    bytes32 s2;
+    uint8 v3;
+    bytes32 r3;
+    bytes32 s3;
+    uint8 fv;
+    bytes32 fr;
+    bytes32 fs;
+  }
+
+  function test_recover_chained_wrong_checkpoint_order_fail(
+    test_recover_chained_wrong_checkpoint_order_fail_params memory params
+  ) external {
+    boundToLegalPayload(params.payload);
+
+    params.checkpoint1 = bound(params.checkpoint1, 0, type(uint56).max);
+    params.checkpoint2 = bound(params.checkpoint2, 0, type(uint56).max);
+    params.checkpoint3 = bound(params.checkpoint3, 0, type(uint56).max);
+
+    // Ensure that either checkpoint2 <= checkpoint1 or checkpoint3 <= checkpoint2
+    if (params.checkpoint2 > params.checkpoint1) {
+      params.checkpoint1 = params.checkpoint2;
+    }
+    if (params.checkpoint3 > params.checkpoint2) {
+      params.checkpoint2 = params.checkpoint3;
+    }
+
+    test_recover_chained_wrong_checkpoint_order_fail_vars memory vars;
+
+    params.signer1pk = boundPk(params.signer1pk);
+    params.signer2pk = boundPk(params.signer2pk);
+    params.signer3pk = boundPk(params.signer3pk);
+
+    vars.signer1addr = vm.addr(params.signer1pk);
+    vars.signer2addr = vm.addr(params.signer2pk);
+    vars.signer3addr = vm.addr(params.signer3pk);
+
+    vars.config1 = PrimitivesRPC.newConfig(
+      vm, 1, params.checkpoint1, string(abi.encodePacked("signer:", vm.toString(vars.signer1addr), ":1"))
+    );
+    vars.config2 = PrimitivesRPC.newConfig(
+      vm, 2, params.checkpoint2, string(abi.encodePacked("signer:", vm.toString(vars.signer2addr), ":2"))
+    );
+    vars.config3 = PrimitivesRPC.newConfig(
+      vm, 1, params.checkpoint3, string(abi.encodePacked("signer:", vm.toString(vars.signer3addr), ":3"))
+    );
+
+    vars.payloadApprove2.kind = Payload.KIND_CONFIG_UPDATE;
+    vars.payloadApprove3.kind = Payload.KIND_CONFIG_UPDATE;
+
+    vars.payloadApprove2.imageHash = vars.config2Hash;
+    vars.payloadApprove3.imageHash = vars.config3Hash;
+
+    {
+      (vars.v2, vars.r2, vars.s2) =
+        vm.sign(params.signer1pk, Payload.hashFor(vars.payloadApprove2, address(baseSigImp)));
+      (vars.v3, vars.r3, vars.s3) =
+        vm.sign(params.signer2pk, Payload.hashFor(vars.payloadApprove3, address(baseSigImp)));
+      (vars.fv, vars.fr, vars.fs) = vm.sign(params.signer3pk, Payload.hashFor(params.payload, address(baseSigImp)));
+
+      vars.signatureForFinalPayload = PrimitivesRPC.toEncodedSignature(
+        vm,
+        vars.config3,
+        string(
+          abi.encodePacked(
+            vm.toString(vars.signer3addr),
+            ":hash:",
+            vm.toString(vars.fr),
+            ":",
+            vm.toString(vars.fs),
+            ":",
+            vm.toString(vars.fv)
+          )
+        ),
+        !params.payload.noChainId
+      );
+
+      vars.signature1to2 = PrimitivesRPC.toEncodedSignature(
+        vm,
+        vars.config1,
+        string(
+          abi.encodePacked(
+            "--signature ",
+            vm.toString(vars.signer1addr),
+            ":hash:",
+            vm.toString(vars.r2),
+            ":",
+            vm.toString(vars.s2),
+            ":",
+            vm.toString(vars.v2)
+          )
+        ),
+        true
+      );
+
+      vars.signature2to3 = PrimitivesRPC.toEncodedSignature(
+        vm,
+        vars.config2,
+        string(
+          abi.encodePacked(
+            "--signature ",
+            vm.toString(vars.signer2addr),
+            ":hash:",
+            vm.toString(vars.r3),
+            ":",
+            vm.toString(vars.s3),
+            ":",
+            vm.toString(vars.v3)
+          )
+        ),
+        true
+      );
+    }
+
+    bytes[] memory signatures = new bytes[](3);
+    signatures[0] = vars.signatureForFinalPayload;
+    signatures[1] = vars.signature2to3;
+    signatures[2] = vars.signature1to2;
+
+    bytes memory chainedSignature = PrimitivesRPC.concatSignatures(vm, signatures);
+
+    if (params.checkpoint3 > params.checkpoint2) {
+      vm.expectRevert(
+        abi.encodeWithSelector(BaseSig.WrongChainedCheckpointOrder.selector, params.checkpoint1, params.checkpoint2)
+      );
+    } else {
+      vm.expectRevert(
+        abi.encodeWithSelector(BaseSig.WrongChainedCheckpointOrder.selector, params.checkpoint2, params.checkpoint3)
+      );
+    }
     baseSigImp.recoverPub(params.payload, chainedSignature, true, address(0));
   }
 
