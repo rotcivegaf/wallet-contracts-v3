@@ -855,4 +855,34 @@ contract SessionSigTest is SessionTestBase {
     );
   }
 
+  function testEmptyPermissionsStructSize_direct(address signer, uint256 valueLimit, uint256 deadline) public view {
+    // Create an empty permissions struct
+    SessionPermissions memory sessionPerms = SessionPermissions({
+      signer: signer,
+      valueLimit: valueLimit,
+      deadline: deadline,
+      permissions: new Permission[](0)
+    });
+
+    // Directly encode the permissions struct
+    bytes memory encoded = abi.encodePacked(
+      uint8(SessionSig.FLAG_PERMISSIONS),
+      sessionPerms.signer,
+      sessionPerms.valueLimit,
+      sessionPerms.deadline,
+      uint8(0) // empty permissions array length
+    );
+
+    // Verify the size is the minimum size
+    assertEq(encoded.length, SessionSig.MIN_ENCODED_PERMISSION_SIZE, "Incorrect size for empty permissions struct");
+
+    // Verify we can decode it back
+    (SessionSig.DecodedSignature memory sig,) = harness.recoverConfiguration(encoded);
+    assertEq(sig.sessionPermissions.length, 1, "Should have one permissions struct");
+    assertEq(sig.sessionPermissions[0].signer, signer, "Signer should match");
+    assertEq(sig.sessionPermissions[0].valueLimit, valueLimit, "Value limit should match");
+    assertEq(sig.sessionPermissions[0].deadline, deadline, "Deadline should match");
+    assertEq(sig.sessionPermissions[0].permissions.length, 0, "Should have no permissions");
+  }
+
 }
