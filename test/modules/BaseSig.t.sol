@@ -4,9 +4,9 @@ pragma solidity ^0.8.27;
 import { Payload } from "../../src/modules/Payload.sol";
 import { BaseSig } from "../../src/modules/auth/BaseSig.sol";
 
+import { ICheckpointer, Snapshot } from "../../src/modules/interfaces/ICheckpointer.sol";
 import { ISapient, ISapientCompact } from "../../src/modules/interfaces/ISapient.sol";
 import { PrimitivesRPC } from "../utils/PrimitivesRPC.sol";
-
 import { AdvTest } from "../utils/TestUtils.sol";
 import { Vm } from "forge-std/Test.sol";
 import { console } from "forge-std/console.sol";
@@ -1052,6 +1052,290 @@ contract BaseSigTest is AdvTest {
       );
     }
     baseSigImp.recoverPub(params.payload, chainedSignature, true, address(0));
+  }
+
+  // Checkpointer tests
+
+  struct test_checkpointer_current_snapshot_params {
+    Payload.Decoded payload;
+    address checkpointer;
+    uint56 checkpoint;
+    uint256 signer1pk;
+    uint8 threshold;
+    uint8 weight;
+    bytes checkpointerData;
+  }
+
+  struct test_checkpointer_current_snapshot_vars {
+    address signer1addr;
+    string configJson;
+    bytes32 expectedImageHash;
+    bytes signature;
+    Snapshot snapshot;
+  }
+
+  function test_checkpointer_current_snapshot(
+    test_checkpointer_current_snapshot_params memory params
+  ) external {
+    vm.assume(params.payload.calls.length < 3);
+    test_checkpointer_current_snapshot_vars memory vars;
+    boundToLegalPayload(params.payload);
+
+    params.checkpointer = boundNoPrecompile(params.checkpointer);
+    params.signer1pk = boundPk(params.signer1pk);
+    vars.signer1addr = vm.addr(params.signer1pk);
+
+    params.weight = uint8(bound(params.weight, params.threshold, type(uint8).max));
+
+    vars.configJson = PrimitivesRPC.newConfigWithCheckpointer(
+      vm,
+      params.checkpointer,
+      params.threshold,
+      params.checkpoint,
+      string(abi.encodePacked("signer:", vm.toString(vars.signer1addr), ":", vm.toString(params.weight)))
+    );
+    vars.expectedImageHash = PrimitivesRPC.getImageHash(vm, vars.configJson);
+
+    (uint8 v, bytes32 r, bytes32 s) = vm.sign(params.signer1pk, Payload.hashFor(params.payload, address(baseSigImp)));
+
+    vars.signature = PrimitivesRPC.toEncodedSignatureWithCheckpointerData(
+      vm,
+      vars.configJson,
+      string(
+        abi.encodePacked(
+          vm.toString(vars.signer1addr), ":hash:", vm.toString(r), ":", vm.toString(s), ":", vm.toString(v)
+        )
+      ),
+      !params.payload.noChainId,
+      params.checkpointerData
+    );
+
+    vars.snapshot.imageHash = vars.expectedImageHash;
+    vars.snapshot.checkpoint = params.checkpoint;
+
+    vm.mockCall(
+      params.checkpointer, abi.encodeWithSelector(ICheckpointer.snapshotFor.selector), abi.encode(vars.snapshot)
+    );
+
+    (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint, bytes32 opHash) =
+      baseSigImp.recoverPub(params.payload, vars.signature, false, address(0));
+    assertEq(threshold, params.threshold);
+    assertEq(weight, params.weight);
+    assertEq(imageHash, vars.snapshot.imageHash);
+    assertEq(checkpoint, vars.snapshot.checkpoint);
+    assertEq(opHash, Payload.hashFor(params.payload, address(baseSigImp)));
+  }
+
+  struct test_checkpointer_higher_checkpoint_fail_params {
+    Payload.Decoded payload;
+    address checkpointer;
+    bytes checkpointerData;
+    uint56 checkpointerCheckpoint;
+    uint56 checkpoint;
+    uint256 signer1pk;
+    uint8 threshold;
+    uint8 weight;
+  }
+
+  struct test_checkpointer_higher_checkpoint_fail_vars {
+    address signer1addr;
+    string configJson;
+    bytes32 expectedImageHash;
+    bytes signature;
+    Snapshot snapshot;
+  }
+
+  function test_checkpointer_higher_checkpoint_fail(
+    test_checkpointer_higher_checkpoint_fail_params memory params
+  ) external {
+    boundToLegalPayload(params.payload);
+
+    params.checkpointerCheckpoint = uint56(bound(params.checkpointerCheckpoint, 1, type(uint56).max));
+    params.checkpoint = uint56(bound(params.checkpoint, 0, params.checkpointerCheckpoint - 1));
+
+    params.checkpointer = boundNoPrecompile(params.checkpointer);
+    params.signer1pk = boundPk(params.signer1pk);
+
+    params.weight = uint8(bound(params.weight, params.threshold, type(uint8).max));
+
+    test_checkpointer_higher_checkpoint_fail_vars memory vars;
+
+    vars.configJson = PrimitivesRPC.newConfigWithCheckpointer(
+      vm,
+      params.checkpointer,
+      params.threshold,
+      params.checkpointerCheckpoint,
+      string(abi.encodePacked("signer:", vm.toString(vars.signer1addr), ":", vm.toString(params.weight)))
+    );
+    vars.expectedImageHash = PrimitivesRPC.getImageHash(vm, vars.configJson);
+
+    (uint8 v, bytes32 r, bytes32 s) = vm.sign(params.signer1pk, Payload.hashFor(params.payload, address(baseSigImp)));
+
+    vars.signature = PrimitivesRPC.toEncodedSignatureWithCheckpointerData(
+      vm,
+      vars.configJson,
+      string(
+        abi.encodePacked(
+          vm.toString(vars.signer1addr), ":hash:", vm.toString(r), ":", vm.toString(s), ":", vm.toString(v)
+        )
+      ),
+      !params.payload.noChainId,
+      params.checkpointerData
+    );
+
+    vars.snapshot.imageHash = vars.expectedImageHash;
+    vars.snapshot.checkpoint = params.checkpointerCheckpoint;
+
+    vm.mockCall(
+      params.checkpointer, abi.encodeWithSelector(ICheckpointer.snapshotFor.selector), abi.encode(vars.snapshot)
+    );
+
+    vm.expectRevert(abi.encodeWithSelector(BaseSig.UnusedSnapshot.selector, vars.snapshot));
+    baseSigImp.recoverPub(params.payload, vars.signature, false, address(0));
+  }
+
+  struct test_checkpointer_different_image_hash_fail_params {
+    Payload.Decoded payload;
+    address checkpointer;
+    bytes checkpointerData;
+    uint56 checkpoint;
+    uint256 signer1pk;
+    uint8 threshold;
+    uint8 weight;
+    bytes32 differentImageHash;
+  }
+
+  struct test_checkpointer_different_image_hash_fail_vars {
+    address signer1addr;
+    string configJson;
+    bytes32 expectedImageHash;
+    bytes signature;
+    Snapshot snapshot;
+  }
+
+  function test_checkpointer_different_image_hash_fail(
+    test_checkpointer_different_image_hash_fail_params memory params
+  ) external {
+    vm.assume(params.differentImageHash != bytes32(0));
+
+    boundToLegalPayload(params.payload);
+
+    params.checkpoint = uint56(bound(params.checkpoint, 0, type(uint56).max));
+    params.checkpointer = boundNoPrecompile(params.checkpointer);
+    params.signer1pk = boundPk(params.signer1pk);
+    params.weight = uint8(bound(params.weight, params.threshold, type(uint8).max));
+
+    test_checkpointer_different_image_hash_fail_vars memory vars;
+
+    vars.signer1addr = vm.addr(params.signer1pk);
+    vars.configJson = PrimitivesRPC.newConfigWithCheckpointer(
+      vm,
+      params.checkpointer,
+      params.threshold,
+      params.checkpoint,
+      string(abi.encodePacked("signer:", vm.toString(vars.signer1addr), ":", vm.toString(params.weight)))
+    );
+    vars.expectedImageHash = PrimitivesRPC.getImageHash(vm, vars.configJson);
+
+    // Ensure the different imageHash is actually different from the expected one and not zero
+    vm.assume(params.differentImageHash != vars.expectedImageHash);
+
+    (uint8 v, bytes32 r, bytes32 s) = vm.sign(params.signer1pk, Payload.hashFor(params.payload, address(baseSigImp)));
+
+    vars.signature = PrimitivesRPC.toEncodedSignatureWithCheckpointerData(
+      vm,
+      vars.configJson,
+      string(
+        abi.encodePacked(
+          vm.toString(vars.signer1addr), ":hash:", vm.toString(r), ":", vm.toString(s), ":", vm.toString(v)
+        )
+      ),
+      !params.payload.noChainId,
+      params.checkpointerData
+    );
+
+    // Use the provided different imageHash
+    vars.snapshot.imageHash = params.differentImageHash;
+    vars.snapshot.checkpoint = params.checkpoint;
+
+    vm.mockCall(
+      params.checkpointer, abi.encodeWithSelector(ICheckpointer.snapshotFor.selector), abi.encode(vars.snapshot)
+    );
+
+    vm.expectRevert(abi.encodeWithSelector(BaseSig.UnusedSnapshot.selector, vars.snapshot));
+    baseSigImp.recoverPub(params.payload, vars.signature, false, address(0));
+  }
+
+  struct test_checkpointer_disabled_params {
+    Payload.Decoded payload;
+    address checkpointer;
+    uint56 checkpoint;
+    uint56 snapshotCheckpoint;
+    uint256 signer1pk;
+    uint8 threshold;
+    uint8 weight;
+    bytes checkpointerData;
+  }
+
+  struct test_checkpointer_disabled_vars {
+    address signer1addr;
+    string configJson;
+    bytes32 expectedImageHash;
+    bytes signature;
+    Snapshot snapshot;
+  }
+
+  function test_checkpointer_disabled(
+    test_checkpointer_disabled_params memory params
+  ) external {
+    vm.assume(params.payload.calls.length < 3);
+    test_checkpointer_disabled_vars memory vars;
+    boundToLegalPayload(params.payload);
+
+    params.checkpointer = boundNoPrecompile(params.checkpointer);
+    params.signer1pk = boundPk(params.signer1pk);
+    vars.signer1addr = vm.addr(params.signer1pk);
+
+    params.weight = uint8(bound(params.weight, params.threshold, type(uint8).max));
+
+    vars.configJson = PrimitivesRPC.newConfigWithCheckpointer(
+      vm,
+      params.checkpointer,
+      params.threshold,
+      params.checkpoint,
+      string(abi.encodePacked("signer:", vm.toString(vars.signer1addr), ":", vm.toString(params.weight)))
+    );
+    vars.expectedImageHash = PrimitivesRPC.getImageHash(vm, vars.configJson);
+
+    (uint8 v, bytes32 r, bytes32 s) = vm.sign(params.signer1pk, Payload.hashFor(params.payload, address(baseSigImp)));
+
+    vars.signature = PrimitivesRPC.toEncodedSignatureWithCheckpointerData(
+      vm,
+      vars.configJson,
+      string(
+        abi.encodePacked(
+          vm.toString(vars.signer1addr), ":hash:", vm.toString(r), ":", vm.toString(s), ":", vm.toString(v)
+        )
+      ),
+      !params.payload.noChainId,
+      params.checkpointerData
+    );
+
+    // Set imageHash to 0 to indicate checkpointer is disabled
+    vars.snapshot.imageHash = bytes32(0);
+    vars.snapshot.checkpoint = params.snapshotCheckpoint;
+
+    vm.mockCall(
+      params.checkpointer, abi.encodeWithSelector(ICheckpointer.snapshotFor.selector), abi.encode(vars.snapshot)
+    );
+
+    (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint, bytes32 opHash) =
+      baseSigImp.recoverPub(params.payload, vars.signature, false, address(0));
+    assertEq(threshold, params.threshold);
+    assertEq(weight, params.weight);
+    assertEq(imageHash, vars.expectedImageHash);
+    assertEq(checkpoint, params.checkpoint); // Should use checkpoint from config, not snapshot
+    assertEq(opHash, Payload.hashFor(params.payload, address(baseSigImp)));
   }
 
 }

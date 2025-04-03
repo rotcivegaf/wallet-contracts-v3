@@ -154,6 +154,28 @@ library PrimitivesRPC {
     return string(rawResponse);
   }
 
+  function newConfigWithCheckpointer(
+    Vm _vm,
+    address _checkpointer,
+    uint16 _threshold,
+    uint256 _checkpoint,
+    string memory _elements
+  ) internal returns (string memory) {
+    string memory params = string.concat(
+      '{"threshold":"',
+      _vm.toString(_threshold),
+      '","checkpoint":"',
+      _vm.toString(_checkpoint),
+      '","from":"flat","content":"',
+      _elements,
+      '","checkpointer":"',
+      _vm.toString(_checkpointer),
+      '"}'
+    );
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "config_new", params);
+    return string(rawResponse);
+  }
+
   function toEncodedConfig(Vm _vm, string memory configJson) internal returns (bytes memory) {
     string memory params = string.concat('{"input":', configJson, "}");
     bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "config_encode", params);
@@ -180,6 +202,28 @@ library PrimitivesRPC {
     // If you wanted no chainId, adapt the JSON, e.g. `"chainId":false`.
     string memory params = string.concat(
       '{"input":', configJson, ',"signatures":"', signatures, '","chainId":', _chainId ? "true" : "false", "}"
+    );
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "signature_encode", params);
+    return (rawResponse);
+  }
+
+  function toEncodedSignatureWithCheckpointerData(
+    Vm _vm,
+    string memory configJson,
+    string memory signatures,
+    bool _chainId,
+    bytes memory checkpointerData
+  ) internal returns (bytes memory) {
+    string memory params = string.concat(
+      '{"input":',
+      configJson,
+      ',"signatures":"',
+      signatures,
+      '","chainId":',
+      _chainId ? "true" : "false",
+      ',"checkpointerData":"',
+      _vm.toString(checkpointerData),
+      '"}'
     );
     bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "signature_encode", params);
     return (rawResponse);
