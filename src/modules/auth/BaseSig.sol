@@ -27,7 +27,7 @@ library BaseSig {
   uint256 internal constant FLAG_SIGNATURE_SAPIENT_COMPACT = 10;
 
   error LowWeightChainedSignature(bytes _signature, uint256 _threshold, uint256 _weight);
-  error InvalidNestedSignature(Payload.Decoded _payload, bytes32 _subdigest, address _signer, bytes _signature);
+  error InvalidERC1271Signature(bytes32 _opHash, address _signer, bytes _signature);
   error WrongChainedCheckpointOrder(uint256 _nextCheckpoint, uint256 _checkpoint);
   error UnusedSnapshot(Snapshot _snapshot);
   error InvalidSignatureFlag(uint256 _flag);
@@ -283,7 +283,7 @@ library BaseSig {
 
           // Call the ERC1271 contract to check if the signature is valid
           if (IERC1271(addr).isValidSignature(_opHash, _signature[rindex:nrindex]) != IERC1271_MAGIC_VALUE) {
-            revert InvalidNestedSignature(_payload, _opHash, addr, _signature);
+            revert InvalidERC1271Signature(_opHash, addr, _signature[rindex:nrindex]);
           }
           rindex = nrindex;
           // Add the weight and compute the merkle root

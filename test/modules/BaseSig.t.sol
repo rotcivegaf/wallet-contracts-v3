@@ -226,6 +226,160 @@ contract BaseSigTest is AdvTest {
     assertEq(opHash, Payload.hashFor(params.payload, address(baseSigImp)));
   }
 
+  struct test_recover_one_1271_invalid_signature_fail_params {
+    AddressWeightPair[] prefix;
+    AddressWeightPair[] suffix;
+    Payload.Decoded payload;
+    uint16 threshold;
+    uint56 checkpoint;
+    uint8 weight;
+    address signer;
+    bytes signature;
+    bytes revertFromSigner;
+  }
+
+  function test_recovert_one_1271_invalid_signature_revert_fail(
+    test_recover_one_1271_invalid_signature_fail_params memory params
+  ) external {
+    assumeNotPrecompile2(params.signer);
+    vm.assume(params.prefix.length + params.suffix.length < 600);
+
+    // The signer should not be in the prefix or suffix
+    // or we may end up with more weight than expected
+    for (uint256 i = 0; i < params.prefix.length; i++) {
+      vm.assume(params.prefix[i].addr != params.signer);
+    }
+    for (uint256 i = 0; i < params.suffix.length; i++) {
+      vm.assume(params.suffix[i].addr != params.signer);
+    }
+
+    boundToLegalPayload(params.payload);
+
+    string memory config;
+
+    {
+      string memory ce;
+      for (uint256 i = 0; i < params.prefix.length; i++) {
+        ce = string(
+          abi.encodePacked(
+            ce, "signer:", vm.toString(params.prefix[i].addr), ":", vm.toString(params.prefix[i].weight), " "
+          )
+        );
+      }
+
+      ce = string(abi.encodePacked(ce, "signer:", vm.toString(params.signer), ":", vm.toString(params.weight)));
+
+      for (uint256 i = 0; i < params.suffix.length; i++) {
+        ce = string(
+          abi.encodePacked(
+            ce, " signer:", vm.toString(params.suffix[i].addr), ":", vm.toString(params.suffix[i].weight)
+          )
+        );
+      }
+
+      config = PrimitivesRPC.newConfig(vm, params.threshold, params.checkpoint, ce);
+    }
+
+    bytes memory encodedSignature;
+    {
+      bytes32 payloadHash = Payload.hashFor(params.payload, address(baseSigImp));
+
+      vm.mockCallRevert(
+        address(params.signer),
+        abi.encodeWithSignature("isValidSignature(bytes32,bytes)", payloadHash, params.signature),
+        params.revertFromSigner
+      );
+
+      string memory se =
+        string(abi.encodePacked(vm.toString(params.signer), ":erc1271:", vm.toString(params.signature)));
+
+      encodedSignature = PrimitivesRPC.toEncodedSignature(vm, config, se, !params.payload.noChainId);
+    }
+
+    vm.expectRevert(params.revertFromSigner);
+    baseSigImp.recoverPub(params.payload, encodedSignature, true, address(0));
+  }
+
+  struct test_recover_one_1271_invalid_signature_bad_return_fail_params {
+    AddressWeightPair[] prefix;
+    AddressWeightPair[] suffix;
+    Payload.Decoded payload;
+    uint16 threshold;
+    uint56 checkpoint;
+    uint8 weight;
+    address signer;
+    bytes signature;
+    bytes4 bad4Bytes;
+  }
+
+  function test_recovert_one_1271_invalid_signature_bad_return_fail(
+    test_recover_one_1271_invalid_signature_bad_return_fail_params memory params
+  ) external {
+    assumeNotPrecompile2(params.signer);
+    vm.assume(params.prefix.length + params.suffix.length < 600);
+
+    if (params.bad4Bytes == bytes4(0x20c13b0b)) {
+      params.bad4Bytes = bytes4(0x00000000);
+    }
+
+    // The signer should not be in the prefix or suffix
+    // or we may end up with more weight than expected
+    for (uint256 i = 0; i < params.prefix.length; i++) {
+      vm.assume(params.prefix[i].addr != params.signer);
+    }
+    for (uint256 i = 0; i < params.suffix.length; i++) {
+      vm.assume(params.suffix[i].addr != params.signer);
+    }
+
+    boundToLegalPayload(params.payload);
+
+    string memory config;
+
+    {
+      string memory ce;
+      for (uint256 i = 0; i < params.prefix.length; i++) {
+        ce = string(
+          abi.encodePacked(
+            ce, "signer:", vm.toString(params.prefix[i].addr), ":", vm.toString(params.prefix[i].weight), " "
+          )
+        );
+      }
+
+      ce = string(abi.encodePacked(ce, "signer:", vm.toString(params.signer), ":", vm.toString(params.weight)));
+
+      for (uint256 i = 0; i < params.suffix.length; i++) {
+        ce = string(
+          abi.encodePacked(
+            ce, " signer:", vm.toString(params.suffix[i].addr), ":", vm.toString(params.suffix[i].weight)
+          )
+        );
+      }
+
+      config = PrimitivesRPC.newConfig(vm, params.threshold, params.checkpoint, ce);
+    }
+
+    bytes memory encodedSignature;
+    bytes32 payloadHash = Payload.hashFor(params.payload, address(baseSigImp));
+
+    {
+      vm.mockCall(
+        address(params.signer),
+        abi.encodeWithSignature("isValidSignature(bytes32,bytes)", payloadHash, params.signature),
+        abi.encode(params.bad4Bytes)
+      );
+
+      string memory se =
+        string(abi.encodePacked(vm.toString(params.signer), ":erc1271:", vm.toString(params.signature)));
+
+      encodedSignature = PrimitivesRPC.toEncodedSignature(vm, config, se, !params.payload.noChainId);
+    }
+
+    vm.expectRevert(
+      abi.encodeWithSelector(BaseSig.InvalidERC1271Signature.selector, payloadHash, params.signer, params.signature)
+    );
+    baseSigImp.recoverPub(params.payload, encodedSignature, true, address(0));
+  }
+
   struct test_recover_one_sapient_signer_params {
     AddressWeightPair[] prefix;
     AddressWeightPair[] suffix;
