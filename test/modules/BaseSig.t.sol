@@ -9,7 +9,6 @@ import { ISapient, ISapientCompact } from "../../src/modules/interfaces/ISapient
 import { PrimitivesRPC } from "../utils/PrimitivesRPC.sol";
 import { AdvTest } from "../utils/TestUtils.sol";
 import { Vm } from "forge-std/Test.sol";
-import { console } from "forge-std/console.sol";
 
 contract BaseSigImp {
 
@@ -1335,6 +1334,135 @@ contract BaseSigTest is AdvTest {
     assertEq(weight, params.weight);
     assertEq(imageHash, vars.expectedImageHash);
     assertEq(checkpoint, params.checkpoint); // Should use checkpoint from config, not snapshot
+    assertEq(opHash, Payload.hashFor(params.payload, address(baseSigImp)));
+  }
+
+  struct test_checkpointer_past_with_chain_params {
+    Payload.Decoded payload;
+    address checkpointer;
+    bytes checkpointerData;
+    uint256 signerPk1;
+    uint256 signerPk2;
+    uint56 checkpoint1;
+    uint56 checkpoint2;
+  }
+
+  struct test_checkpointer_past_with_chain_vars {
+    address signer1addr;
+    address signer2addr;
+    string config1Json;
+    string config2Json;
+    bytes32 config1ImageHash;
+    bytes32 config2ImageHash;
+    bytes signature1to2;
+    bytes signature2toPayload;
+    Snapshot snapshot;
+    bytes32 r1;
+    bytes32 r2;
+    bytes32 s1;
+    bytes32 s2;
+    uint8 v1;
+    uint8 v2;
+    Payload.Decoded payloadApprove2;
+    bytes chainedSignature;
+  }
+
+  function test_checkpointer_past_with_chain(
+    test_checkpointer_past_with_chain_params memory params
+  ) external {
+    vm.assume(params.payload.calls.length < 3);
+    boundToLegalPayload(params.payload);
+
+    params.checkpointer = boundNoPrecompile(params.checkpointer);
+    params.signerPk1 = boundPk(params.signerPk1);
+    params.signerPk2 = boundPk(params.signerPk2);
+
+    params.checkpoint1 = uint56(bound(params.checkpoint1, 0, type(uint56).max - 1));
+    params.checkpoint2 = uint56(bound(params.checkpoint2, params.checkpoint1 + 1, type(uint56).max));
+
+    test_checkpointer_past_with_chain_vars memory vars;
+
+    vars.signer1addr = vm.addr(params.signerPk1);
+    vars.signer2addr = vm.addr(params.signerPk2);
+
+    vars.config1Json = PrimitivesRPC.newConfigWithCheckpointer(
+      vm,
+      params.checkpointer,
+      1,
+      params.checkpoint1,
+      string(abi.encodePacked("signer:", vm.toString(vars.signer1addr), ":1"))
+    );
+    vars.config1ImageHash = PrimitivesRPC.getImageHash(vm, vars.config1Json);
+
+    vars.config2Json = PrimitivesRPC.newConfigWithCheckpointer(
+      vm,
+      params.checkpointer,
+      2,
+      params.checkpoint2,
+      string(abi.encodePacked("signer:", vm.toString(vars.signer2addr), ":2"))
+    );
+    vars.config2ImageHash = PrimitivesRPC.getImageHash(vm, vars.config2Json);
+
+    vars.payloadApprove2.kind = Payload.KIND_CONFIG_UPDATE;
+    vars.payloadApprove2.imageHash = vars.config2ImageHash;
+    vars.payloadApprove2.noChainId = true;
+
+    (vars.v1, vars.r1, vars.s1) = vm.sign(params.signerPk1, Payload.hashFor(vars.payloadApprove2, address(baseSigImp)));
+    vars.signature1to2 = PrimitivesRPC.toEncodedSignatureWithCheckpointerData(
+      vm,
+      vars.config1Json,
+      string(
+        abi.encodePacked(
+          vm.toString(vars.signer1addr),
+          ":hash:",
+          vm.toString(vars.r1),
+          ":",
+          vm.toString(vars.s1),
+          ":",
+          vm.toString(vars.v1)
+        )
+      ),
+      false,
+      params.checkpointerData
+    );
+
+    (vars.v2, vars.r2, vars.s2) = vm.sign(params.signerPk2, Payload.hashFor(params.payload, address(baseSigImp)));
+    vars.signature2toPayload = PrimitivesRPC.toEncodedSignatureWithCheckpointerData(
+      vm,
+      vars.config2Json,
+      string(
+        abi.encodePacked(
+          vm.toString(vars.signer2addr),
+          ":hash:",
+          vm.toString(vars.r2),
+          ":",
+          vm.toString(vars.s2),
+          ":",
+          vm.toString(vars.v2)
+        )
+      ),
+      !params.payload.noChainId,
+      params.checkpointerData
+    );
+
+    vars.snapshot.imageHash = vars.config2ImageHash;
+    vars.snapshot.checkpoint = params.checkpoint2;
+
+    vm.mockCall(
+      params.checkpointer, abi.encodeWithSelector(ICheckpointer.snapshotFor.selector), abi.encode(vars.snapshot)
+    );
+
+    bytes[] memory signatures = new bytes[](2);
+    signatures[0] = vars.signature2toPayload;
+    signatures[1] = vars.signature1to2;
+    vars.chainedSignature = PrimitivesRPC.concatSignatures(vm, signatures);
+
+    (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint, bytes32 opHash) =
+      baseSigImp.recoverPub(params.payload, vars.chainedSignature, false, address(0));
+    assertEq(threshold, 1);
+    assertEq(weight, 1);
+    assertEq(imageHash, vars.config1ImageHash);
+    assertEq(checkpoint, params.checkpoint1);
     assertEq(opHash, Payload.hashFor(params.payload, address(baseSigImp)));
   }
 

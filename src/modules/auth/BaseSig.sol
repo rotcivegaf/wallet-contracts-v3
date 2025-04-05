@@ -153,11 +153,15 @@ library BaseSig {
         nrindex = sigSize + rindex;
       }
 
-      address actualCheckpointer = (nrindex == _signature.length) ? _checkpointer : address(0);
-      Payload.Decoded memory currentPayload = (prevCheckpoint == type(uint256).max) ? _payload : linkedPayload;
+      address checkpointer = nrindex == _signature.length ? _checkpointer : address(0);
 
-      (threshold, weight, imageHash, checkpoint,) =
-        recover(currentPayload, _signature[rindex:nrindex], true, actualCheckpointer);
+      if (prevCheckpoint == type(uint256).max) {
+        (threshold, weight, imageHash, checkpoint, opHash) =
+          recover(_payload, _signature[rindex:nrindex], true, checkpointer);
+      } else {
+        (threshold, weight, imageHash, checkpoint,) =
+          recover(linkedPayload, _signature[rindex:nrindex], true, checkpointer);
+      }
 
       if (weight < threshold) {
         revert LowWeightChainedSignature(_signature[rindex:nrindex], threshold, weight);
@@ -181,8 +185,6 @@ library BaseSig {
     if (_snapshot.imageHash != bytes32(0) && checkpoint <= _snapshot.checkpoint) {
       revert UnusedSnapshot(_snapshot);
     }
-
-    opHash = _payload.hash();
   }
 
   function recoverBranch(
