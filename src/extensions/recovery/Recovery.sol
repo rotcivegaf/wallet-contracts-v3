@@ -48,6 +48,10 @@ contract Recovery is ISapientCompact {
   // wallet -> signer -> payloadHash[]
   mapping(address => mapping(address => bytes32[])) public queuedPayloadHashes;
 
+  function totalQueuedPayloads(address _wallet, address _signer) public view returns (uint256) {
+    return queuedPayloadHashes[_wallet][_signer].length;
+  }
+
   function _leafForRecoveryLeaf(
     address _signer,
     uint256 _requiredDeltaTime,
@@ -80,7 +84,7 @@ contract Recovery is ISapientCompact {
 
         // Check if we have a queued payload for this signer
         uint256 queuedAt = timestampForQueuedPayload[_wallet][signer][_payloadHash];
-        if (queuedAt != 0 && queuedAt >= minTimestamp && block.timestamp - queuedAt > requiredDeltaTime) {
+        if (queuedAt != 0 && queuedAt >= minTimestamp && block.timestamp - queuedAt >= requiredDeltaTime) {
           verified = true;
         }
 
@@ -119,6 +123,12 @@ contract Recovery is ISapientCompact {
     }
 
     return (verified, root);
+  }
+
+  function recoveryPayloadHash(address _wallet, Payload.Decoded calldata _payload) public view returns (bytes32) {
+    bytes32 domain = domainSeparator(_payload.noChainId, _wallet);
+    bytes32 structHash = Payload.toEIP712(_payload);
+    return keccak256(abi.encodePacked("\x19\x01", domain, structHash));
   }
 
   function recoverSapientSignatureCompact(
@@ -160,12 +170,10 @@ contract Recovery is ISapientCompact {
     Payload.Decoded calldata _payload,
     bytes calldata _signature
   ) internal view returns (bool) {
-    bytes32 domain = domainSeparator(_payload.noChainId, _wallet);
-    bytes32 structHash = Payload.toEIP712(_payload);
-    bytes32 recoveryPayloadHash = keccak256(abi.encodePacked("\x19\x01", domain, structHash));
+    bytes32 rPayloadHash = recoveryPayloadHash(_wallet, _payload);
 
     if (_signer.code.length != 0) {
-      return IERC1271(_signer).isValidSignature(recoveryPayloadHash, _signature) == IERC1271_MAGIC_VALUE;
+      return IERC1271(_signer).isValidSignature(rPayloadHash, _signature) == IERC1271_MAGIC_VALUE;
     }
 
     (bytes32 r, bytes32 yParityAndS) = abi.decode(_signature, (bytes32, bytes32));
@@ -173,7 +181,7 @@ contract Recovery is ISapientCompact {
     bytes32 s = bytes32(uint256(yParityAndS) & 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);
     uint8 v = uint8(yParity) + 27;
 
-    address addr = ecrecover(recoveryPayloadHash, v, r, s);
+    address addr = ecrecover(rPayloadHash, v, r, s);
     return addr == _signer;
   }
 

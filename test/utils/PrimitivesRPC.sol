@@ -464,10 +464,10 @@ library PrimitivesRPC {
     return rawResponse;
   }
 
-  function recoveryTrim(Vm _vm, string memory leaves, address signer) internal returns (string memory) {
+  function recoveryTrim(Vm _vm, string memory leaves, address signer) internal returns (bytes memory) {
     string memory params = string.concat('{"leaves":"', leaves, '","signer":"', _vm.toString(signer), '"}');
     bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "recovery_trim", params);
-    return string(rawResponse);
+    return rawResponse;
   }
 
   function recoveryHashEncoded(Vm _vm, bytes memory encoded) internal returns (bytes32) {
