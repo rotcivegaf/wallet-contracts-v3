@@ -8,6 +8,8 @@ import { Stage2Module } from "../src/Stage2Module.sol";
 import { Payload } from "../src/modules/Payload.sol";
 
 import { BaseAuth } from "../src/modules/auth/BaseAuth.sol";
+
+import { SelfAuth } from "../src/modules/auth/SelfAuth.sol";
 import { PrimitivesRPC } from "./utils/PrimitivesRPC.sol";
 import { AdvTest } from "./utils/TestUtils.sol";
 
@@ -15,6 +17,8 @@ contract TestStage1Module is AdvTest {
 
   Factory public factory = new Factory();
   Stage1Module public stage1Module = new Stage1Module(address(factory));
+
+  event StaticSignatureSet(bytes32 _hash, address _address, uint96 _timestamp);
 
   function test_fails_on_low_weight(
     uint16 _threshold,
@@ -321,6 +325,169 @@ contract TestStage1Module is AdvTest {
 
     // Check that the wallet received the ether
     assertEq(address(vars.wallet).balance, 1 ether);
+  }
+
+  function test_static_signature_any_address(
+    bytes32 _digest,
+    bytes32 _imageHash,
+    uint256 _timestamp,
+    uint256 _validUntil,
+    address _otherCaller
+  ) external {
+    Payload.Decoded memory payload;
+    payload.kind = Payload.KIND_DIGEST;
+    payload.digest = _digest;
+
+    _timestamp = bound(_timestamp, 0, type(uint64).max);
+    _validUntil = bound(_validUntil, _timestamp + 1, type(uint96).max);
+
+    vm.warp(_timestamp);
+
+    // Create a new wallet using imageHash
+    address payable wallet = payable(factory.deploy(address(stage1Module), _imageHash));
+
+    // Set the static signature
+    vm.prank(wallet);
+    vm.expectEmit(true, true, false, true, wallet);
+    emit StaticSignatureSet(Payload.hashFor(payload, wallet), address(0), uint96(_validUntil));
+    Stage1Module(wallet).setStaticSignature(Payload.hashFor(payload, wallet), address(0), uint96(_validUntil));
+
+    (address addr, uint256 timestamp) = Stage1Module(wallet).getStaticSignature(Payload.hashFor(payload, wallet));
+    assertEq(addr, address(0));
+    assertEq(timestamp, _validUntil);
+
+    // Call isValidSignature and expect it to succeed
+    bytes4 result = Stage1Module(wallet).isValidSignature(_digest, hex"80");
+    assertEq(result, bytes4(0x20c13b0b));
+
+    // Even if called from other caller
+    vm.prank(_otherCaller);
+    result = Stage1Module(wallet).isValidSignature(_digest, hex"80");
+    assertEq(result, bytes4(0x20c13b0b));
+  }
+
+  function test_static_signature_specific_address(
+    bytes32 _digest,
+    bytes32 _imageHash,
+    uint256 _timestamp,
+    uint256 _validUntil,
+    address _onlyAddress,
+    address _otherCaller
+  ) external {
+    vm.assume(_onlyAddress != address(0) && _onlyAddress != _otherCaller);
+
+    Payload.Decoded memory payload;
+    payload.kind = Payload.KIND_DIGEST;
+    payload.digest = _digest;
+
+    _timestamp = bound(_timestamp, 0, type(uint64).max);
+    _validUntil = bound(_validUntil, _timestamp + 1, type(uint96).max);
+
+    vm.warp(_timestamp);
+
+    // Create a new wallet using imageHash
+    address payable wallet = payable(factory.deploy(address(stage1Module), _imageHash));
+
+    // Set the static signature
+    vm.prank(wallet);
+    vm.expectEmit(true, true, false, true, wallet);
+    emit StaticSignatureSet(Payload.hashFor(payload, wallet), _onlyAddress, uint96(_validUntil));
+    Stage1Module(wallet).setStaticSignature(Payload.hashFor(payload, wallet), _onlyAddress, uint96(_validUntil));
+
+    (address addr, uint256 timestamp) = Stage1Module(wallet).getStaticSignature(Payload.hashFor(payload, wallet));
+    assertEq(addr, _onlyAddress);
+    assertEq(timestamp, _validUntil);
+
+    // Call isValidSignature from _onlyAddress should succeed
+    vm.prank(_onlyAddress);
+    bytes4 result = Stage1Module(wallet).isValidSignature(_digest, hex"80");
+    assertEq(result, bytes4(0x20c13b0b));
+
+    // Call isValidSignature from _otherCaller should fail
+    vm.prank(_otherCaller);
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        BaseAuth.InvalidStaticSignatureWrongCaller.selector,
+        Payload.hashFor(payload, wallet),
+        _otherCaller,
+        _onlyAddress
+      )
+    );
+    Stage1Module(wallet).isValidSignature(_digest, hex"80");
+  }
+
+  function test_reverts_invalid_static_signature_expired(
+    bytes32 _digest,
+    bytes32 _imageHash,
+    uint256 _startTime,
+    uint256 _validUntil
+  ) external {
+    // Ensure validUntil is strictly after startTime and within uint96 range
+    _startTime = bound(_startTime, 0, type(uint96).max - 1);
+    _validUntil = bound(_validUntil, _startTime + 1, type(uint96).max);
+
+    // Set the current time to _startTime
+    vm.warp(_startTime);
+
+    // Create a new wallet
+    address payable wallet = payable(factory.deploy(address(stage1Module), _imageHash));
+
+    // Prepare the payload and calculate its hash
+    Payload.Decoded memory payload;
+    payload.kind = Payload.KIND_DIGEST;
+    payload.digest = _digest;
+    bytes32 opHash = Payload.hashFor(payload, wallet);
+
+    // Set the static signature from the wallet itself, valid until _validUntil
+    // Use address(0) to allow any caller before expiration
+    vm.prank(wallet);
+    vm.expectEmit(true, true, false, true, wallet);
+    emit StaticSignatureSet(opHash, address(0), uint96(_validUntil));
+    Stage1Module(wallet).setStaticSignature(opHash, address(0), uint96(_validUntil));
+
+    // Verify it was set correctly
+    (address addr, uint256 timestamp) = Stage1Module(wallet).getStaticSignature(opHash);
+    assertEq(addr, address(0));
+    assertEq(timestamp, _validUntil);
+
+    // --- Test Case 1: Use signature just before expiry (should work) ---
+    vm.warp(_validUntil - 1); // Set time to just before expiration
+    bytes4 result = Stage1Module(wallet).isValidSignature(_digest, hex"80");
+    assertEq(result, bytes4(0x20c13b0b), "Signature should be valid before expiry");
+
+    // --- Test Case 2: Use signature exactly at expiry (should fail) ---
+    vm.warp(_validUntil); // Set time exactly to expiration
+    vm.expectRevert(abi.encodeWithSelector(BaseAuth.InvalidStaticSignatureExpired.selector, opHash, _validUntil));
+    Stage1Module(wallet).isValidSignature(_digest, hex"80");
+
+    // --- Test Case 3: Use signature after expiry (should fail) ---
+    vm.warp(_validUntil + 1); // Set time after expiration
+    vm.expectRevert(abi.encodeWithSelector(BaseAuth.InvalidStaticSignatureExpired.selector, opHash, _validUntil));
+    Stage1Module(wallet).isValidSignature(_digest, hex"80");
+  }
+
+  function test_reverts_set_static_signature_not_self(
+    bytes32 _hash,
+    bytes32 _imageHash,
+    address _sigAddress,
+    uint96 _timestamp,
+    address _caller // The address attempting the call (not the wallet)
+  ) external {
+    // Create a new wallet
+    address payable wallet = payable(factory.deploy(address(stage1Module), _imageHash));
+
+    // Ensure the caller is not the wallet itself
+    vm.assume(_caller != wallet);
+
+    // Attempt to call setStaticSignature from _caller
+    vm.prank(_caller);
+    vm.expectRevert(abi.encodeWithSelector(SelfAuth.OnlySelf.selector, _caller));
+    Stage1Module(wallet).setStaticSignature(_hash, _sigAddress, _timestamp);
+
+    // Verify that the signature was NOT set (should still be default values)
+    (address addr, uint256 ts) = Stage1Module(wallet).getStaticSignature(_hash);
+    assertEq(addr, address(0), "Static signature address should not be set");
+    assertEq(ts, 0, "Static signature timestamp should not be set");
   }
 
   receive() external payable { }

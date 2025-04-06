@@ -512,17 +512,6 @@ contract PasskeysTest is AdvTest {
 
 library LibString {
 
-  function slice(string memory s, uint256 start, uint256 end) internal pure returns (string memory) {
-    bytes memory b = bytes(s);
-    require(start <= end, "LibString: invalid slice");
-    require(end <= b.length, "LibString: slice out of bounds");
-    bytes memory res = new bytes(end - start);
-    for (uint256 i = start; i < end; i++) {
-      res[i - start] = b[i];
-    }
-    return string(res);
-  }
-
   function indexOf(string memory haystack, string memory needle) internal pure returns (uint256) {
     bytes memory h = bytes(haystack);
     bytes memory n = bytes(needle);
