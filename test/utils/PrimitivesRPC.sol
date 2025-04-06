@@ -476,4 +476,95 @@ library PrimitivesRPC {
     return abi.decode(rawResponse, (bytes32));
   }
 
+  // ----------------------------------------------------------------
+  // passkeys
+  // ----------------------------------------------------------------
+
+  struct PasskeyPublicKey {
+    bytes32 x;
+    bytes32 y;
+    bool requireUserVerification;
+    string credentialId;
+    bytes32 metadataHash;
+  }
+
+  struct PasskeySignatureComponents {
+    bytes32 r;
+    bytes32 s;
+    bytes authenticatorData;
+    string clientDataJson;
+  }
+
+  function passkeysEncodeSignature(
+    Vm _vm,
+    PasskeyPublicKey memory _pk,
+    PasskeySignatureComponents memory _sig,
+    bool _embedMetadata
+  ) internal returns (bytes memory) {
+    string memory params = '{"x":"';
+    params = string.concat(params, _vm.toString(_pk.x));
+    params = string.concat(params, '","y":"', _vm.toString(_pk.y));
+    params = string.concat(params, '","requireUserVerification":', _pk.requireUserVerification ? "true" : "false");
+    if (bytes(_pk.credentialId).length > 0) {
+      params = string.concat(params, ',"credentialId":"', _pk.credentialId, '"');
+    } else if (_pk.metadataHash != bytes32(0)) {
+      params = string.concat(params, ',"metadataHash":"', _vm.toString(_pk.metadataHash), '"');
+    }
+    params = string.concat(params, ',"r":"', _vm.toString(_sig.r));
+    params = string.concat(params, '","s":"', _vm.toString(_sig.s));
+    params = string.concat(params, '","authenticatorData":"', _vm.toString(_sig.authenticatorData));
+    params = string.concat(params, '","clientDataJson":', _sig.clientDataJson);
+    params = string.concat(params, ',"embedMetadata":', _embedMetadata ? "true" : "false", "}");
+
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "passkeys_encodeSignature", params);
+    return rawResponse;
+  }
+
+  function passkeysDecodeSignature(Vm _vm, bytes memory _encodedSignature) internal returns (string memory) {
+    string memory params = string.concat('{"encodedSignature":"', _vm.toString(_encodedSignature), '"}');
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "passkeys_decodeSignature", params);
+    return string(rawResponse);
+  }
+
+  function passkeysComputeRoot(Vm _vm, PasskeyPublicKey memory _pk) internal returns (bytes32) {
+    string memory params = '{"x":"';
+    params = string.concat(params, _vm.toString(_pk.x));
+    params = string.concat(params, '","y":"', _vm.toString(_pk.y));
+    params = string.concat(params, '","requireUserVerification":', _pk.requireUserVerification ? "true" : "false");
+    if (bytes(_pk.credentialId).length > 0) {
+      params = string.concat(params, ',"credentialId":"', _pk.credentialId, '"');
+    } else if (_pk.metadataHash != bytes32(0)) {
+      params = string.concat(params, ',"metadataHash":"', _vm.toString(_pk.metadataHash), '"');
+    }
+    params = string.concat(params, "}");
+
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "passkeys_computeRoot", params);
+    return abi.decode(rawResponse, (bytes32));
+  }
+
+  function passkeysValidateSignature(
+    Vm _vm,
+    bytes32 _challenge,
+    PasskeyPublicKey memory _pk,
+    PasskeySignatureComponents memory _sig
+  ) internal returns (bool) {
+    string memory params = '{"challenge":"';
+    params = string.concat(params, _vm.toString(_challenge));
+    params = string.concat(params, '","x":"', _vm.toString(_pk.x));
+    params = string.concat(params, '","y":"', _vm.toString(_pk.y));
+    params = string.concat(params, '","requireUserVerification":', _pk.requireUserVerification ? "true" : "false");
+    if (bytes(_pk.credentialId).length > 0) {
+      params = string.concat(params, ',"credentialId":"', _pk.credentialId, '"');
+    } else if (_pk.metadataHash != bytes32(0)) {
+      params = string.concat(params, ',"metadataHash":"', _vm.toString(_pk.metadataHash), '"');
+    }
+    params = string.concat(params, ',"r":"', _vm.toString(_sig.r));
+    params = string.concat(params, '","s":"', _vm.toString(_sig.s));
+    params = string.concat(params, '","authenticatorData":"', _vm.toString(_sig.authenticatorData));
+    params = string.concat(params, '","clientDataJson":', _sig.clientDataJson, "}");
+
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "passkeys_validateSignature", params);
+    return abi.decode(rawResponse, (bool));
+  }
+
 }
