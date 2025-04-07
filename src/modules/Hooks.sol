@@ -4,9 +4,6 @@ pragma solidity ^0.8.27;
 import { Storage } from "./Storage.sol";
 import { SelfAuth } from "./auth/SelfAuth.sol";
 
-error HookAlreadyExists(bytes4 signature);
-error HookDoesNotExist(bytes4 signature);
-
 interface IERC1155Receiver {
 
   function onERC1155Received(address, address, uint256, uint256, bytes calldata) external returns (bytes4);
@@ -38,6 +35,9 @@ contract Hooks is SelfAuth, IERC1155Receiver, IERC721Receiver, IERC223Receiver {
   bytes32 private constant HOOKS_KEY = bytes32(0xbe27a319efc8734e89e26ba4bc95f5c788584163b959f03fa04e2d7ab4b9a120);
 
   event DefinedHook(bytes4 signature, address implementation);
+
+  error HookAlreadyExists(bytes4 signature);
+  error HookDoesNotExist(bytes4 signature);
 
   function readHook(
     bytes4 signature
