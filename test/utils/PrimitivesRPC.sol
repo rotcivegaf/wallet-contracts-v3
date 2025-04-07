@@ -112,6 +112,17 @@ library PrimitivesRPC {
     return (rawResponse);
   }
 
+  function toPackedPayloadForWallet(
+    Vm _vm,
+    Payload.Decoded memory _decoded,
+    address _wallet
+  ) internal returns (bytes memory) {
+    string memory params =
+      string.concat('{"payload":"', _vm.toString(abi.encode(_decoded)), '","wallet":"', _vm.toString(_wallet), '"}');
+    bytes memory rawResponse = _vm.rpc(rpcURL(_vm), "payload_toPacked", params);
+    return (rawResponse);
+  }
+
   function hashForPayload(
     Vm _vm,
     address _wallet,

@@ -85,6 +85,48 @@ contract PayloadTest is AdvTest {
     assertEq(abi.encode(input), abi.encode(output));
   }
 
+  function test_fromPackedCalls_2bytes(
+    Payload.Call memory _call
+  ) external {
+    // Convert behaviors into legal ones
+    _call.behaviorOnError =
+      bound(_call.behaviorOnError, uint256(Payload.BEHAVIOR_IGNORE_ERROR), uint256(Payload.BEHAVIOR_ABORT_ON_ERROR));
+
+    Payload.Call[] memory _calls = new Payload.Call[](257);
+    for (uint256 i = 0; i < 257; i++) {
+      // Force > 1 byte of calls
+      _calls[i] = _call;
+    }
+
+    Payload.Decoded memory input;
+    input.kind = Payload.KIND_TRANSACTIONS;
+    input.calls = _calls;
+
+    bytes memory packed = PrimitivesRPC.toPackedPayload(vm, input);
+    Payload.Decoded memory output = payloadImp.fromPackedCalls(packed);
+    assertEq(abi.encode(input), abi.encode(output));
+  }
+
+  function test_fromPackedCalls_self(
+    Payload.Call memory _call
+  ) external {
+    // Convert behaviors into legal ones
+    _call.behaviorOnError =
+      bound(_call.behaviorOnError, uint256(Payload.BEHAVIOR_IGNORE_ERROR), uint256(Payload.BEHAVIOR_ABORT_ON_ERROR));
+    _call.to = address(payloadImp);
+
+    Payload.Call[] memory _calls = new Payload.Call[](1);
+    _calls[0] = _call;
+
+    Payload.Decoded memory input;
+    input.kind = Payload.KIND_TRANSACTIONS;
+    input.calls = _calls;
+
+    bytes memory packed = PrimitivesRPC.toPackedPayloadForWallet(vm, input, address(payloadImp));
+    Payload.Decoded memory output = payloadImp.fromPackedCalls(packed);
+    assertEq(abi.encode(input), abi.encode(output));
+  }
+
   function test_fromMessage(
     bytes calldata _message
   ) external view {
