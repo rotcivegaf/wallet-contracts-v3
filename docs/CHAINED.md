@@ -334,3 +334,117 @@ To solve this, when a chained signature is used, and the onchain configuration c
                 that got at the start of the
                 chained signature
 ```
+
+### Checkpointer control flow
+
+In summary, only the checkpointer that is defined by the wallet contract is used. If a non-chained signature is used, it has to either match the checkpointer's snapshot, or it must be behind the wallet contract.
+
+If a chained signature is used, then at some point during the chain, the snapshot provided by the checkpointer must match with one of the recovered configurations, this may also happen at the final signature. If this does not happen, the final signature (that corresponds to the wallet contract) **must** be ahead of the checkpointer's snapshot.
+
+```
+                                     ╔═══════════════════╗
+                                     ║                   ║
+                                     ║    Validation     ║
+                                     ║       start       ║
+                                     ║                   ║
+                                     ╚═════════╤═════════╝
+                                               │
+                                               │
+                                               │
+                                     ┌─────────▼─────────┐
+                                     │                   │
+                                     │  Obtain snapshot  │
+                                     │                   │
+                                     │                   │
+                                     └─────────┬─────────┘
+                                               │
+                                               │
+                                               │
+        ╔═══════════════════╗        ╭─────────▼─────────╮
+        ║                   ║        │    Is snapshot    │
+        ║    Approved by    ║     Yes│     equal to      │
+        ║   checkpointer    ◀────────┤    bytes32(0)?    │
+        ║                   ║        │                   │
+        ╚═══════════════════╝        ╰─────────┬─────────╯
+                                               │No
+                                               │
+                                               │
+                                     ╭─────────▼─────────╮
+                                     │                   │
+                                     │    Is chained     │ Yes
+                                     │    signature?     ├────────────────╮
+                                     │                   │                │
+                                     ╰─────────┬─────────╯                │
+                                               │No                        │
+                                               │                          │
+                                               │                          │
+        ╔═══════════════════╗        ┌─────────▼─────────┐                │
+        ║                   ║        │                   │                │
+        ║    Rejected by    ║        │      Recover      │                │
+        ║   checkpointer    ║        │    image hash     │                │
+        ║                   ║        │                   │                │
+        ╚═════════▲═════════╝        └─────────┬─────────┘                │
+                  │                            │                          │
+                  │                            │                          │
+                  │No                          │                          │
+        ╭─────────┴─────────╮        ╭─────────▼─────────╮                │
+        │                   │        │                   │                │
+        │ Checkpoint below  │     No │      Matches      │                │
+        │     snapshot?     ◀────────┤     snapshot?     │                │
+        │                   │        │                   │                │
+        ╰─────────┬─────────╯        ╰─────────┬─────────╯                │
+                  │Yes                         │Yes                       │
+                  │                            │                          │
+                  │                            │                          │
+                  │                  ╔═════════▼═════════╗                │
+                  │                  ║                   ║                │
+                  │                  ║    Approved by    ║                │
+                  └──────────────────▶   checkpointer    ║                │
+                                     ║                   ║                │
+                                     ╚═══════════════════╝                │
+                                                                          │
+                                                                          │
+                                                                          │
+                                                          ┌───────────────▼───┐
+                                                          │                   │
+                                                          │      Recover      │
+                                       ┌──────────────────▶    image hash     │
+                                       │                  │                   │
+                                       │                  └─────────┬─────────┘
+                                       │                            │
+                                       │                            │
+                                       │No                          │
+                             ╭─────────┴─────────╮        ╭─────────▼─────────╮
+                             │                   │        │                   │
+                          Yes│   Was the last    │     No │      Matches      │
+          ┌──────────────────┤  signature part?  ◀────────┤     snapshot?     │
+          │                  │                   │        │                   │
+          │                  ╰─────────▲─────────╯        ╰─────────┬─────────╯
+          │                            │                            │Yes
+          │                            │                            │
+          │                            │                            │
+╭─────────▼─────────╮                  │                  ┌─────────▼─────────┐
+│                   │                  │                  │                   │
+│ Was the snapshot  │Yes               │                  │      Consume      │
+│     consumed?     ├─────────────┐    └──────────────────┤     snapshot      │
+│                   │             │                       │                   │
+╰─────────┬─────────╯             │                       └───────────────────┘
+          │No                     │
+          │                       │
+          │                       │
+╭─────────▼─────────╮        ╔════▼══════════════╗
+│                   │        ║                   ║
+│  Last checkpoint  │Yes     ║    Approved by    ║
+│  below snapshot?  ├────────▶   checkpointer    ║
+│                   │        ║                   ║
+╰─────────┬─────────╯        ╚═══════════════════╝
+          │No
+          │
+          │
+╔═════════▼═════════╗
+║                   ║
+║    Rejected by    ║
+║   checkpointer    ║
+║                   ║
+╚═══════════════════╝
+```
