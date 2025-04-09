@@ -25,7 +25,7 @@ Wallet lifecycle
 
 Chained signatures are encoded as a list of signatures, in reverse order. This is done to allow for the contract to recover from the payload to the configuration that is currently defined by the contract. Intermediary configurations are not directly encoded, but rather recovered from the previous signature, until the last configuration which is recovered and validated against the contract’s current configuration.
 
-All chained signatures start by setting the global signature flag to `XXXX XXX1` (`flag & 0x01`), only the first bit is read, every other bit is ignored.
+All chained signatures start by setting the global signature flag to `XXXX XXX1` (`flag & 0x01`), only the 8th bit is read, every other bit is ignored.
 
 Afterwards, each signature part is encoded, prefixed by 3 bytes that determine their size.
 
@@ -249,4 +249,88 @@ In this scenario, the checkpointer contract **must** provide with an escape hatc
           │                         │                        │
           ▼                         ▼                        ▼
 Old state - Irrelevant         Latest state         Dangling, not linked
+```
+
+### Checkpointer signature format
+
+Signatures that involve a checkpointer contain two additional pieces of data, the "checkpointer address" that is used to identify the checkpointer (and to be able to reconstruct the merkle root), and the "checkpointer data" which is needed to obtain the snapshot from the checkpointer.
+
+#### Non-chained signatures
+
+When non-chained signatures are used, the signature flag **must** have the `X1XX XXXX` bit set (`flag & 0x08 == 0x08`), this signals to the wallet contract that the signature involves a checkpointer, afterwards fixed 20 bytes are read to obtain the checkpointer address, and the next 3 bytes are read to obtain the checkpointer data size, after which the checkpointer data is read.
+
+```
+  ┌───▶ 1 byte global flag
+  │     must have the 2nd bit
+  │     set to 1 to signal a chained             ┌───▶ 3 bytes define the size
+  │     signature                                │     of the checkpointer data
+  │                                              │
+──┴─                                          ───┴──
+0x40 6974206973207265616c6C792073756E6E791aDd 001271 6b656570206275696c64696e67...
+     ──┬─────────────────────────────────────        ─┬───────────────────────────
+       │                                              │
+       └─▶ 20 byte address                            └─▶ Dynamic size checkpointer
+           determines the address                         data
+           of the checkpointer
+```
+
+#### Chained signatures
+
+If chained signatures are used, then the encoding becomes slightly more complex. The reason for this is that the **only** checkpointer that is used is the one that is defined by the wallet contract, **checkpointers provided by the state channel are ignored**.
+
+This is intended behavior, as the checkpointer is in charge of overseeing the state channel, thus it wouldn't be safe for the state channel to be able to provide a checkpointer, as it could self-authorize the state channel. This would negate the purpose of having a checkpointer in the first place.
+
+There is a challenge with this, when a chained signature is encoded, the configuration that corresponds to the wallet contract is provided **at the end of the chain**, which is a problem, because we need to obtain the snapshot at the beginning of the chain, in order to validate if the state channel ever "goes over" the snapshot provided by the checkpointer.
+
+Additionally, intermediary configurations need to have their checkpointers provided, as it is needed to reconstruct the merkle root. However no checkpointer data is needed, as these intermediate checkpointers are not called.
+
+To solve this, when a chained signature is used, and the onchain configuration contains a checkpointer, the checkpointer of the **last** configuration is moved at the beginning of the chain, alongside its checkpointer data, and no checkpointer data is provided for the intermediate signature parts.
+
+```
+     ┌─▶ 2nd. bit signals checkpointer    ┌──▶ The checkpointer and data is only
+     │                                    │    provided once, as part of the
+     │      ┌▶ 8th. bit signals chained   │    chained signatures, and not of
+     ┴      ┴                             │    the individual parts
+    0100 0001                             │
+    ▲ ┌───────────────────────────────────┴─────────────────────────────────────────┐
+    │ │                                       3 byte Size                           │
+  ──┴─│                                         ──────                              │
+  0x41│6974206973207265616c6C792073756E6E791aDd 001271 6b656570206275696c64696e67...│─┐
+      │──────────────────────────────────────── ────────────────────────────────────│ │
+      │Checkpointer address □                   Checkpointer data                   │ │
+      └─────────────────────╫───────────────────────────────────────────────────────┘ │
+╔═══════════════════════════╝                                                         │
+║    ┌────────────────────────────────────────────────────────────────────────────────┘
+║    │
+║    │     Payload signature                          ┌─▶ No checkpointer data
+║    │    ┌───────────────────────────────────────────┼───────────────────┐
+║    │    │                                           x                   │
+║    └───▶│44 6974206973207265616c6C792073756E6E791aDd 03 01 5151515151...│─┐
+║         │─┬─────────────────────────────────────────                    │ │
+║         └─┼─────────────────────────────────────────────────────────────┘ │
+║           │                                                               │
+║           └───▶ Signature requires checkpointer                           │
+║                 but no checkpointer data is                               │
+║                 required as it is only for root                           │
+║                 recovery                                                  │
+║                                                                           │
+║                 Checkpointer may or may not match                         │
+║                                                                           │
+║          ┌──────────────────────────────────────────────────────┐         │
+║    ┌─────┤  Intermediary signatures follow the previous format  ├─────────┘
+║    │     └──────────────────────────────────────────────────────┘
+║    │
+║    │     Final signature
+║    │    ┌────────────────────────────────┐
+║    │    │                                │
+║    └───▶│04 03 01 5252525252552525252... │
+║         │  x      ───────────────────┬── │
+║         └──┼─────────────────────────┼───┘
+║            │                         │
+║            └▶ No checkpointer        │
+║               No checkpointer data   └────▶ Regular signature body
+║
+╚════════════▷  Recovery uses the checkpointer
+                that got at the start of the
+                chained signature
 ```
