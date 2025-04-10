@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import { Hooks, IERC1155Receiver, IERC223Receiver, IERC721Receiver } from "../../src/modules/Hooks.sol";
+import { Hooks, IERC1155Receiver, IERC223Receiver, IERC721Receiver, IERC777Receiver } from "../../src/modules/Hooks.sol";
 import { SelfAuth } from "../../src/modules/auth/SelfAuth.sol";
 
 import { AdvTest } from "../utils/TestUtils.sol";
@@ -80,6 +80,20 @@ contract HooksTest is AdvTest {
     assertEq(selector, bytes4(keccak256("onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)")));
     bytes4 returnValue = hooks.onERC1155BatchReceived(_from, _to, _ids, _values, _data);
     assertEq(returnValue, selector);
+  }
+
+  // ERC777 Receiver Tests
+  function test_tokensReceived(
+    address _operator,
+    address _from,
+    address _to,
+    uint256 _amount,
+    bytes calldata _data,
+    bytes calldata _operatorData
+  ) public {
+    bytes4 selector = IERC777Receiver.tokensReceived.selector;
+    assertEq(selector, bytes4(keccak256("tokensReceived(address,address,address,uint256,bytes,bytes)")));
+    hooks.tokensReceived(_operator, _from, _to, _amount, _data, _operatorData);
   }
 
   // ERC721 Receiver Tests
