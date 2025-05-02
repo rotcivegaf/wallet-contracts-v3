@@ -417,7 +417,7 @@ library BaseSig {
             weight = type(uint256).max;
           }
 
-          bytes32 node = _leafForAnyAddressSubdigest(anyAddressOpHash);
+          bytes32 node = _leafForAnyAddressSubdigest(hardcoded);
           root = root != bytes32(0) ? LibOptim.fkeccak256(root, node) : node;
           continue;
         }
