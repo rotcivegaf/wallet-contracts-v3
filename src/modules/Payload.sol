@@ -196,12 +196,11 @@ library Payload {
   ) internal pure returns (bytes32) {
     // In EIP712, an array is often hashed as the keccak256 of the concatenated
     // hashes of each item. So we hash each Call, pack them, and hash again.
-    bytes memory encoded;
+    bytes32[] memory callHashes = new bytes32[](calls.length);
     for (uint256 i = 0; i < calls.length; i++) {
-      bytes32 callHash = hashCall(calls[i]);
-      encoded = abi.encodePacked(encoded, callHash);
+      callHashes[i] = hashCall(calls[i]);
     }
-    return keccak256(encoded);
+    return keccak256(abi.encodePacked(callHashes));
   }
 
   function toEIP712(
