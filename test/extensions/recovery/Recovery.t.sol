@@ -245,7 +245,6 @@ contract RecoveryTest is AdvTest {
     vm.mockCallRevert(
       _signer, abi.encodeWithSelector(IERC1271.isValidSignature.selector, recoveryPayloadHash, _signature), _revertData
     );
-    vm.etch(_signer, _signerCode);
 
     vm.expectRevert(_revertData);
     recovery.queuePayload(_wallet, _signer, _payload, _signature);
