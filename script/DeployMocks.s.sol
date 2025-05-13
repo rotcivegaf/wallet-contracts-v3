@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import { SingletonDeployer, console } from "erc2470-libs/script/SingletonDeployer.s.sol";
+import { SingletonDeployer, console } from "lib/erc2470-libs/script/SingletonDeployer.s.sol";
 
 import { ERC20ImplicitMint } from "test/mocks/MockERC20.sol";
 import { MockImplicitContract, MockInvalidImplicitContract } from "test/mocks/MockImplicitContract.sol";
