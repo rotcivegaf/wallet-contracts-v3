@@ -170,17 +170,25 @@ contract Recovery is ISapientCompact {
   ) internal view returns (bool) {
     bytes32 rPayloadHash = recoveryPayloadHash(_wallet, _payload);
 
+    if (_signature.length == 64) {
+      // Try an ECDSA signature
+      (bytes32 r, bytes32 yParityAndS) = abi.decode(_signature, (bytes32, bytes32));
+      uint256 yParity = uint256(yParityAndS >> 255);
+      bytes32 s = bytes32(uint256(yParityAndS) & 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);
+      uint8 v = uint8(yParity) + 27;
+
+      address addr = ecrecover(rPayloadHash, v, r, s);
+      if (addr == _signer) {
+        return true;
+      }
+    }
+
     if (_signer.code.length != 0) {
+      // ERC1271
       return IERC1271(_signer).isValidSignature(rPayloadHash, _signature) == IERC1271_MAGIC_VALUE;
     }
 
-    (bytes32 r, bytes32 yParityAndS) = abi.decode(_signature, (bytes32, bytes32));
-    uint256 yParity = uint256(yParityAndS >> 255);
-    bytes32 s = bytes32(uint256(yParityAndS) & 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);
-    uint8 v = uint8(yParity) + 27;
-
-    address addr = ecrecover(rPayloadHash, v, r, s);
-    return addr == _signer;
+    return false;
   }
 
 }

@@ -742,7 +742,6 @@ contract BaseSigTest is AdvTest {
         vars.config1,
         string(
           abi.encodePacked(
-            "--signature ",
             vm.toString(vars.signer1addr),
             ":hash:",
             vm.toString(vars.r2),
@@ -759,7 +758,6 @@ contract BaseSigTest is AdvTest {
         vars.config2,
         string(
           abi.encodePacked(
-            "--signature ",
             vm.toString(vars.signer2addr),
             ":hash:",
             vm.toString(vars.r3),
@@ -1003,7 +1001,6 @@ contract BaseSigTest is AdvTest {
         vars.config1,
         string(
           abi.encodePacked(
-            "--signature ",
             vm.toString(vars.signer1addr),
             ":hash:",
             vm.toString(vars.r2),
@@ -1021,7 +1018,6 @@ contract BaseSigTest is AdvTest {
         vars.config2,
         string(
           abi.encodePacked(
-            "--signature ",
             vm.toString(vars.signer2addr),
             ":hash:",
             vm.toString(vars.r3),
@@ -1156,7 +1152,6 @@ contract BaseSigTest is AdvTest {
         vars.config1,
         string(
           abi.encodePacked(
-            "--signature ",
             vm.toString(vars.signer1addr),
             ":hash:",
             vm.toString(vars.r2),
@@ -1174,7 +1169,6 @@ contract BaseSigTest is AdvTest {
         vars.config2,
         string(
           abi.encodePacked(
-            "--signature ",
             vm.toString(vars.signer2addr),
             ":hash:",
             vm.toString(vars.r3),
