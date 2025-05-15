@@ -344,6 +344,57 @@ contract SessionSigTest is SessionTestBase {
     }
   }
 
+  function testRecover_invalidSessionSigner() public {
+    Payload.Decoded memory payload = _buildPayload(1);
+    {
+      payload.calls[0] = Payload.Call({
+        to: address(0xBEEF),
+        value: 123,
+        data: "test",
+        gasLimit: 0,
+        delegateCall: false,
+        onlyFallback: false,
+        behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+      });
+    }
+    SessionPermissions memory sessionPerms = SessionPermissions({
+      signer: sessionWallet.addr,
+      valueLimit: 1000,
+      deadline: 2000,
+      permissions: new Permission[](1)
+    });
+    sessionPerms.permissions[0] = Permission({ target: address(0xBEEF), rules: new ParameterRule[](0) });
+
+    // Create the topology from the CLI.
+    string memory topology;
+    {
+      topology = PrimitivesRPC.sessionEmpty(vm, identityWallet.addr);
+      string memory sessionPermsJson = _sessionPermissionsToJSON(sessionPerms);
+      topology = PrimitivesRPC.sessionExplicitAdd(vm, sessionPermsJson, topology);
+    }
+
+    // Generate an invalid session signature
+    string memory sessionSignature =
+      "0x0000000000000000000000000000000000000000000000000000000000000000:0x0000000000000000000000000000000000000000000000000000000000000000:0";
+    string memory callSignature = _explicitCallSignatureToJSON(0, sessionSignature);
+
+    // Construct the encoded signature.
+    bytes memory encoded;
+    {
+      string[] memory callSignatures = new string[](1);
+      callSignatures[0] = callSignature;
+      address[] memory explicitSigners = new address[](1);
+      explicitSigners[0] = sessionWallet.addr;
+      address[] memory implicitSigners = new address[](0);
+      encoded =
+        PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, explicitSigners, implicitSigners);
+    }
+
+    // Recover and validate.
+    vm.expectRevert(abi.encodeWithSelector(SessionErrors.InvalidSessionSigner.selector, address(0)));
+    harness.recover(payload, encoded);
+  }
+
   function testRecover_invalidIdentitySigner_unset() public {
     // Create a topology with an invalid identity signer
     string memory topology = PrimitivesRPC.sessionEmpty(vm, address(0));
