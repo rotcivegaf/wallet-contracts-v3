@@ -5,7 +5,7 @@ import { Payload } from "../Payload.sol";
 
 import { Storage } from "../Storage.sol";
 import { IAuth } from "../interfaces/IAuth.sol";
-import { IERC1271 } from "../interfaces/IERC1271.sol";
+import { IERC1271, IERC1271_MAGIC_VALUE_HASH } from "../interfaces/IERC1271.sol";
 
 import { IPartialAuth } from "../interfaces/IPartialAuth.sol";
 import { ISapient } from "../interfaces/ISapient.sol";
@@ -126,7 +126,7 @@ abstract contract BaseAuth is IAuth, ISapient, IERC1271, SelfAuth {
       return bytes4(0);
     }
 
-    return bytes4(0x20c13b0b);
+    return IERC1271_MAGIC_VALUE_HASH;
   }
 
   function recoverPartialSignature(

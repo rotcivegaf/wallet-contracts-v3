@@ -2,7 +2,7 @@
 pragma solidity ^0.8.27;
 
 import { Payload } from "../../modules/Payload.sol";
-import { IERC1271, IERC1271_MAGIC_VALUE } from "../../modules/interfaces/IERC1271.sol";
+import { IERC1271, IERC1271_MAGIC_VALUE_HASH } from "../../modules/interfaces/IERC1271.sol";
 import { ISapientCompact } from "../../modules/interfaces/ISapient.sol";
 import { LibBytesPointer } from "../../utils/LibBytesPointer.sol";
 import { LibOptim } from "../../utils/LibOptim.sol";
@@ -185,7 +185,7 @@ contract Recovery is ISapientCompact {
 
     if (_signer.code.length != 0) {
       // ERC1271
-      return IERC1271(_signer).isValidSignature(rPayloadHash, _signature) == IERC1271_MAGIC_VALUE;
+      return IERC1271(_signer).isValidSignature(rPayloadHash, _signature) == IERC1271_MAGIC_VALUE_HASH;
     }
 
     return false;
