@@ -6,7 +6,7 @@ import { LibOptim } from "../../utils/LibOptim.sol";
 import { Payload } from "../Payload.sol";
 
 import { ICheckpointer, Snapshot } from "../interfaces/ICheckpointer.sol";
-import { IERC1271, IERC1271_MAGIC_VALUE } from "../interfaces/IERC1271.sol";
+import { IERC1271, IERC1271_MAGIC_VALUE_HASH } from "../interfaces/IERC1271.sol";
 import { ISapient, ISapientCompact } from "../interfaces/ISapient.sol";
 
 using LibBytesPointer for bytes;
@@ -280,7 +280,7 @@ library BaseSig {
           uint256 nrindex = rindex + size;
 
           // Call the ERC1271 contract to check if the signature is valid
-          if (IERC1271(addr).isValidSignature(_opHash, _signature[rindex:nrindex]) != IERC1271_MAGIC_VALUE) {
+          if (IERC1271(addr).isValidSignature(_opHash, _signature[rindex:nrindex]) != IERC1271_MAGIC_VALUE_HASH) {
             revert InvalidERC1271Signature(_opHash, addr, _signature[rindex:nrindex]);
           }
           rindex = nrindex;

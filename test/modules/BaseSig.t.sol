@@ -202,7 +202,7 @@ contract BaseSigTest is AdvTest {
       vm.mockCall(
         address(params.signer),
         abi.encodeWithSignature("isValidSignature(bytes32,bytes)", payloadHash, params.signature),
-        abi.encode(bytes4(0x20c13b0b))
+        abi.encode(bytes4(0x1626ba7e))
       );
 
       vm.expectCall(
@@ -318,7 +318,7 @@ contract BaseSigTest is AdvTest {
     assumeNotPrecompile2(params.signer);
     vm.assume(params.prefix.length + params.suffix.length < 600);
 
-    if (params.bad4Bytes == bytes4(0x20c13b0b)) {
+    if (params.bad4Bytes == bytes4(0x1626ba7e)) {
       params.bad4Bytes = bytes4(0x00000000);
     }
 

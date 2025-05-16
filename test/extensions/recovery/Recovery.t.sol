@@ -260,7 +260,7 @@ contract RecoveryTest is AdvTest {
     vm.mockCall(
       _signer,
       abi.encodeWithSelector(IERC1271.isValidSignature.selector, recoveryPayloadHash, _signature),
-      abi.encode(bytes4(0x20c13b0b))
+      abi.encode(bytes4(0x1626ba7e))
     );
     vm.etch(_signer, _signerCode);
 
@@ -288,7 +288,7 @@ contract RecoveryTest is AdvTest {
 
     _signerCode = abi.encodePacked(bytes1(0x00), _signerCode);
     vm.warp(_randomTime);
-    if (_badMagicValue == bytes4(0x20c13b0b)) {
+    if (_badMagicValue == bytes4(0x1626ba7e)) {
       _badMagicValue = bytes4(0);
     }
 
