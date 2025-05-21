@@ -613,6 +613,108 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     harness.incrementUsageLimit(limits);
   }
 
+  function test_validateExplicitCall_MultipleValues(
+    uint256 firstValue,
+    uint256 secondValue,
+    uint256 thirdValue,
+    uint256 valueLimit
+  ) public {
+    // Bound values to reasonable ranges
+    firstValue = bound(firstValue, 1, type(uint256).max / 3);
+    secondValue = bound(secondValue, 1, type(uint256).max / 3);
+    thirdValue = bound(thirdValue, 1, type(uint256).max / 3);
+    valueLimit = bound(valueLimit, firstValue + secondValue, firstValue + secondValue + thirdValue - 1);
+
+    // Build a payload with three calls
+    Payload.Decoded memory payload = _buildPayload(3);
+
+    // First call
+    payload.calls[0] = Payload.Call({
+      to: address(0x1234),
+      value: firstValue,
+      data: abi.encodeWithSelector(bytes4(0x12345678)),
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    // Second call
+    payload.calls[1] = Payload.Call({
+      to: address(0x5678),
+      value: secondValue,
+      data: abi.encodeWithSelector(bytes4(0x12345678)),
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    // Third call
+    payload.calls[2] = Payload.Call({
+      to: address(0x9ABC),
+      value: thirdValue,
+      data: abi.encodeWithSelector(bytes4(0x12345678)),
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    // Set valueLimit to allow first two calls but not the third
+    SessionPermissions memory perms = SessionPermissions({
+      signer: sessionWallet.addr,
+      valueLimit: valueLimit,
+      deadline: block.timestamp + 1 days,
+      permissions: new Permission[](3)
+    });
+
+    // Add permissions for all three targets
+    for (uint256 i = 0; i < 3; i++) {
+      perms.permissions[i] = Permission({ target: payload.calls[i].to, rules: new ParameterRule[](1) });
+      perms.permissions[i].rules[0] = ParameterRule({
+        cumulative: false,
+        operation: ParameterOperation.EQUAL,
+        value: bytes32(bytes4(0x12345678)),
+        offset: 0,
+        mask: SELECTOR_MASK
+      });
+    }
+
+    SessionPermissions[] memory permsArr = _toArray(perms);
+    SessionUsageLimits memory usage;
+    usage.signer = sessionWallet.addr;
+    usage.limits = new UsageLimit[](0);
+    usage.totalValueUsed = 0;
+
+    // First transaction: Validate first call
+    SessionUsageLimits memory newUsage =
+      harness.validateExplicitCall(payload, 0, wallet, sessionWallet.addr, permsArr, 0, usage);
+    assertEq(newUsage.totalValueUsed, firstValue, "First call should add firstValue to total value");
+
+    // Increment usage limit after first call
+    UsageLimit[] memory limits = new UsageLimit[](1);
+    limits[0] = UsageLimit({
+      usageHash: keccak256(abi.encode(sessionWallet.addr, VALUE_TRACKING_ADDRESS)),
+      usageAmount: firstValue
+    });
+    vm.prank(wallet);
+    harness.incrementUsageLimit(limits);
+
+    // Second transaction: Validate second call
+    newUsage = harness.validateExplicitCall(payload, 1, wallet, sessionWallet.addr, permsArr, 1, newUsage);
+    assertEq(newUsage.totalValueUsed, firstValue + secondValue, "Second call should add secondValue to total value");
+
+    // Increment usage limit after second call
+    limits[0].usageAmount = firstValue + secondValue;
+    vm.prank(wallet);
+    harness.incrementUsageLimit(limits);
+
+    // Third transaction: Try to make third call which should fail
+    vm.expectRevert(SessionErrors.InvalidValue.selector);
+    harness.validateExplicitCall(payload, 2, wallet, sessionWallet.addr, permsArr, 2, newUsage);
+  }
+
 }
 
 contract ExplicitSessionManagerHarness is ExplicitSessionManager {
