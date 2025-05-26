@@ -72,7 +72,7 @@ library LibBytesPointer {
   function readUint16(bytes calldata _data, uint256 _index) internal pure returns (uint16 a, uint256 newPointer) {
     assembly {
       let word := calldataload(add(_index, _data.offset))
-      a := and(shr(240, word), 0xffff)
+      a := shr(240, word)
       newPointer := add(_index, 2)
     }
   }
@@ -93,7 +93,7 @@ library LibBytesPointer {
   function readUint24(bytes calldata _data, uint256 _index) internal pure returns (uint24 a, uint256 newPointer) {
     assembly {
       let word := calldataload(add(_index, _data.offset))
-      a := and(shr(232, word), 0xffffff)
+      a := shr(232, word)
       newPointer := add(_index, 3)
     }
   }
@@ -101,14 +101,15 @@ library LibBytesPointer {
   function readUint64(bytes calldata _data, uint256 _index) internal pure returns (uint64 a, uint256 newPointer) {
     assembly {
       let word := calldataload(add(_index, _data.offset))
-      a := and(shr(192, word), 0xffffffffffffffff)
+      a := shr(192, word)
       newPointer := add(_index, 8)
     }
   }
 
   function readBytes4(bytes calldata _data, uint256 _pointer) internal pure returns (bytes4 a, uint256 newPointer) {
     assembly {
-      a := calldataload(add(_pointer, _data.offset))
+      let word := calldataload(add(_pointer, _data.offset))
+      a := and(word, 0xffffffff00000000000000000000000000000000000000000000000000000000)
       newPointer := add(_pointer, 4)
     }
   }
@@ -130,7 +131,7 @@ library LibBytesPointer {
   function readUint160(bytes calldata _data, uint256 _index) internal pure returns (uint160 a, uint256 newPointer) {
     assembly {
       let word := calldataload(add(_index, _data.offset))
-      a := and(shr(96, word), 0xffffffffffffffffffffffffffffffffffffffff)
+      a := shr(96, word)
       newPointer := add(_index, 20)
     }
   }
