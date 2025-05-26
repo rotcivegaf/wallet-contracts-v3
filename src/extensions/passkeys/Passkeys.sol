@@ -2,7 +2,6 @@
 pragma solidity ^0.8.27;
 
 import { ISapientCompact } from "../../modules/interfaces/ISapient.sol";
-import { LibBytes } from "../../utils/LibBytes.sol";
 
 import { LibBytesPointer } from "../../utils/LibBytesPointer.sol";
 import { LibOptim } from "../../utils/LibOptim.sol";
@@ -92,7 +91,7 @@ contract Passkeys is ISapientCompact {
         (_webAuthnAuth.s, pointer) = LibBytesPointer.readBytes32(_signature, pointer);
 
         (_x, pointer) = LibBytesPointer.readBytes32(_signature, pointer);
-        _y = LibBytes.readBytes32(_signature, pointer);
+        (_y, pointer) = LibBytesPointer.readBytes32(_signature, pointer);
       } else {
         (_webAuthnAuth, _requireUserVerification, _x, _y, _metadata) =
           abi.decode(_signature[1:], (WebAuthn.WebAuthnAuth, bool, bytes32, bytes32, bytes32));
