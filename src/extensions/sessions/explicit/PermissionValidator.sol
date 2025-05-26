@@ -2,12 +2,12 @@
 pragma solidity ^0.8.27;
 
 import { Payload } from "../../../modules/interfaces/ISapient.sol";
-import { LibBytesPointer } from "../../../utils/LibBytesPointer.sol";
+import { LibBytes } from "../../../utils/LibBytes.sol";
 import { ParameterOperation, ParameterRule, Permission, UsageLimit } from "./Permission.sol";
 
 abstract contract PermissionValidator {
 
-  using LibBytesPointer for bytes;
+  using LibBytes for bytes;
 
   /// @notice Mapping of usage limit hashes to their usage amounts
   mapping(address => mapping(bytes32 => uint256)) private limitUsage;

@@ -1,28 +1,28 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import { LibBytesPointer } from "../../src/utils/LibBytesPointer.sol";
+import { LibBytes } from "../../src/utils/LibBytes.sol";
 import { AdvTest } from "./TestUtils.sol";
 import { Test, Vm } from "forge-std/Test.sol";
 
-contract LibBytesPointerImp {
+contract LibBytesImp {
 
   function readFirstUint8(
     bytes calldata data
   ) external pure returns (uint8 a, uint256 newPointer) {
-    return LibBytesPointer.readFirstUint8(data);
+    return LibBytes.readFirstUint8(data);
   }
 
   function readUint8(bytes calldata data, uint256 index) external pure returns (uint8 a, uint256 newPointer) {
-    return LibBytesPointer.readUint8(data, index);
+    return LibBytes.readUint8(data, index);
   }
 
   function readAddress(bytes calldata data, uint256 index) external pure returns (address a, uint256 newPointer) {
-    return LibBytesPointer.readAddress(data, index);
+    return LibBytes.readAddress(data, index);
   }
 
   function readUint16(bytes calldata data, uint256 index) external pure returns (uint16 a, uint256 newPointer) {
-    return LibBytesPointer.readUint16(data, index);
+    return LibBytes.readUint16(data, index);
   }
 
   function readUintX(
@@ -30,48 +30,48 @@ contract LibBytesPointerImp {
     uint256 index,
     uint256 length
   ) external pure returns (uint256 a, uint256 newPointer) {
-    return LibBytesPointer.readUintX(data, index, length);
+    return LibBytes.readUintX(data, index, length);
   }
 
   function readUint24(bytes calldata data, uint256 index) external pure returns (uint24 a, uint256 newPointer) {
-    return LibBytesPointer.readUint24(data, index);
+    return LibBytes.readUint24(data, index);
   }
 
   function readUint64(bytes calldata data, uint256 index) external pure returns (uint64 a, uint256 newPointer) {
-    return LibBytesPointer.readUint64(data, index);
+    return LibBytes.readUint64(data, index);
   }
 
   function readBytes4(bytes calldata data, uint256 pointer) external pure returns (bytes4 a, uint256 newPointer) {
-    return LibBytesPointer.readBytes4(data, pointer);
+    return LibBytes.readBytes4(data, pointer);
   }
 
   function readBytes32(bytes calldata data, uint256 pointer) external pure returns (bytes32 a, uint256 newPointer) {
-    return LibBytesPointer.readBytes32(data, pointer);
+    return LibBytes.readBytes32(data, pointer);
   }
 
   function readUint256(bytes calldata data, uint256 index) external pure returns (uint256 a, uint256 newPointer) {
-    return LibBytesPointer.readUint256(data, index);
+    return LibBytes.readUint256(data, index);
   }
 
   function readUint160(bytes calldata data, uint256 index) external pure returns (uint160 a, uint256 newPointer) {
-    return LibBytesPointer.readUint160(data, index);
+    return LibBytes.readUint160(data, index);
   }
 
   function readRSVCompact(
     bytes calldata data,
     uint256 index
   ) external pure returns (bytes32 r, bytes32 s, uint8 v, uint256 newPointer) {
-    return LibBytesPointer.readRSVCompact(data, index);
+    return LibBytes.readRSVCompact(data, index);
   }
 
 }
 
-contract LibBytesPointerTest is AdvTest {
+contract LibBytesTest is AdvTest {
 
-  LibBytesPointerImp public bytesImp;
+  LibBytesImp public bytesImp;
 
   function setUp() public {
-    bytesImp = new LibBytesPointerImp();
+    bytesImp = new LibBytesImp();
   }
 
   function test_readFirstUint8(

@@ -9,7 +9,7 @@ pragma solidity ^0.8.18;
  * @dev These functions do not check if the input index is within the bounds of the data array.
  *         Reading out of bounds may return dirty values.
  */
-library LibBytesPointer {
+library LibBytes {
 
   function readFirstUint8(
     bytes calldata _data
