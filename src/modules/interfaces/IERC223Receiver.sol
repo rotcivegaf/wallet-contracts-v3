@@ -5,12 +5,11 @@ pragma solidity ^0.8.18;
 /// @notice Interface for the ERC223 receiver module
 interface IERC223Receiver {
 
-  /// @notice Called when tokens are received by this contract
-  /// @param operator The address which initiated the transfer
+  /// @notice Called when ERC223 tokens are received by this contract
   /// @param from The address which previously owned the tokens
-  /// @param to The address which is receiving the tokens
-  /// @param amount The amount of tokens being transferred
-  /// @param data Additional data with no specified format
-  function tokenReceived(address operator, address from, address to, uint256 amount, bytes calldata data) external;
+  /// @param value The amount of tokens being transferred
+  /// @param data Transaction metadata
+  /// @return signature The signature of the function to be called
+  function tokenReceived(address from, uint256 value, bytes calldata data) external returns (bytes4 signature);
 
 }

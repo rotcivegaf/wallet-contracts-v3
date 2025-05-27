@@ -86,7 +86,9 @@ contract Hooks is SelfAuth, IERC1155Receiver, IERC777Receiver, IERC721Receiver, 
     return Hooks.onERC721Received.selector;
   }
 
-  function tokenReceived(address, uint256, bytes calldata) external { }
+  function tokenReceived(address, uint256, bytes calldata) external pure returns (bytes4) {
+    return Hooks.tokenReceived.selector;
+  }
 
   fallback() external payable {
     if (msg.data.length >= 4) {
