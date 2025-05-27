@@ -33,6 +33,7 @@ abstract contract BaseAuth is IAuth, IPartialAuth, ISapient, IERC1271, SelfAuth 
   /// @notice Error thrown when the static signature has the wrong caller
   error InvalidStaticSignatureWrongCaller(bytes32 _opHash, address _caller, address _expectedCaller);
 
+  /// @notice Event emitted when a static signature is set
   event StaticSignatureSet(bytes32 _hash, address _address, uint96 _timestamp);
 
   function _getStaticSignature(
@@ -48,17 +49,29 @@ abstract contract BaseAuth is IAuth, IPartialAuth, ISapient, IERC1271, SelfAuth 
     );
   }
 
+  /// @notice Get the static signature for a specific hash
+  /// @param _hash The hash to get the static signature for
+  /// @return address The address associated with the static signature
+  /// @return timestamp The timestamp of the static signature
   function getStaticSignature(
     bytes32 _hash
   ) external view returns (address, uint256) {
     return _getStaticSignature(_hash);
   }
 
+  /// @notice Set the static signature for a specific hash
+  /// @param _hash The hash to set the static signature for
+  /// @param _address The address to associate with the static signature
+  /// @param _timestamp The timestamp of the static signature
+  /// @dev Only callable by the wallet itself
   function setStaticSignature(bytes32 _hash, address _address, uint96 _timestamp) external onlySelf {
     _setStaticSignature(_hash, _address, _timestamp);
     emit StaticSignatureSet(_hash, _address, _timestamp);
   }
 
+  /// @notice Update the image hash
+  /// @param _imageHash The new image hash
+  /// @dev Only callable by the wallet itself
   function updateImageHash(
     bytes32 _imageHash
   ) external virtual onlySelf {
@@ -103,6 +116,7 @@ abstract contract BaseAuth is IAuth, IPartialAuth, ISapient, IERC1271, SelfAuth 
     isValid = _isValidImage(imageHash);
   }
 
+  /// @inheritdoc ISapient
   function recoverSapientSignature(
     Payload.Decoded memory _payload,
     bytes calldata _signature
@@ -125,6 +139,7 @@ abstract contract BaseAuth is IAuth, IPartialAuth, ISapient, IERC1271, SelfAuth 
     return bytes32(uint256(1));
   }
 
+  /// @inheritdoc IERC1271
   function isValidSignature(bytes32 _hash, bytes calldata _signature) external view returns (bytes4) {
     Payload.Decoded memory payload = Payload.fromDigest(_hash);
 
@@ -136,6 +151,7 @@ abstract contract BaseAuth is IAuth, IPartialAuth, ISapient, IERC1271, SelfAuth 
     return IERC1271_MAGIC_VALUE_HASH;
   }
 
+  /// @inheritdoc IPartialAuth
   function recoverPartialSignature(
     Payload.Decoded memory _payload,
     bytes calldata _signature
