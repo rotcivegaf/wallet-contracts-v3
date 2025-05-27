@@ -172,10 +172,10 @@ contract Recovery is ISapientCompact {
 
     if (_signature.length == 64) {
       // Try an ECDSA signature
-      (bytes32 r, bytes32 yParityAndS) = abi.decode(_signature, (bytes32, bytes32));
-      uint256 yParity = uint256(yParityAndS >> 255);
-      bytes32 s = bytes32(uint256(yParityAndS) & 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);
-      uint8 v = uint8(yParity) + 27;
+      bytes32 r;
+      bytes32 s;
+      uint8 v;
+      (r, s, v,) = _signature.readRSVCompact(0);
 
       address addr = ecrecover(rPayloadHash, v, r, s);
       if (addr == _signer) {

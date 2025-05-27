@@ -218,13 +218,9 @@ library BaseSig {
           }
 
           bytes32 r;
-          bytes32 yParityAndS;
-          (r, rindex) = _signature.readBytes32(rindex);
-          (yParityAndS, rindex) = _signature.readBytes32(rindex);
-
-          uint256 yParity = uint256(yParityAndS >> 255);
-          bytes32 s = bytes32(uint256(yParityAndS) & 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);
-          uint8 v = uint8(yParity) + 27;
+          bytes32 s;
+          uint8 v;
+          (r, s, v, rindex) = _signature.readRSVCompact(rindex);
 
           address addr = ecrecover(_opHash, v, r, s);
 
@@ -387,13 +383,9 @@ library BaseSig {
           }
 
           bytes32 r;
-          bytes32 yParityAndS;
-          (r, rindex) = _signature.readBytes32(rindex);
-          (yParityAndS, rindex) = _signature.readBytes32(rindex);
-
-          uint256 yParity = uint256(yParityAndS >> 255);
-          bytes32 s = bytes32(uint256(yParityAndS) & ((1 << 255) - 1));
-          uint8 v = uint8(yParity) + 27;
+          bytes32 s;
+          uint8 v;
+          (r, s, v, rindex) = _signature.readRSVCompact(rindex);
 
           address addr = ecrecover(keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", _opHash)), v, r, s);
 
