@@ -5,8 +5,12 @@ import { LibBytes } from "../utils/LibBytes.sol";
 
 using LibBytes for bytes;
 
+/// @title Payload
+/// @author Agustin Aguilar, Michael Standen, William Hua
+/// @notice Library for encoding and decoding payloads
 library Payload {
 
+  /// @notice Error thrown when the kind is invalid
   error InvalidKind(uint8 kind);
 
   /// @dev keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)")
@@ -44,15 +48,23 @@ library Payload {
   /// @dev keccak256("ConfigUpdate(bytes32 imageHash,address[] wallets)")
   bytes32 private constant CONFIG_UPDATE_TYPEHASH = 0x11fdeb7e8373a1aa96bfac8d0ea91526b2c5d15e5cee20e0543e780258f3e8e4;
 
+  /// @notice Kind of transaction
   uint8 public constant KIND_TRANSACTIONS = 0x00;
+  /// @notice Kind of digest
   uint8 public constant KIND_MESSAGE = 0x01;
+  /// @notice Kind of config update
   uint8 public constant KIND_CONFIG_UPDATE = 0x02;
+  /// @notice Kind of message
   uint8 public constant KIND_DIGEST = 0x03;
 
+  /// @notice Behavior on error: ignore error
   uint8 public constant BEHAVIOR_IGNORE_ERROR = 0x00;
+  /// @notice Behavior on error: revert on error
   uint8 public constant BEHAVIOR_REVERT_ON_ERROR = 0x01;
+  /// @notice Behavior on error: abort on error
   uint8 public constant BEHAVIOR_ABORT_ON_ERROR = 0x02;
 
+  /// @notice Payload call information
   struct Call {
     address to;
     uint256 value;

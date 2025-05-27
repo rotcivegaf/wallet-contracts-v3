@@ -12,6 +12,9 @@ import { ISapient, ISapientCompact } from "../interfaces/ISapient.sol";
 using LibBytes for bytes;
 using Payload for Payload.Decoded;
 
+/// @title BaseSig
+/// @author Agustin Aguilar, Michael Standen, William Hua, Shun Kakinoki
+/// @notice Library for recovering signatures from the base-auth payload
 library BaseSig {
 
   uint256 internal constant FLAG_SIGNATURE_HASH = 0;
@@ -26,10 +29,15 @@ library BaseSig {
   uint256 internal constant FLAG_SIGNATURE_SAPIENT = 9;
   uint256 internal constant FLAG_SIGNATURE_SAPIENT_COMPACT = 10;
 
+  /// @notice Error thrown when the weight is too low for a chained signature
   error LowWeightChainedSignature(bytes _signature, uint256 _threshold, uint256 _weight);
+  /// @notice Error thrown when the ERC1271 signature is invalid
   error InvalidERC1271Signature(bytes32 _opHash, address _signer, bytes _signature);
+  /// @notice Error thrown when the checkpoint order is wrong
   error WrongChainedCheckpointOrder(uint256 _nextCheckpoint, uint256 _checkpoint);
+  /// @notice Error thrown when the snapshot is unused
   error UnusedSnapshot(Snapshot _snapshot);
+  /// @notice Error thrown when the signature flag is invalid
   error InvalidSignatureFlag(uint256 _flag);
 
   function _leafForAddressAndWeight(address _addr, uint256 _weight) internal pure returns (bytes32) {

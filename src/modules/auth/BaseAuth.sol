@@ -15,15 +15,22 @@ import { SelfAuth } from "./SelfAuth.sol";
 
 using Payload for Payload.Decoded;
 
+/// @title BaseAuth
+/// @author Agustin Aguilar, Michael Standen
+/// @notice Base contract for the auth module
 abstract contract BaseAuth is IAuth, ISapient, IERC1271, SelfAuth {
 
-  //                                              keccak256("org.sequence.module.auth.static")
+  /// @dev keccak256("org.sequence.module.auth.static")
   bytes32 private constant STATIC_SIGNATURE_KEY =
     bytes32(0xc852adf5e97c2fc3b38f405671e91b7af1697ef0287577f227ef10494c2a8e86);
 
+  /// @notice Error thrown when the sapient signature is invalid
   error InvalidSapientSignature(Payload.Decoded _payload, bytes _signature);
+  /// @notice Error thrown when the signature weight is invalid
   error InvalidSignatureWeight(uint256 _threshold, uint256 _weight);
+  /// @notice Error thrown when the static signature has expired
   error InvalidStaticSignatureExpired(bytes32 _opHash, uint256 _expires);
+  /// @notice Error thrown when the static signature has the wrong caller
   error InvalidStaticSignatureWrongCaller(bytes32 _opHash, address _caller, address _expectedCaller);
 
   event StaticSignatureSet(bytes32 _hash, address _address, uint96 _timestamp);

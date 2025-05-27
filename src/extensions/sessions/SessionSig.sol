@@ -12,6 +12,9 @@ import { Attestation, LibAttestation } from "./implicit/Attestation.sol";
 using LibBytes for bytes;
 using LibAttestation for Attestation;
 
+/// @title SessionSig
+/// @author Michael Standen, Agustin Aguilar
+/// @notice Library for session signatures
 library SessionSig {
 
   uint256 internal constant FLAG_PERMISSIONS = 0;
@@ -22,23 +25,34 @@ library SessionSig {
 
   uint256 internal constant MIN_ENCODED_PERMISSION_SIZE = 86;
 
+  /// @notice Call signature for a specific session
   struct CallSignature {
+    /// @notice If the call is implicit
     bool isImplicit;
+    /// @notice Address of the session signer
     address sessionSigner;
-    uint8 sessionPermission; // For explicit
-    Attestation attestation; // For implicit
+    /// @notice Session permission for explicit calls
+    uint8 sessionPermission;
+    /// @notice Attestation for implicit calls
+    Attestation attestation;
   }
 
+  /// @notice Decoded signature for a specific session
   struct DecodedSignature {
+    /// @notice Image hash
     bytes32 imageHash;
+    /// @notice Identity signer
     address identitySigner;
+    /// @notice Implicit blacklist
     address[] implicitBlacklist;
+    /// @notice Session permissions
     SessionPermissions[] sessionPermissions;
+    /// @notice Call signatures
     CallSignature[] callSignatures;
   }
 
   /// @notice Recovers the decoded signature from the encodedSignature bytes.
-  /// The encoded layout is conceptually separated into three parts:
+  /// @dev The encoded layout is conceptually separated into three parts:
   ///  1) Session Configuration
   ///  2) A reusable list of Attestations + their identity signatures (if any implicit calls exist)
   ///  3) Call Signatures (one per call in the payload)
@@ -378,10 +392,13 @@ library SessionSig {
 
   /// @notice Hashes a call with replay protection.
   /// @dev The replay protection is based on the chainId, space, and nonce in the payload.
+  /// @param call The call to hash
+  /// @param payload The payload to hash
+  /// @return callHash The hash of the call with replay protection
   function hashCallWithReplayProtection(
     Payload.Call calldata call,
     Payload.Decoded calldata payload
-  ) public view returns (bytes32) {
+  ) public view returns (bytes32 callHash) {
     return keccak256(
       abi.encodePacked(payload.noChainId ? 0 : block.chainid, payload.space, payload.nonce, Payload.hashCall(call))
     );

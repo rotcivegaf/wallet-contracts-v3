@@ -6,19 +6,31 @@ import { LibBytes } from "src/utils/LibBytes.sol";
 
 using LibBytes for bytes;
 
+/// @notice Attestation for a specific session
 struct Attestation {
+  /// @notice Address of the approved signer
   address approvedSigner;
+  /// @notice Identity type
   bytes4 identityType;
+  /// @notice Hash of the issuer
   bytes32 issuerHash;
+  /// @notice Hash of the audience
   bytes32 audienceHash;
+  /// @notice Application data
   bytes applicationData;
+  /// @notice Auth data
   AuthData authData;
 }
 
+/// @notice Auth data for an attestation
 struct AuthData {
+  /// @notice Authorization redirect URL
   string redirectUrl;
 }
 
+/// @title LibAttestation
+/// @author Michael Standen
+/// @notice Library for attestation management
 library LibAttestation {
 
   /// @notice Hashes an attestation

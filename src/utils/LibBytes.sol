@@ -1,14 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.18;
 
-/**
- * @title Library for reading data from bytes arrays
- * @author Agustin Aguilar (aa@horizon.io), Michael Standen (mstan@horizon.io)
- * @notice This library contains functions for reading data from bytes arrays.
- *
- * @dev These functions do not check if the input index is within the bounds of the data array.
- *         Reading out of bounds may return dirty values.
- */
+/// @title Library for reading data from bytes arrays
+/// @author Agustin Aguilar (aa@horizon.io), Michael Standen (mstan@horizon.io)
+/// @notice This library contains functions for reading data from bytes arrays.
+/// @dev These functions do not check if the input index is within the bounds of the data array.
+/// @dev Reading out of bounds may return dirty values.
 library LibBytes {
 
   function readFirstUint8(
@@ -104,7 +101,7 @@ library LibBytes {
     }
   }
 
-  // ERC-2098 Compact Signature
+  /// @dev ERC-2098 Compact Signature
   function readRSVCompact(
     bytes calldata _data,
     uint256 _index

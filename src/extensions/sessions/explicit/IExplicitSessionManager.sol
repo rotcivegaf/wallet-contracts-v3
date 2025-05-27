@@ -25,6 +25,9 @@ struct SessionUsageLimits {
   uint256 totalValueUsed;
 }
 
+/// @title IExplicitSessionManager
+/// @author Agustin Aguilar, Michael Standen
+/// @notice Interface for the explicit session manager
 interface IExplicitSessionManager {
 
   /// @notice Increment usage for a caller's given session and target
