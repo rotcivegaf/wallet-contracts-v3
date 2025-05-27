@@ -4,10 +4,10 @@ pragma solidity ^0.8.27;
 import { Payload } from "../Payload.sol";
 
 /// @notice Snapshot for a specific wallet
+/// @param imageHash Image hash of the wallet
+/// @param checkpoint Checkpoint identifier
 struct Snapshot {
-  /// @notice Image hash
   bytes32 imageHash;
-  /// @notice Checkpoint
   uint256 checkpoint;
 }
 

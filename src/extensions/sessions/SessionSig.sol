@@ -26,28 +26,28 @@ library SessionSig {
   uint256 internal constant MIN_ENCODED_PERMISSION_SIZE = 86;
 
   /// @notice Call signature for a specific session
+  /// @param isImplicit If the call is implicit
+  /// @param sessionSigner Address of the session signer
+  /// @param sessionPermission Session permission for explicit calls
+  /// @param attestation Attestation for implicit calls
   struct CallSignature {
-    /// @notice If the call is implicit
     bool isImplicit;
-    /// @notice Address of the session signer
     address sessionSigner;
-    /// @notice Session permission for explicit calls
     uint8 sessionPermission;
-    /// @notice Attestation for implicit calls
     Attestation attestation;
   }
 
   /// @notice Decoded signature for a specific session
+  /// @param imageHash Derived configuration image hash
+  /// @param identitySigner Identity signer address
+  /// @param implicitBlacklist Implicit blacklist addresses
+  /// @param sessionPermissions Session permissions for each explicit signer
+  /// @param callSignatures Call signatures for each call in the payload
   struct DecodedSignature {
-    /// @notice Image hash
     bytes32 imageHash;
-    /// @notice Identity signer
     address identitySigner;
-    /// @notice Implicit blacklist
     address[] implicitBlacklist;
-    /// @notice Session permissions
     SessionPermissions[] sessionPermissions;
-    /// @notice Call signatures
     CallSignature[] callSignatures;
   }
 

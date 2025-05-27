@@ -4,10 +4,10 @@ pragma solidity ^0.8.27;
 import { LibBytes } from "../../../utils/LibBytes.sol";
 
 /// @notice Permission for a specific session signer
+/// @param target Address of the target contract this permission applies to
+/// @param rules Array of parameter rules
 struct Permission {
-  /// @notice Address of the target contract
   address target;
-  /// @notice Array of parameter rules
   ParameterRule[] rules;
 }
 
@@ -20,24 +20,24 @@ enum ParameterOperation {
 }
 
 /// @notice Parameter rule for a specific session signer
+/// @param cumulative If the value should accumulate over multiple calls
+/// @param operation Operation to apply to the parameter
+/// @param value Value to compare against the masked parameter
+/// @param offset Offset in calldata to read the parameter
+/// @param mask Mask to apply to the parameter
 struct ParameterRule {
-  /// @notice If the value should accumulate over multiple calls
   bool cumulative;
-  /// @notice Operation to apply to the parameter
   ParameterOperation operation;
-  /// @notice Value to compare against
   bytes32 value;
-  /// @notice Offset in calldata to read the parameter
   uint256 offset;
-  /// @notice Mask to apply to the parameter
   bytes32 mask;
 }
 
 /// @notice Usage limit for a specific session signer
+/// @param usageHash Usage identifier
+/// @param usageAmount Amount of usage
 struct UsageLimit {
-  /// @notice Usage identifier
   bytes32 usageHash;
-  /// @notice Amount of usage
   uint256 usageAmount;
 }
 

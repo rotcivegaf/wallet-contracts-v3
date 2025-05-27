@@ -65,6 +65,13 @@ library Payload {
   uint8 public constant BEHAVIOR_ABORT_ON_ERROR = 0x02;
 
   /// @notice Payload call information
+  /// @param to Address of the target contract
+  /// @param value Value to send with the call
+  /// @param data Data to send with the call
+  /// @param gasLimit Gas limit for the call
+  /// @param delegateCall If the call is a delegate call
+  /// @param onlyFallback If the call should only be executed in an error scenario
+  /// @param behaviorOnError Behavior on error
   struct Call {
     address to;
     uint256 value;
@@ -75,6 +82,16 @@ library Payload {
     uint256 behaviorOnError;
   }
 
+  /// @notice Decoded payload
+  /// @param kind Kind of payload
+  /// @param noChainId If the chain ID should be omitted
+  /// @param calls Array of calls (transaction kind)
+  /// @param space Nonce space for the calls (transaction kind)
+  /// @param nonce Nonce value for the calls (transaction kind)
+  /// @param message Message to validate (message kind)
+  /// @param imageHash Image hash to update to (config update kind)
+  /// @param digest Digest to validate (digest kind)
+  /// @param parentWallets Parent wallets
   struct Decoded {
     uint8 kind;
     bool noChainId;

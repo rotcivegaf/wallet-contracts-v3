@@ -7,24 +7,24 @@ import { LibBytes } from "src/utils/LibBytes.sol";
 using LibBytes for bytes;
 
 /// @notice Attestation for a specific session
+/// @param approvedSigner Address of the approved signer
+/// @param identityType Identity type
+/// @param issuerHash Hash of the issuer
+/// @param audienceHash Hash of the audience
+/// @param applicationData Unspecified application data
+/// @param authData Auth data
 struct Attestation {
-  /// @notice Address of the approved signer
   address approvedSigner;
-  /// @notice Identity type
   bytes4 identityType;
-  /// @notice Hash of the issuer
   bytes32 issuerHash;
-  /// @notice Hash of the audience
   bytes32 audienceHash;
-  /// @notice Application data
   bytes applicationData;
-  /// @notice Auth data
   AuthData authData;
 }
 
 /// @notice Auth data for an attestation
+/// @param redirectUrl Authorization redirect URL
 struct AuthData {
-  /// @notice Authorization redirect URL
   string redirectUrl;
 }
 
