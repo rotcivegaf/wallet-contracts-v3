@@ -59,7 +59,7 @@ abstract contract PermissionValidator {
       ParameterRule memory rule = permission.rules[i];
 
       // Extract value from calldata at offset
-      bytes32 value = call.data.readBytes32(rule.offset);
+      (bytes32 value,) = call.data.readBytes32(rule.offset);
 
       // Apply mask
       value = value & rule.mask;

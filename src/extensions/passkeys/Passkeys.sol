@@ -2,9 +2,8 @@
 pragma solidity ^0.8.27;
 
 import { ISapientCompact } from "../../modules/interfaces/ISapient.sol";
-import { LibBytes } from "../../utils/LibBytes.sol";
 
-import { LibBytesPointer } from "../../utils/LibBytesPointer.sol";
+import { LibBytes } from "../../utils/LibBytes.sol";
 import { LibOptim } from "../../utils/LibOptim.sol";
 import { WebAuthn } from "../../utils/WebAuthn.sol";
 
@@ -66,12 +65,12 @@ contract Passkeys is ISapientCompact {
         uint256 pointer = 1;
 
         if ((flags & 0x40) != 0) {
-          (_metadata, pointer) = LibBytesPointer.readBytes32(_signature, pointer);
+          (_metadata, pointer) = LibBytes.readBytes32(_signature, pointer);
         }
 
         {
           uint256 authDataSize;
-          (authDataSize, pointer) = LibBytesPointer.readUintX(_signature, pointer, bytesAuthDataSize);
+          (authDataSize, pointer) = LibBytes.readUintX(_signature, pointer, bytesAuthDataSize);
           uint256 nextPointer = pointer + authDataSize;
           _webAuthnAuth.authenticatorData = _signature[pointer:nextPointer];
           pointer = nextPointer;
@@ -79,20 +78,20 @@ contract Passkeys is ISapientCompact {
 
         {
           uint256 clientDataJSONSize;
-          (clientDataJSONSize, pointer) = LibBytesPointer.readUintX(_signature, pointer, bytesClientDataJSONSize);
+          (clientDataJSONSize, pointer) = LibBytes.readUintX(_signature, pointer, bytesClientDataJSONSize);
           uint256 nextPointer = pointer + clientDataJSONSize;
           _webAuthnAuth.clientDataJSON = string(_signature[pointer:nextPointer]);
           pointer = nextPointer;
         }
 
-        (_webAuthnAuth.challengeIndex, pointer) = LibBytesPointer.readUintX(_signature, pointer, bytesChallengeIndex);
-        (_webAuthnAuth.typeIndex, pointer) = LibBytesPointer.readUintX(_signature, pointer, bytesTypeIndex);
+        (_webAuthnAuth.challengeIndex, pointer) = LibBytes.readUintX(_signature, pointer, bytesChallengeIndex);
+        (_webAuthnAuth.typeIndex, pointer) = LibBytes.readUintX(_signature, pointer, bytesTypeIndex);
 
-        (_webAuthnAuth.r, pointer) = LibBytesPointer.readBytes32(_signature, pointer);
-        (_webAuthnAuth.s, pointer) = LibBytesPointer.readBytes32(_signature, pointer);
+        (_webAuthnAuth.r, pointer) = LibBytes.readBytes32(_signature, pointer);
+        (_webAuthnAuth.s, pointer) = LibBytes.readBytes32(_signature, pointer);
 
-        (_x, pointer) = LibBytesPointer.readBytes32(_signature, pointer);
-        _y = LibBytes.readBytes32(_signature, pointer);
+        (_x, pointer) = LibBytes.readBytes32(_signature, pointer);
+        (_y, pointer) = LibBytes.readBytes32(_signature, pointer);
       } else {
         (_webAuthnAuth, _requireUserVerification, _x, _y, _metadata) =
           abi.decode(_signature[1:], (WebAuthn.WebAuthnAuth, bool, bytes32, bytes32, bytes32));

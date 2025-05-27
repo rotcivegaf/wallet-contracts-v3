@@ -5,12 +5,12 @@ import { Calls } from "./modules/Calls.sol";
 import { Payload } from "./modules/Payload.sol";
 
 import { IAuth } from "./modules/interfaces/IAuth.sol";
-import { LibBytesPointer } from "./utils/LibBytesPointer.sol";
+import { LibBytes } from "./utils/LibBytes.sol";
 import { LibOptim } from "./utils/LibOptim.sol";
 
 contract Guest {
 
-  using LibBytesPointer for bytes;
+  using LibBytes for bytes;
 
   error DelegateCallNotAllowed(uint256 index);
 

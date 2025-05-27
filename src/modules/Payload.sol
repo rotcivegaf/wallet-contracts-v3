@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import { LibBytesPointer } from "../utils/LibBytesPointer.sol";
+import { LibBytes } from "../utils/LibBytes.sol";
 
-using LibBytesPointer for bytes;
+using LibBytes for bytes;
 
 library Payload {
 
