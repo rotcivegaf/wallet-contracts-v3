@@ -9,11 +9,16 @@ library Payload {
 
   error InvalidKind(uint8 kind);
 
-  bytes32 private constant EIP712_DOMAIN_TYPEHASH =
-    keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+  /// @dev keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)")
+  bytes32 private constant EIP712_DOMAIN_TYPEHASH = 0x8b73c3c69bb8fe3d512ecc4cf759cc79239f7b179b0ffacaa9a75d522b39400f;
 
-  bytes32 private constant EIP712_DOMAIN_NAME_SEQUENCE = keccak256("Sequence Wallet");
-  bytes32 private constant EIP712_DOMAIN_VERSION_SEQUENCE = keccak256("3");
+  /// @dev keccak256("Sequence Wallet")
+  bytes32 private constant EIP712_DOMAIN_NAME_SEQUENCE =
+    0x4aa45ca7ad825ceb1bf35643f0a58c295239df563b1b565c2485f96477c56318;
+
+  /// @dev keccak256("3")
+  bytes32 private constant EIP712_DOMAIN_VERSION_SEQUENCE =
+    0x2a80e1ef1d7842f27f2e6be0972bb708b9a135c38860dbe73c27c3486c34f4de;
 
   function domainSeparator(bool _noChainId, address _wallet) internal view returns (bytes32 _domainSeparator) {
     return keccak256(
@@ -27,17 +32,17 @@ library Payload {
     );
   }
 
-  bytes32 private constant CALL_TYPEHASH = keccak256(
-    "Call(address to,uint256 value,bytes data,uint256 gasLimit,bool delegateCall,bool onlyFallback,uint256 behaviorOnError)"
-  );
+  /// @dev keccak256("Call(address to,uint256 value,bytes data,uint256 gasLimit,bool delegateCall,bool onlyFallback,uint256 behaviorOnError)")
+  bytes32 private constant CALL_TYPEHASH = 0x0603985259a953da1f65a522f589c17bd1d0117ec1d3abb7c0788aef251ef437;
 
-  bytes32 private constant CALLS_TYPEHASH = keccak256(
-    "Calls(Call[] calls,uint256 space,uint256 nonce,address[] wallets)Call(address to,uint256 value,bytes data,uint256 gasLimit,bool delegateCall,bool onlyFallback,uint256 behaviorOnError)"
-  );
+  /// @dev keccak256("Calls(Call[] calls,uint256 space,uint256 nonce,address[] wallets)Call(address to,uint256 value,bytes data,uint256 gasLimit,bool delegateCall,bool onlyFallback,uint256 behaviorOnError)")
+  bytes32 private constant CALLS_TYPEHASH = 0x11e1e4079a79a66e4ade50033cfe2678cdd5341d2dfe5ef9513edb1a0be147a2;
 
-  bytes32 private constant MESSAGE_TYPEHASH = keccak256("Message(bytes message,address[] wallets)");
+  /// @dev keccak256("Message(bytes message,address[] wallets)")
+  bytes32 private constant MESSAGE_TYPEHASH = 0xe19a3b94fc3c7ece3f890d98a99bc422615537a08dea0603fa8425867d87d466;
 
-  bytes32 private constant CONFIG_UPDATE_TYPEHASH = keccak256("ConfigUpdate(bytes32 imageHash,address[] wallets)");
+  /// @dev keccak256("ConfigUpdate(bytes32 imageHash,address[] wallets)")
+  bytes32 private constant CONFIG_UPDATE_TYPEHASH = 0x11fdeb7e8373a1aa96bfac8d0ea91526b2c5d15e5cee20e0543e780258f3e8e4;
 
   uint8 public constant KIND_TRANSACTIONS = 0x00;
   uint8 public constant KIND_MESSAGE = 0x01;
