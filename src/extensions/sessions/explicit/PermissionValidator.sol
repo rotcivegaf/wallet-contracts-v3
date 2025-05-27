@@ -9,6 +9,9 @@ abstract contract PermissionValidator {
 
   using LibBytes for bytes;
 
+  /// @notice Emitted when the usage amount for a given wallet and usage hash is updated
+  event LimitUsageUpdated(address wallet, bytes32 usageHash, uint256 usageAmount);
+
   /// @notice Mapping of usage limit hashes to their usage amounts
   mapping(address => mapping(bytes32 => uint256)) private limitUsage;
 
@@ -26,6 +29,7 @@ abstract contract PermissionValidator {
   /// @param usageAmount The usage amount
   function setLimitUsage(address wallet, bytes32 usageHash, uint256 usageAmount) internal {
     limitUsage[wallet][usageHash] = usageAmount;
+    emit LimitUsageUpdated(wallet, usageHash, usageAmount);
   }
 
   /// @notice Validates a rules permission
