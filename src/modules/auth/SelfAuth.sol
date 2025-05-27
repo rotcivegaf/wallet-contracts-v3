@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-contract SelfAuth {
+abstract contract SelfAuth {
 
   error OnlySelf(address _sender);
 
