@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import { ISapient, Payload } from "../../../modules/interfaces/ISapient.sol";
+import { Payload } from "../../../modules/Payload.sol";
 import { LibBytesPointer } from "../../../utils/LibBytesPointer.sol";
 
 import { SessionErrors } from "../SessionErrors.sol";
@@ -153,14 +153,6 @@ abstract contract ExplicitSessionManager is IExplicitSessionManager, PermissionV
         revert SessionErrors.InvalidLimitUsageIncrement();
       }
     }
-  }
-
-  /// @notice Returns true if the contract implements the given interface
-  /// @param interfaceId The interface identifier
-  function supportsInterface(
-    bytes4 interfaceId
-  ) public pure virtual returns (bool) {
-    return interfaceId == type(ISapient).interfaceId || interfaceId == type(IExplicitSessionManager).interfaceId;
   }
 
 }

@@ -113,12 +113,4 @@ contract SessionManager is ISapient, ImplicitSessionManager, ExplicitSessionMana
     return sig.imageHash;
   }
 
-  /// @notice Returns true if the contract implements the given interface
-  /// @param interfaceId The interface identifier
-  function supportsInterface(
-    bytes4 interfaceId
-  ) public pure virtual override returns (bool) {
-    return interfaceId == type(ISapient).interfaceId || super.supportsInterface(interfaceId);
-  }
-
 }
