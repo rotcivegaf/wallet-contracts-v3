@@ -18,7 +18,7 @@ using Payload for Payload.Decoded;
 /// @title BaseAuth
 /// @author Agustin Aguilar, Michael Standen
 /// @notice Base contract for the auth module
-abstract contract BaseAuth is IAuth, ISapient, IERC1271, SelfAuth {
+abstract contract BaseAuth is IAuth, IPartialAuth, ISapient, IERC1271, SelfAuth {
 
   /// @dev keccak256("org.sequence.module.auth.static")
   bytes32 private constant STATIC_SIGNATURE_KEY =
