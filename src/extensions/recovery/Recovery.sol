@@ -4,10 +4,10 @@ pragma solidity ^0.8.27;
 import { Payload } from "../../modules/Payload.sol";
 import { IERC1271, IERC1271_MAGIC_VALUE_HASH } from "../../modules/interfaces/IERC1271.sol";
 import { ISapientCompact } from "../../modules/interfaces/ISapient.sol";
-import { LibBytesPointer } from "../../utils/LibBytesPointer.sol";
+import { LibBytes } from "../../utils/LibBytes.sol";
 import { LibOptim } from "../../utils/LibOptim.sol";
 
-using LibBytesPointer for bytes;
+using LibBytes for bytes;
 
 contract Recovery is ISapientCompact {
 

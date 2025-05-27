@@ -2,14 +2,14 @@
 pragma solidity ^0.8.27;
 
 import { Payload } from "../../modules/Payload.sol";
-import { LibBytesPointer } from "../../utils/LibBytesPointer.sol";
+import { LibBytes } from "../../utils/LibBytes.sol";
 import { LibOptim } from "../../utils/LibOptim.sol";
 import { SessionErrors } from "./SessionErrors.sol";
 import { SessionPermissions } from "./explicit/IExplicitSessionManager.sol";
 import { LibPermission, Permission } from "./explicit/Permission.sol";
 import { Attestation, LibAttestation } from "./implicit/Attestation.sol";
 
-using LibBytesPointer for bytes;
+using LibBytes for bytes;
 using LibAttestation for Attestation;
 
 library SessionSig {

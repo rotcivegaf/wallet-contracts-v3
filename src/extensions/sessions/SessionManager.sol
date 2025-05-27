@@ -3,7 +3,7 @@ pragma solidity ^0.8.27;
 
 import { Payload } from "../../modules/Payload.sol";
 import { ISapient } from "../../modules/interfaces/ISapient.sol";
-import { LibBytesPointer } from "../../utils/LibBytesPointer.sol";
+import { LibBytes } from "../../utils/LibBytes.sol";
 
 import { SessionErrors } from "./SessionErrors.sol";
 import { SessionSig } from "./SessionSig.sol";
@@ -16,7 +16,7 @@ import {
 import { Permission, UsageLimit } from "./explicit/Permission.sol";
 import { ImplicitSessionManager } from "./implicit/ImplicitSessionManager.sol";
 
-using LibBytesPointer for bytes;
+using LibBytes for bytes;
 
 contract SessionManager is ISapient, ImplicitSessionManager, ExplicitSessionManager {
 

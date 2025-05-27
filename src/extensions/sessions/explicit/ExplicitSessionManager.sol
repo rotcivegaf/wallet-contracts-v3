@@ -2,7 +2,7 @@
 pragma solidity ^0.8.27;
 
 import { Payload } from "../../../modules/Payload.sol";
-import { LibBytesPointer } from "../../../utils/LibBytesPointer.sol";
+import { LibBytes } from "../../../utils/LibBytes.sol";
 
 import { SessionErrors } from "../SessionErrors.sol";
 import { IExplicitSessionManager, SessionPermissions, SessionUsageLimits } from "./IExplicitSessionManager.sol";
@@ -11,7 +11,7 @@ import { PermissionValidator } from "./PermissionValidator.sol";
 
 abstract contract ExplicitSessionManager is IExplicitSessionManager, PermissionValidator {
 
-  using LibBytesPointer for bytes;
+  using LibBytes for bytes;
 
   // Special address used for tracking native token value limits
   address public constant VALUE_TRACKING_ADDRESS = address(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
