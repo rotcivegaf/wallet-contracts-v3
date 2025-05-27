@@ -336,7 +336,6 @@ library SessionSig {
       assembly {
         mstore(permissions, permissionsCount)
       }
-      sig.sessionPermissions = permissions;
     }
 
     return (sig, hasBlacklist);
