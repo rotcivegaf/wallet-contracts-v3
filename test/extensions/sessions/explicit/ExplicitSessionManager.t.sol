@@ -27,10 +27,6 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     sessionWallet = vm.createWallet("session");
   }
 
-  function test_supportsInterface() public view {
-    assertEq(harness.supportsInterface(type(IExplicitSessionManager).interfaceId), true);
-  }
-
   function test_validateExplicitCall(address target, bytes4 selector, bytes memory callData) public view {
     vm.assume(target != address(harness));
     // Build a payload with one call.

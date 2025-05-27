@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import { Payload } from "../../../modules/interfaces/ISapient.sol";
+import { Payload } from "../../../modules/Payload.sol";
 import { LibBytes } from "../../../utils/LibBytes.sol";
 import { ParameterOperation, ParameterRule, Permission, UsageLimit } from "./Permission.sol";
 
