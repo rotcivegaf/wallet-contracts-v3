@@ -325,8 +325,8 @@ Below is a hypothetical top-level signature that is **not** chained, uses a chec
 
 1. **signatureFlag** = `0x6C` => in binary `0110 1100`
    - Bit 6 => `1`, so we have a checkpointer
-   - Bits 4..2 => `110` => checkpoint size = 6 bytes
    - Bit 5 => `1`, threshold uses 2 bytes
+   - Bits 4..2 => `110` => checkpoint size = 6 bytes
    - Bit 1 => `0`, normal chain id usage
    - Bit 0 => `0`, not chained
 2. We read:
