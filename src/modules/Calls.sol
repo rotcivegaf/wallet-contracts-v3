@@ -5,7 +5,6 @@ import { LibOptim } from "../utils/LibOptim.sol";
 import { Nonce } from "./Nonce.sol";
 import { Payload } from "./Payload.sol";
 import { BaseAuth } from "./auth/BaseAuth.sol";
-import { SelfAuth } from "./auth/SelfAuth.sol";
 import { IDelegatedExtension } from "./interfaces/IDelegatedExtension.sol";
 
 /// @title Calls
