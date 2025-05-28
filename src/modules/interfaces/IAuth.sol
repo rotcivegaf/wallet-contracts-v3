@@ -7,10 +7,8 @@ pragma solidity ^0.8.27;
 abstract contract IAuth {
 
   function _isValidImage(
-    bytes32
-  ) internal view virtual returns (bool isValid) {
-    return false;
-  }
+    bytes32 imageHash
+  ) internal view virtual returns (bool isValid);
 
   function _updateImageHash(
     bytes32 imageHash
