@@ -144,7 +144,7 @@ The contract defines constants:
 | Constant Name                          | Value (Decimal) | Purpose                                                                                               |
 | -------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------- |
 | `FLAG_SIGNATURE_HASH`                  | 0               | ECDSA signature with `r,yParityAndS` (ERC-2098 compact) directly against `_opHash`.                   |
-| `FLAG_ADDRESS`                         | 1               | Just an address “leaf” (adds that address’s weight, but no actual ECDSA check)                        |
+| `FLAG_ADDRESS`                         | 1               | Just an address “leaf” (with no actual ECDSA check)                                                   |
 | `FLAG_SIGNATURE_ERC1271`               | 2               | A contract-based signature check using `isValidSignature(opHash, signature)`                          |
 | `FLAG_NODE`                            | 3               | Includes a raw 32-byte node hash in the merkle root. No weight added.                                 |
 | `FLAG_BRANCH`                          | 4               | Nested branch. The next bytes specify length, then recursion into `recoverBranch`.                    |
