@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
+/// @title SessionErrors
+/// @author Michael Standen
+/// @notice Errors for the session manager
 library SessionErrors {
 
   /// @notice Invalid session signer

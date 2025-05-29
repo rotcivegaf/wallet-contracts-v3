@@ -7,8 +7,12 @@ import { LibBytes } from "../../utils/LibBytes.sol";
 import { LibOptim } from "../../utils/LibOptim.sol";
 import { WebAuthn } from "../../utils/WebAuthn.sol";
 
+/// @title Passkeys
+/// @author Agustin Aguilar, Michael Standen
+/// @notice A sapient signer for passkeys
 contract Passkeys is ISapientCompact {
 
+  /// @notice Error thrown when the passkey signature is invalid
   error InvalidPasskeySignature(
     WebAuthn.WebAuthnAuth _webAuthnAuth, bool _requireUserVerification, bytes32 _x, bytes32 _y
   );
@@ -99,6 +103,7 @@ contract Passkeys is ISapientCompact {
     }
   }
 
+  /// @inheritdoc ISapientCompact
   function recoverSapientSignatureCompact(bytes32 _digest, bytes calldata _signature) external view returns (bytes32) {
     (
       WebAuthn.WebAuthnAuth memory _webAuthnAuth,

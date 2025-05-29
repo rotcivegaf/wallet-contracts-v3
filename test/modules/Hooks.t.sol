@@ -105,9 +105,11 @@ contract HooksTest is AdvTest {
   }
 
   // ERC223 Receiver Tests
-  function test_tokenReceived(address _from, uint256 _value, bytes calldata _data) external {
-    // This function should not revert
-    hooks.tokenReceived(_from, _value, _data);
+  function test_tokenReceived(address _from, uint256 _value, bytes calldata _data) external view {
+    bytes4 selector = IERC223Receiver.tokenReceived.selector;
+    assertEq(selector, bytes4(keccak256("tokenReceived(address,uint256,bytes)")));
+    bytes4 returnValue = hooks.tokenReceived(_from, _value, _data);
+    assertEq(returnValue, selector);
   }
 
   // Fallback and Receive Tests
