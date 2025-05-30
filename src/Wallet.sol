@@ -5,10 +5,10 @@ pragma solidity ^0.8.0;
 // Delegate Proxy in Huff
 // @title Delegate Proxy
 // @notice Implements a proxy that uses the contract's own address to store the location of the proxy.
-// All calls are forwarded to the stored proxy address as long as they don't include value.
+// All calls are forwarded to the stored proxy address as long as they don't include value
 // @author Agusx1211
 #define macro CONSTRUCTOR() = takes (0) returns (0) {
-  0x3e                   // [code + arg size] (code_size + 32)
+  0x41                   // [code + arg size] (code_size + 32)
   __codeoffset(MAIN)     // [code_start, code + arg size]
   returndatasize         // [0, code_start, code + arg size]
   codecopy               // []
@@ -26,8 +26,11 @@ pragma solidity ^0.8.0;
 #define macro MAIN() = takes(0) returns(0) {
   returndatasize     // [0]
   returndatasize     // [0, 0]
-  callvalue          // [cv, 0, 0]
-  success            // [nr, cv, 0, 0]
+  calldatasize       // [cs, 0, 0]
+  iszero             // [cs == 0, 0, 0]
+  callvalue          // [cv, cs == 0, 0, 0]
+  mul                // [cv * cs == 0, 0, 0]
+  success            // [nr, cv * cs == 0, 0, 0]
   jumpi
     calldatasize     // [cds, 0, 0]
     returndatasize   // [0, cds, 0, 0]
@@ -58,6 +61,6 @@ pragma solidity ^0.8.0;
 library Wallet {
 
   bytes internal constant creationCode =
-    hex"603e600e3d39601e805130553df33d3d34601c57363d3d373d363d30545af43d82803e903d91601c57fd5bf3";
+    hex"6041600e3d396021805130553df33d3d36153402601f57363d3d373d363d30545af43d82803e903d91601f57fd5bf3";
 
 }
