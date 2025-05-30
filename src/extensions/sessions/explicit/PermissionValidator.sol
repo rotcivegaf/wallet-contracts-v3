@@ -5,6 +5,9 @@ import { Payload } from "../../../modules/Payload.sol";
 import { LibBytes } from "../../../utils/LibBytes.sol";
 import { ParameterOperation, ParameterRule, Permission, UsageLimit } from "./Permission.sol";
 
+/// @title PermissionValidator
+/// @author Michael Standen, Agustin Aguilar
+/// @notice Validates permissions for a given call
 abstract contract PermissionValidator {
 
   using LibBytes for bytes;

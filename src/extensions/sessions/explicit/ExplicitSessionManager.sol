@@ -13,7 +13,7 @@ abstract contract ExplicitSessionManager is IExplicitSessionManager, PermissionV
 
   using LibBytes for bytes;
 
-  // Special address used for tracking native token value limits
+  /// @notice Special address used for tracking native token value limits
   address public constant VALUE_TRACKING_ADDRESS = address(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
 
   /// @inheritdoc IExplicitSessionManager

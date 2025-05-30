@@ -18,9 +18,14 @@ import { ImplicitSessionManager } from "./implicit/ImplicitSessionManager.sol";
 
 using LibBytes for bytes;
 
+/// @title SessionManager
+/// @author Michael Standen, Agustin Aguilar
+/// @notice Manager for smart sessions
 contract SessionManager is ISapient, ImplicitSessionManager, ExplicitSessionManager {
 
+  /// @notice Error thrown when the payload kind is invalid
   error InvalidPayloadKind();
+  /// @notice Error thrown when the calls length is invalid
   error InvalidCallsLength();
 
   /// @inheritdoc ISapient
