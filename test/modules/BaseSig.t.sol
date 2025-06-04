@@ -37,7 +37,41 @@ contract BaseSigTest is AdvTest {
     Payload.Decoded memory payload;
     payload.noChainId = true;
 
-    string memory config = PrimitivesRPC.randomConfig(vm, _maxDepth, _seed, 1, "");
+    string memory config = PrimitivesRPC.randomConfig(vm, _maxDepth, _seed, 1, "none");
+    bytes memory encodedConfig = PrimitivesRPC.toEncodedConfig(vm, config);
+
+    (, uint256 weight, bytes32 imageHash,, bytes32 opHash) =
+      baseSigImp.recoverPub(payload, encodedConfig, true, address(0));
+
+    assertEq(weight, 0);
+    assertEq(imageHash, PrimitivesRPC.getImageHash(vm, config));
+    assertEq(opHash, Payload.hashFor(payload, address(baseSigImp)));
+  }
+
+  function test_recover_random_config_unsigned_skewed_left(uint256 _seed) external {
+    uint256 _maxDepth = 54;
+
+    Payload.Decoded memory payload;
+    payload.noChainId = true;
+
+    string memory config = PrimitivesRPC.randomConfig(vm, _maxDepth, _seed, 1, "left");
+    bytes memory encodedConfig = PrimitivesRPC.toEncodedConfig(vm, config);
+
+    (, uint256 weight, bytes32 imageHash,, bytes32 opHash) =
+      baseSigImp.recoverPub(payload, encodedConfig, true, address(0));
+
+    assertEq(weight, 0);
+    assertEq(imageHash, PrimitivesRPC.getImageHash(vm, config));
+    assertEq(opHash, Payload.hashFor(payload, address(baseSigImp)));
+  }
+
+  function test_recover_random_config_unsigned_skewed_right(uint256 _seed) external {
+    uint256 _maxDepth = 54;
+
+    Payload.Decoded memory payload;
+    payload.noChainId = true;
+
+    string memory config = PrimitivesRPC.randomConfig(vm, _maxDepth, _seed, 1, "right");
     bytes memory encodedConfig = PrimitivesRPC.toEncodedConfig(vm, config);
 
     (, uint256 weight, bytes32 imageHash,, bytes32 opHash) =
