@@ -19,7 +19,7 @@ contract Guest {
 
   /// @notice Fallback function
   /// @dev Dispatches the guest call
-  fallback() external {
+  fallback() external payable {
     Payload.Decoded memory decoded = Payload.fromPackedCalls(msg.data);
     bytes32 opHash = Payload.hash(decoded);
     _dispatchGuest(decoded, opHash);
