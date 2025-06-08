@@ -104,6 +104,12 @@ library SessionSig {
         Attestation memory att;
         (att, pointer) = LibAttestation.fromPacked(encodedSignature, pointer);
 
+        // Validate the attestation issuance time
+        if (att.authData.issuedAt > block.timestamp) {
+          // Cannot be issued in the future
+          revert SessionErrors.InvalidAttestation();
+        }
+
         // Read the identity signature that approves this attestation
         {
           bytes32 r;

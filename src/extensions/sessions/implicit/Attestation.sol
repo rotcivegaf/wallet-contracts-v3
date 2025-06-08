@@ -24,8 +24,10 @@ struct Attestation {
 
 /// @notice Auth data for an attestation
 /// @param redirectUrl Authorization redirect URL
+/// @param issuedAt Timestamp of the attestation issuance
 struct AuthData {
   string redirectUrl;
+  uint64 issuedAt;
 }
 
 /// @title LibAttestation
@@ -64,18 +66,21 @@ library LibAttestation {
     return (attestation, newPointer);
   }
 
-  /// @notice Decodes the auth data from a packed bytes array
-  /// @param encoded The packed bytes array
+  /// @notice Decodes the auth data from a packed bytes
+  /// @param encoded The packed bytes containing the auth data
+  /// @param pointer The pointer to the start of the auth data within the encoded data
   /// @return authData The decoded auth data
+  /// @return newPointer The pointer to the end of the auth data within the encoded data
   function fromPackedAuthData(
     bytes calldata encoded,
     uint256 pointer
   ) internal pure returns (AuthData memory authData, uint256 newPointer) {
-    uint256 dataSize;
-    (dataSize, newPointer) = encoded.readUint24(pointer);
-    authData.redirectUrl = string(encoded[newPointer:newPointer + dataSize]);
-    newPointer += dataSize;
-    return (authData, newPointer);
+    uint24 redirectUrlLength;
+    (redirectUrlLength, pointer) = encoded.readUint24(pointer);
+    authData.redirectUrl = string(encoded[pointer:pointer + redirectUrlLength]);
+    pointer += redirectUrlLength;
+    (authData.issuedAt, pointer) = encoded.readUint64(pointer);
+    return (authData, pointer);
   }
 
   /// @notice Encodes an attestation into a packed bytes array
@@ -101,7 +106,7 @@ library LibAttestation {
   function toPackAuthData(
     AuthData memory authData
   ) internal pure returns (bytes memory encoded) {
-    return abi.encodePacked(uint24(bytes(authData.redirectUrl).length), bytes(authData.redirectUrl));
+    return abi.encodePacked(uint24(bytes(authData.redirectUrl).length), bytes(authData.redirectUrl), authData.issuedAt);
   }
 
   /// @notice Generates the implicit request magic return value

@@ -191,6 +191,7 @@ contract SessionManagerTest is SessionTestBase {
   function testInvalidDelegateCallReverts(Attestation memory attestation, bytes memory data) public {
     attestation.approvedSigner = sessionWallet.addr;
     attestation.authData.redirectUrl = "https://example.com"; // Normalise for safe JSONify
+    attestation.authData.issuedAt = uint64(bound(attestation.authData.issuedAt, 0, block.timestamp));
 
     // Build a payload with one call that erroneously uses delegateCall.
     uint256 callCount = 1;
@@ -297,6 +298,7 @@ contract SessionManagerTest is SessionTestBase {
   function testValidImplicitSessionSignature(Attestation memory attestation, bytes memory data) public {
     attestation.approvedSigner = sessionWallet.addr;
     attestation.authData.redirectUrl = "https://example.com"; // Normalise for safe JSONify
+    attestation.authData.issuedAt = uint64(bound(attestation.authData.issuedAt, 0, block.timestamp));
 
     // Build a payload with one call for implicit session.
     uint256 callCount = 1;

@@ -119,6 +119,8 @@ abstract contract SessionTestBase is AdvTest {
     json = string.concat(json, vm.toString(attestation.audienceHash));
     json = string.concat(json, '","authData":{"redirectUrl":"');
     json = string.concat(json, attestation.authData.redirectUrl);
+    json = string.concat(json, '","issuedAt":"');
+    json = string.concat(json, vm.toString(attestation.authData.issuedAt));
     json = string.concat(json, '"},"applicationData":"');
     json = string.concat(json, vm.toString(attestation.applicationData));
     json = string.concat(json, '"}');

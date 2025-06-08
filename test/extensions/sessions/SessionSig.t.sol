@@ -124,6 +124,7 @@ contract SessionSigTest is SessionTestBase {
   ) public {
     attestation.approvedSigner = sessionWallet.addr;
     attestation.authData.redirectUrl = "https://example.com"; // Normalise for safe JSONify
+    attestation.authData.issuedAt = uint64(bound(attestation.authData.issuedAt, 0, block.timestamp));
 
     Payload.Decoded memory payload = _buildPayload(1);
     {
@@ -179,6 +180,7 @@ contract SessionSigTest is SessionTestBase {
   ) public {
     attestation.approvedSigner = sessionWallet.addr;
     attestation.authData.redirectUrl = "https://example.com"; // Normalise for safe JSONify
+    attestation.authData.issuedAt = uint64(bound(attestation.authData.issuedAt, 0, block.timestamp));
 
     Payload.Decoded memory payload = _buildPayload(2);
     {
@@ -344,6 +346,54 @@ contract SessionSigTest is SessionTestBase {
     }
   }
 
+  function testRecover_invalidAttestationIssuedAt(
+    Attestation memory attestation
+  ) public {
+    attestation.approvedSigner = sessionWallet.addr;
+    attestation.authData.redirectUrl = "https://example.com"; // Normalise for safe JSONify
+    attestation.authData.issuedAt = uint64(bound(attestation.authData.issuedAt, block.timestamp + 1, type(uint256).max));
+
+    Payload.Decoded memory payload = _buildPayload(1);
+    {
+      payload.calls[0] = Payload.Call({
+        to: address(0xBEEF),
+        value: 123,
+        data: "test",
+        gasLimit: 0,
+        delegateCall: false,
+        onlyFallback: false,
+        behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+      });
+    }
+
+    // Sign the payload.
+    string memory callSignature = _createImplicitCallSignature(payload, 0, sessionWallet, identityWallet, attestation);
+
+    // Create the topology from the CLI.
+    string memory topology;
+    {
+      topology = PrimitivesRPC.sessionEmpty(vm, identityWallet.addr);
+    }
+
+    // Create the encoded signature.
+    bytes memory encoded;
+    {
+      string[] memory callSignatures = new string[](1);
+      callSignatures[0] = callSignature;
+      address[] memory explicitSigners = new address[](0);
+      address[] memory implicitSigners = new address[](1);
+      implicitSigners[0] = sessionWallet.addr;
+      encoded =
+        PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, explicitSigners, implicitSigners);
+    }
+
+    // Recover and validate.
+    {
+      vm.expectRevert(SessionErrors.InvalidAttestation.selector);
+      harness.recover(payload, encoded);
+    }
+  }
+
   function testRecover_invalidSessionSigner() public {
     Payload.Decoded memory payload = _buildPayload(1);
     {
@@ -423,6 +473,7 @@ contract SessionSigTest is SessionTestBase {
   ) public {
     attestation.approvedSigner = sessionWallet.addr;
     attestation.authData.redirectUrl = "https://example.com"; // Normalise for safe JSONify
+    attestation.authData.issuedAt = uint64(bound(attestation.authData.issuedAt, 0, block.timestamp));
 
     // Create a topology with an invalid identity signer
     string memory topology = PrimitivesRPC.sessionEmpty(vm, identityWallet.addr);
@@ -461,6 +512,7 @@ contract SessionSigTest is SessionTestBase {
   ) public {
     attestation.approvedSigner = sessionWallet.addr;
     attestation.authData.redirectUrl = "https://example.com"; // Normalise for safe JSONify
+    attestation.authData.issuedAt = uint64(bound(attestation.authData.issuedAt, 0, block.timestamp));
 
     // Create a topology with an invalid identity signer
     string memory topology = PrimitivesRPC.sessionEmpty(vm, address(0));
@@ -497,6 +549,7 @@ contract SessionSigTest is SessionTestBase {
   ) public {
     attestation.approvedSigner = sessionWallet.addr;
     attestation.authData.redirectUrl = "https://example.com"; // Normalise for safe JSONify
+    attestation.authData.issuedAt = uint64(bound(attestation.authData.issuedAt, 0, block.timestamp));
 
     string memory topology = PrimitivesRPC.sessionEmpty(vm, identityWallet.addr);
     Payload.Decoded memory payload = _buildPayload(1);
