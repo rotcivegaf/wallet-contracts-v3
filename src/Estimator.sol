@@ -9,6 +9,10 @@ import { LibOptim } from "./utils/LibOptim.sol";
 
 contract Estimator is Stage2Module {
 
+  constructor(
+    address _entryPoint
+  ) Stage2Module(_entryPoint) { }
+
   function _isValidImage(
     bytes32 _imageHash
   ) internal view virtual override returns (bool) {

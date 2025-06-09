@@ -7,12 +7,14 @@ import { Calls } from "./modules/Calls.sol";
 import { Hooks } from "./modules/Hooks.sol";
 import { Stage1Auth } from "./modules/auth/Stage1Auth.sol";
 import { IAuth } from "./modules/interfaces/IAuth.sol";
+import { ERC4337 } from "./modules/ERC4337.sol";
 
-contract Stage1Module is Calls, Stage1Auth, Hooks {
+contract Stage1Module is Calls, Stage1Auth, Hooks, ERC4337 {
 
   constructor(
-    address _factory
-  ) Stage1Auth(_factory, address(new Stage2Module())) { }
+    address _factory,
+    address _entryPoint
+  ) Stage1Auth(_factory, address(new Stage2Module(_entryPoint))) ERC4337(_entryPoint) { }
 
   function _isValidImage(
     bytes32 _imageHash
