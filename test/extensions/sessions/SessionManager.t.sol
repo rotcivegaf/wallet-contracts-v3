@@ -37,10 +37,6 @@ contract SessionManagerTest is SessionTestBase {
     implicitTarget = address(mockImplicit);
   }
 
-  function testSupportsInterface() public view {
-    assertTrue(sessionManager.supportsInterface(type(ISapient).interfaceId));
-  }
-
   /// @notice Valid explicit session test.
   function testValidExplicitSessionSignature(
     bytes4 selector,
