@@ -54,7 +54,7 @@ contract SessionManagerTest is SessionTestBase {
     SessionPermissions memory sessionPerms = SessionPermissions({
       signer: sessionWallet.addr,
       valueLimit: value,
-      deadline: block.timestamp + 1 days,
+      deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](2)
     });
     // Permission with an empty rules set allows all calls to the target.
@@ -256,7 +256,7 @@ contract SessionManagerTest is SessionTestBase {
     SessionPermissions memory sessionPerms;
     sessionPerms.signer = sessionWallet.addr;
     sessionPerms.valueLimit = 0;
-    sessionPerms.deadline = block.timestamp + 1 days;
+    sessionPerms.deadline = uint64(block.timestamp + 1 days);
     sessionPerms.permissions = new Permission[](1);
     sessionPerms.permissions[0] = Permission({ target: explicitTarget, rules: new ParameterRule[](1) });
     sessionPerms.permissions[0].rules[0] = ParameterRule({

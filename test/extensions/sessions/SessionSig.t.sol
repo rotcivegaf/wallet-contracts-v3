@@ -959,7 +959,7 @@ contract SessionSigTest is SessionTestBase {
     );
   }
 
-  function testEmptyPermissionsStructSize_direct(address signer, uint256 valueLimit, uint256 deadline) public view {
+  function testEmptyPermissionsStructSize_direct(address signer, uint256 valueLimit, uint64 deadline) public view {
     // Create an empty permissions struct
     SessionPermissions memory sessionPerms = SessionPermissions({
       signer: signer,
