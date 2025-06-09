@@ -4,16 +4,16 @@ pragma solidity ^0.8.27;
 import { Stage2Module } from "./Stage2Module.sol";
 import { Calls } from "./modules/Calls.sol";
 
+import { ERC4337 } from "./modules/ERC4337.sol";
 import { Hooks } from "./modules/Hooks.sol";
 import { Stage1Auth } from "./modules/auth/Stage1Auth.sol";
 import { IAuth } from "./modules/interfaces/IAuth.sol";
-import { ERC4337 } from "./modules/ERC4337.sol";
-
 
 /// @title Stage1Module
 /// @author Agustin Aguilar
 /// @notice The initial stage of the wallet
 contract Stage1Module is Calls, Stage1Auth, Hooks, ERC4337 {
+
   constructor(
     address _factory,
     address _entryPoint

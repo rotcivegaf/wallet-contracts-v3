@@ -28,6 +28,7 @@ struct PackedUserOperation {
 }
 
 interface IAccount {
+
   /**
    * Validate user's signature and nonce
    * the entryPoint will make the call to the recipient only if this validation call returns successfully.
@@ -60,8 +61,11 @@ interface IAccount {
     bytes32 userOpHash,
     uint256 missingAccountFunds
   ) external returns (uint256 validationData);
+
 }
 
 interface Entrypoint {
+
   function depositFor(address account, uint256 amount) external;
+
 }

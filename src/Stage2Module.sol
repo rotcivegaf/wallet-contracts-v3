@@ -3,10 +3,10 @@ pragma solidity ^0.8.27;
 
 import { Calls } from "./modules/Calls.sol";
 
+import { ERC4337 } from "./modules/ERC4337.sol";
 import { Hooks } from "./modules/Hooks.sol";
 import { Stage2Auth } from "./modules/auth/Stage2Auth.sol";
 import { IAuth } from "./modules/interfaces/IAuth.sol";
-import { ERC4337 } from "./modules/ERC4337.sol";
 
 /// @title Stage2Module
 /// @author Agustin Aguilar
@@ -23,4 +23,5 @@ contract Stage2Module is Calls, Stage2Auth, Hooks, ERC4337 {
   ) internal view virtual override(IAuth, Stage2Auth) returns (bool) {
     return super._isValidImage(_imageHash);
   }
+
 }

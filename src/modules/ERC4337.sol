@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.18;
 
-import { IERC1271, IERC1271_MAGIC_VALUE_HASH } from "./interfaces/IERC1271.sol";
-import { IAccount, PackedUserOperation } from "./interfaces/IAccount.sol";
-import { Entrypoint } from "./interfaces/IEntrypoint.sol";
 import { Calls } from "./Calls.sol";
+import { IAccount, PackedUserOperation } from "./interfaces/IAccount.sol";
+import { IERC1271, IERC1271_MAGIC_VALUE_HASH } from "./interfaces/IERC1271.sol";
+import { Entrypoint } from "./interfaces/IEntrypoint.sol";
 
 abstract contract ERC4337 is IAccount, Calls {
 
@@ -60,4 +60,5 @@ abstract contract ERC4337 is IAccount, Calls {
 
     this.selfExecute(_payload);
   }
+
 }
