@@ -29,7 +29,7 @@ abstract contract SessionTestBase is AdvTest {
   function _encodeExplicitConfig(
     address signer,
     uint256 valueLimit,
-    uint256 deadline
+    uint64 deadline
   ) internal pure returns (bytes memory) {
     bytes memory node = abi.encodePacked(
       uint8(SessionSig.FLAG_PERMISSIONS),
@@ -119,6 +119,8 @@ abstract contract SessionTestBase is AdvTest {
     json = string.concat(json, vm.toString(attestation.audienceHash));
     json = string.concat(json, '","authData":{"redirectUrl":"');
     json = string.concat(json, attestation.authData.redirectUrl);
+    json = string.concat(json, '","issuedAt":"');
+    json = string.concat(json, vm.toString(attestation.authData.issuedAt));
     json = string.concat(json, '"},"applicationData":"');
     json = string.concat(json, vm.toString(attestation.applicationData));
     json = string.concat(json, '"}');
@@ -170,7 +172,7 @@ abstract contract SessionTestBase is AdvTest {
   function _createSessionPermissions(
     address target,
     uint256 valueLimit,
-    uint256 deadline,
+    uint64 deadline,
     address signer
   ) internal pure returns (SessionPermissions memory) {
     SessionPermissions memory sessionPerms = SessionPermissions({

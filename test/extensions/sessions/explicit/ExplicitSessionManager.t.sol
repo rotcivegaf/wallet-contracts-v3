@@ -47,7 +47,7 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     SessionPermissions memory perms = SessionPermissions({
       signer: sessionWallet.addr,
       valueLimit: 0, // no native token usage for this test
-      deadline: block.timestamp + 1 days,
+      deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](1)
     });
     // Allow calls to the target if the selector matches..
@@ -105,7 +105,7 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     SessionPermissions memory perms = SessionPermissions({
       signer: invalidSigner, // different signer
       valueLimit: 100,
-      deadline: block.timestamp + 1 days,
+      deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](1)
     });
     perms.permissions[0] = Permission({ target: address(0x1234), rules: new ParameterRule[](0) });
@@ -123,9 +123,9 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     harness.validateExplicitCall(payload, 0, wallet, sessionWallet.addr, permsArr, 0, usage);
   }
 
-  function test_validateExplicitCall_SessionExpired(uint256 currentTimestamp, uint256 expiredTimestamp) public {
-    currentTimestamp = bound(currentTimestamp, 2, type(uint256).max);
-    expiredTimestamp = bound(expiredTimestamp, 1, currentTimestamp - 1);
+  function test_validateExplicitCall_SessionExpired(uint64 currentTimestamp, uint64 expiredTimestamp) public {
+    currentTimestamp = uint64(bound(currentTimestamp, 2, type(uint256).max));
+    expiredTimestamp = uint64(bound(expiredTimestamp, 1, currentTimestamp - 1));
     vm.warp(currentTimestamp);
 
     Payload.Decoded memory payload = _buildPayload(1);
@@ -186,7 +186,7 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     SessionPermissions memory perms = SessionPermissions({
       signer: sessionWallet.addr,
       valueLimit: 100,
-      deadline: block.timestamp + 1 days,
+      deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](1)
     });
     perms.permissions[0] = Permission({ target: address(0x1234), rules: new ParameterRule[](1) });
@@ -227,7 +227,7 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     SessionPermissions memory perms = SessionPermissions({
       signer: sessionWallet.addr, // Match the session signer
       valueLimit: 100,
-      deadline: block.timestamp + 1 days,
+      deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](1)
     });
     perms.permissions[0] = Permission({ target: address(harness), rules: new ParameterRule[](0) });
@@ -260,7 +260,7 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     SessionPermissions memory perms = SessionPermissions({
       signer: sessionWallet.addr, // Match the session signer
       valueLimit: 100,
-      deadline: block.timestamp + 1 days,
+      deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](1)
     });
     perms.permissions[0] = Permission({ target: address(harness), rules: new ParameterRule[](0) });
@@ -293,7 +293,7 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     SessionPermissions memory perms = SessionPermissions({
       signer: sessionWallet.addr,
       valueLimit: 100,
-      deadline: block.timestamp + 1 days,
+      deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](0)
     });
 
@@ -327,7 +327,7 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     SessionPermissions memory perms = SessionPermissions({
       signer: sessionWallet.addr,
       valueLimit: 10, // limit too low
-      deadline: block.timestamp + 1 days,
+      deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](1)
     });
     perms.permissions[0] = Permission({ target: address(0x1234), rules: new ParameterRule[](1) });
@@ -368,7 +368,7 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     SessionPermissions memory perms = SessionPermissions({
       signer: sessionWallet.addr,
       valueLimit: 0,
-      deadline: block.timestamp + 1 days,
+      deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](1)
     });
     perms.permissions[0] = Permission({ target: payload.calls[0].to, rules: new ParameterRule[](1) });
@@ -661,7 +661,7 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     SessionPermissions memory perms = SessionPermissions({
       signer: sessionWallet.addr,
       valueLimit: valueLimit,
-      deadline: block.timestamp + 1 days,
+      deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](3)
     });
 

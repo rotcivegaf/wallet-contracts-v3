@@ -54,7 +54,7 @@ contract SessionManagerTest is SessionTestBase {
     SessionPermissions memory sessionPerms = SessionPermissions({
       signer: sessionWallet.addr,
       valueLimit: value,
-      deadline: block.timestamp + 1 days,
+      deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](2)
     });
     // Permission with an empty rules set allows all calls to the target.
@@ -191,6 +191,7 @@ contract SessionManagerTest is SessionTestBase {
   function testInvalidDelegateCallReverts(Attestation memory attestation, bytes memory data) public {
     attestation.approvedSigner = sessionWallet.addr;
     attestation.authData.redirectUrl = "https://example.com"; // Normalise for safe JSONify
+    attestation.authData.issuedAt = uint64(bound(attestation.authData.issuedAt, 0, block.timestamp));
 
     // Build a payload with one call that erroneously uses delegateCall.
     uint256 callCount = 1;
@@ -255,7 +256,7 @@ contract SessionManagerTest is SessionTestBase {
     SessionPermissions memory sessionPerms;
     sessionPerms.signer = sessionWallet.addr;
     sessionPerms.valueLimit = 0;
-    sessionPerms.deadline = block.timestamp + 1 days;
+    sessionPerms.deadline = uint64(block.timestamp + 1 days);
     sessionPerms.permissions = new Permission[](1);
     sessionPerms.permissions[0] = Permission({ target: explicitTarget, rules: new ParameterRule[](1) });
     sessionPerms.permissions[0].rules[0] = ParameterRule({
@@ -297,6 +298,7 @@ contract SessionManagerTest is SessionTestBase {
   function testValidImplicitSessionSignature(Attestation memory attestation, bytes memory data) public {
     attestation.approvedSigner = sessionWallet.addr;
     attestation.authData.redirectUrl = "https://example.com"; // Normalise for safe JSONify
+    attestation.authData.issuedAt = uint64(bound(attestation.authData.issuedAt, 0, block.timestamp));
 
     // Build a payload with one call for implicit session.
     uint256 callCount = 1;

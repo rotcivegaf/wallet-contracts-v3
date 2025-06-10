@@ -11,7 +11,7 @@ import { Permission, UsageLimit } from "./Permission.sol";
 struct SessionPermissions {
   address signer;
   uint256 valueLimit;
-  uint256 deadline;
+  uint64 deadline;
   Permission[] permissions;
 }
 

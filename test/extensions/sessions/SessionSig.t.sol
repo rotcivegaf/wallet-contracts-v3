@@ -124,6 +124,7 @@ contract SessionSigTest is SessionTestBase {
   ) public {
     attestation.approvedSigner = sessionWallet.addr;
     attestation.authData.redirectUrl = "https://example.com"; // Normalise for safe JSONify
+    attestation.authData.issuedAt = uint64(bound(attestation.authData.issuedAt, 0, block.timestamp));
 
     Payload.Decoded memory payload = _buildPayload(1);
     {
@@ -179,6 +180,7 @@ contract SessionSigTest is SessionTestBase {
   ) public {
     attestation.approvedSigner = sessionWallet.addr;
     attestation.authData.redirectUrl = "https://example.com"; // Normalise for safe JSONify
+    attestation.authData.issuedAt = uint64(bound(attestation.authData.issuedAt, 0, block.timestamp));
 
     Payload.Decoded memory payload = _buildPayload(2);
     {
@@ -423,6 +425,7 @@ contract SessionSigTest is SessionTestBase {
   ) public {
     attestation.approvedSigner = sessionWallet.addr;
     attestation.authData.redirectUrl = "https://example.com"; // Normalise for safe JSONify
+    attestation.authData.issuedAt = uint64(bound(attestation.authData.issuedAt, 0, block.timestamp));
 
     // Create a topology with an invalid identity signer
     string memory topology = PrimitivesRPC.sessionEmpty(vm, identityWallet.addr);
@@ -461,6 +464,7 @@ contract SessionSigTest is SessionTestBase {
   ) public {
     attestation.approvedSigner = sessionWallet.addr;
     attestation.authData.redirectUrl = "https://example.com"; // Normalise for safe JSONify
+    attestation.authData.issuedAt = uint64(bound(attestation.authData.issuedAt, 0, block.timestamp));
 
     // Create a topology with an invalid identity signer
     string memory topology = PrimitivesRPC.sessionEmpty(vm, address(0));
@@ -497,6 +501,7 @@ contract SessionSigTest is SessionTestBase {
   ) public {
     attestation.approvedSigner = sessionWallet.addr;
     attestation.authData.redirectUrl = "https://example.com"; // Normalise for safe JSONify
+    attestation.authData.issuedAt = uint64(bound(attestation.authData.issuedAt, 0, block.timestamp));
 
     string memory topology = PrimitivesRPC.sessionEmpty(vm, identityWallet.addr);
     Payload.Decoded memory payload = _buildPayload(1);
@@ -906,7 +911,7 @@ contract SessionSigTest is SessionTestBase {
     );
   }
 
-  function testEmptyPermissionsStructSize_direct(address signer, uint256 valueLimit, uint256 deadline) public view {
+  function testEmptyPermissionsStructSize_direct(address signer, uint256 valueLimit, uint64 deadline) public view {
     // Create an empty permissions struct
     SessionPermissions memory sessionPerms = SessionPermissions({
       signer: signer,
