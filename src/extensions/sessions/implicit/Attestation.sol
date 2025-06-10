@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import { ACCEPT_IMPLICIT_REQUEST_MAGIC_PREFIX } from "src/extensions/sessions/implicit/ISignalsImplicitMode.sol";
-import { LibBytes } from "src/utils/LibBytes.sol";
+import { LibBytes } from "../../../utils/LibBytes.sol";
+import { ACCEPT_IMPLICIT_REQUEST_MAGIC_PREFIX } from "./ISignalsImplicitMode.sol";
 
 using LibBytes for bytes;
 
