@@ -2,7 +2,5 @@
 pragma solidity ^0.8.28;
 
 interface Entrypoint {
-
-  function depositFor(address account, uint256 amount) external;
-
+  function depositTo(address account) external payable;
 }

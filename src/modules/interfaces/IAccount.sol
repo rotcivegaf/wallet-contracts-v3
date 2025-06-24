@@ -63,9 +63,3 @@ interface IAccount {
   ) external returns (uint256 validationData);
 
 }
-
-interface Entrypoint {
-
-  function depositFor(address account, uint256 amount) external;
-
-}
