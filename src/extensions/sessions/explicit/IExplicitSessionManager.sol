@@ -5,11 +5,13 @@ import { Permission, UsageLimit } from "./Permission.sol";
 
 /// @notice Permissions configuration for a specific session signer
 /// @param signer Address of the session signer these permissions apply to
+/// @param chainId Chain ID of the session (0 = any chain)
 /// @param valueLimit Maximum native token value this signer can send
 /// @param deadline Deadline for the session. (0 = no deadline)
 /// @param permissions Array of encoded permissions granted to this signer
 struct SessionPermissions {
   address signer;
+  uint256 chainId;
   uint256 valueLimit;
   uint64 deadline;
   Permission[] permissions;

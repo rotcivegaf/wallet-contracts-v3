@@ -23,7 +23,7 @@ library SessionSig {
   uint256 internal constant FLAG_BLACKLIST = 3;
   uint256 internal constant FLAG_IDENTITY_SIGNER = 4;
 
-  uint256 internal constant MIN_ENCODED_PERMISSION_SIZE = 62;
+  uint256 internal constant MIN_ENCODED_PERMISSION_SIZE = 94;
 
   /// @notice Call signature for a specific session
   /// @param isImplicit If the call is implicit
@@ -218,6 +218,9 @@ library SessionSig {
 
         // Read signer
         (nodePermissions.signer, pointer) = encoded.readAddress(pointer);
+
+        // Read chainId
+        (nodePermissions.chainId, pointer) = encoded.readUint256(pointer);
 
         // Read value limit
         (nodePermissions.valueLimit, pointer) = encoded.readUint256(pointer);

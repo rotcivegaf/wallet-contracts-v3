@@ -39,7 +39,8 @@ contract SessionManagerTest is SessionTestBase {
     bytes4 selector,
     uint256 param,
     uint256 value,
-    address explicitTarget2
+    address explicitTarget2,
+    bool useChainId
   ) public {
     vm.assume(explicitTarget != explicitTarget2);
     vm.assume(value > 0);
@@ -50,6 +51,7 @@ contract SessionManagerTest is SessionTestBase {
     // Create a SessionPermissions struct granting permission for calls to explicitTarget.
     SessionPermissions memory sessionPerms = SessionPermissions({
       signer: sessionWallet.addr,
+      chainId: useChainId ? block.chainid : 0,
       valueLimit: value,
       deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](2)

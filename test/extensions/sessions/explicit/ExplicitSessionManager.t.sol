@@ -18,8 +18,16 @@ contract ExplicitSessionManagerTest is SessionTestBase {
   ExplicitSessionManagerHarness harness;
   address wallet;
   Vm.Wallet sessionWallet;
-  // Constant for the value tracking address as defined in your ExplicitSessionManager.
   bytes32 constant SELECTOR_MASK = bytes32(bytes4(0xffffffff));
+
+  modifier supportChainId(
+    uint64 chainId
+  ) {
+    if (chainId != 0) {
+      vm.chainId(chainId);
+    }
+    _;
+  }
 
   function setUp() public {
     harness = new ExplicitSessionManagerHarness();
@@ -27,7 +35,12 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     sessionWallet = vm.createWallet("session");
   }
 
-  function test_validateExplicitCall(address target, bytes4 selector, bytes memory callData) public view {
+  function test_validateExplicitCall(
+    uint64 chainId,
+    address target,
+    bytes4 selector,
+    bytes memory callData
+  ) public supportChainId(chainId) {
     vm.assume(target != address(harness));
     // Build a payload with one call.
     Payload.Decoded memory payload = _buildPayload(1);
@@ -46,6 +59,7 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     // Create SessionPermissions with one Permission.
     SessionPermissions memory perms = SessionPermissions({
       signer: sessionWallet.addr,
+      chainId: chainId,
       valueLimit: 0, // no native token usage for this test
       deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](1)
@@ -84,9 +98,66 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     assertEq(newUsage.totalValueUsed, 0, "totalValueUsed should be 0");
   }
 
+  function test_validateExplicitCall_invalidChainId(
+    uint64 chainId,
+    uint256 invalidChainId,
+    address target,
+    bytes4 selector,
+    bytes memory callData
+  ) public supportChainId(chainId) {
+    invalidChainId = bound(invalidChainId, 1, type(uint256).max);
+    vm.assume(invalidChainId != chainId);
+    vm.assume(target != address(harness));
+    // Build a payload with one call.
+    Payload.Decoded memory payload = _buildPayload(1);
+    // Prepend the selector to the call data.
+    callData = abi.encodePacked(selector, callData);
+    payload.calls[0] = Payload.Call({
+      to: target,
+      value: 0,
+      data: callData,
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    // Create SessionPermissions with one Permission.
+    SessionPermissions memory perms = SessionPermissions({
+      signer: sessionWallet.addr,
+      chainId: invalidChainId,
+      valueLimit: 0, // no native token usage for this test
+      deadline: uint64(block.timestamp + 1 days),
+      permissions: new Permission[](1)
+    });
+    // Allow calls to the target if the selector matches..
+    perms.permissions[0] = Permission({ target: target, rules: new ParameterRule[](1) });
+    perms.permissions[0].rules[0] = ParameterRule({
+      cumulative: false,
+      operation: ParameterOperation.EQUAL,
+      value: bytes32(selector),
+      offset: 0,
+      mask: SELECTOR_MASK
+    });
+
+    // Prepare initial session usage limits.
+    SessionUsageLimits memory usage;
+    usage.signer = sessionWallet.addr;
+    usage.limits = new UsageLimit[](0);
+    usage.totalValueUsed = 0;
+
+    // Convert our single SessionPermissions into an array.
+    SessionPermissions[] memory permsArr = _toArray(perms);
+
+    // Call the internal explicit call validator.
+    vm.expectRevert(abi.encodeWithSelector(SessionErrors.InvalidChainId.selector, invalidChainId));
+    harness.validateExplicitCall(payload, 0, wallet, sessionWallet.addr, permsArr, 0, usage);
+  }
+
   function test_validateExplicitCall_InvalidSessionSigner(
-    address invalidSigner
-  ) public {
+    address invalidSigner,
+    uint64 chainId
+  ) public supportChainId(chainId) {
     vm.assume(invalidSigner != sessionWallet.addr);
     // Build a payload with one call.
     Payload.Decoded memory payload = _buildPayload(1);
@@ -104,6 +175,7 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     // Create SessionPermissions with a signer that does NOT match the session signer.
     SessionPermissions memory perms = SessionPermissions({
       signer: invalidSigner, // different signer
+      chainId: chainId,
       valueLimit: 100,
       deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](1)
@@ -123,7 +195,11 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     harness.validateExplicitCall(payload, 0, wallet, sessionWallet.addr, permsArr, 0, usage);
   }
 
-  function test_validateExplicitCall_SessionExpired(uint64 currentTimestamp, uint64 expiredTimestamp) public {
+  function test_validateExplicitCall_SessionExpired(
+    uint64 chainId,
+    uint64 currentTimestamp,
+    uint64 expiredTimestamp
+  ) public supportChainId(chainId) {
     currentTimestamp = uint64(bound(currentTimestamp, 2, type(uint256).max));
     expiredTimestamp = uint64(bound(expiredTimestamp, 1, currentTimestamp - 1));
     vm.warp(currentTimestamp);
@@ -143,6 +219,7 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     // Create SessionPermissions with a deadline in the past.
     SessionPermissions memory perms = SessionPermissions({
       signer: sessionWallet.addr,
+      chainId: chainId,
       valueLimit: 100,
       deadline: expiredTimestamp, // expired
       permissions: new Permission[](1)
@@ -168,7 +245,9 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     harness.validateExplicitCall(payload, 0, wallet, sessionWallet.addr, permsArr, 0, usage);
   }
 
-  function test_validateExplicitCall_DelegateCall() public {
+  function test_validateExplicitCall_DelegateCall(
+    uint64 chainId
+  ) public supportChainId(chainId) {
     Payload.Decoded memory payload = _buildPayload(1);
     bytes memory callData = hex"12345678";
     // Set delegateCall to true which is not allowed.
@@ -185,6 +264,7 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     // Create valid SessionPermissions (won't reach permission check).
     SessionPermissions memory perms = SessionPermissions({
       signer: sessionWallet.addr,
+      chainId: chainId,
       valueLimit: 100,
       deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](1)
@@ -209,7 +289,9 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     harness.validateExplicitCall(payload, 0, wallet, sessionWallet.addr, permsArr, 0, usage);
   }
 
-  function test_validateExplicitCall_InvalidSelfCall_Value() public {
+  function test_validateExplicitCall_InvalidSelfCall_Value(
+    uint64 chainId
+  ) public supportChainId(chainId) {
     // Self-call with nonzero value should revert.
     bytes memory callData = abi.encodeWithSelector(harness.incrementUsageLimit.selector, new UsageLimit[](0));
     Payload.Decoded memory payload = _buildPayload(1);
@@ -226,6 +308,7 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     // Need valid session permissions for the test to reach self-call validation
     SessionPermissions memory perms = SessionPermissions({
       signer: sessionWallet.addr, // Match the session signer
+      chainId: chainId,
       valueLimit: 100,
       deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](1)
@@ -242,7 +325,9 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     harness.validateExplicitCall(payload, 0, wallet, sessionWallet.addr, permsArr, 0, usage);
   }
 
-  function test_validateExplicitCall_InvalidSelfCall_Selector() public {
+  function test_validateExplicitCall_InvalidSelfCall_Selector(
+    uint64 chainId
+  ) public supportChainId(chainId) {
     // Self-call with zero value but incorrect selector.
     bytes4 wrongSelector = bytes4(0xdeadbeef);
     Payload.Decoded memory payload = _buildPayload(1);
@@ -259,6 +344,7 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     // Need valid session permissions for the test to reach self-call validation
     SessionPermissions memory perms = SessionPermissions({
       signer: sessionWallet.addr, // Match the session signer
+      chainId: chainId,
       valueLimit: 100,
       deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](1)
@@ -275,7 +361,9 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     harness.validateExplicitCall(payload, 0, wallet, sessionWallet.addr, permsArr, 0, usage);
   }
 
-  function test_validateExplicitCall_MissingPermission() public {
+  function test_validateExplicitCall_MissingPermission(
+    uint64 chainId
+  ) public supportChainId(chainId) {
     // Build a valid payload call.
     bytes memory callData = hex"12345678";
     Payload.Decoded memory payload = _buildPayload(1);
@@ -292,6 +380,7 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     // Create SessionPermissions with an empty permissions array.
     SessionPermissions memory perms = SessionPermissions({
       signer: sessionWallet.addr,
+      chainId: chainId,
       valueLimit: 100,
       deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](0)
@@ -309,7 +398,9 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     harness.validateExplicitCall(payload, 0, wallet, sessionWallet.addr, permsArr, 0, usage);
   }
 
-  function test_validateExplicitCall_ValueLimitExceeded() public {
+  function test_validateExplicitCall_ValueLimitExceeded(
+    uint64 chainId
+  ) public supportChainId(chainId) {
     // Build a payload call with a nonzero value.
     bytes memory callData = hex"12345678";
     Payload.Decoded memory payload = _buildPayload(1);
@@ -326,6 +417,7 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     // Set valueLimit lower than the call value.
     SessionPermissions memory perms = SessionPermissions({
       signer: sessionWallet.addr,
+      chainId: chainId,
       valueLimit: 10, // limit too low
       deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](1)
@@ -350,7 +442,9 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     harness.validateExplicitCall(payload, 0, wallet, sessionWallet.addr, permsArr, 0, usage);
   }
 
-  function test_validateExplicitCall_InvalidPermission() public {
+  function test_validateExplicitCall_InvalidPermission(
+    uint64 chainId
+  ) public supportChainId(chainId) {
     Payload.Decoded memory payload = _buildPayload(1);
     // Use call data that does not match the expected selector.
     bytes memory callData = hex"deadbeef";
@@ -367,6 +461,7 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     // Create SessionPermissions expecting selector 0x12345678.
     SessionPermissions memory perms = SessionPermissions({
       signer: sessionWallet.addr,
+      chainId: chainId,
       valueLimit: 0,
       deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](1)
@@ -610,11 +705,12 @@ contract ExplicitSessionManagerTest is SessionTestBase {
   }
 
   function test_validateExplicitCall_MultipleValues(
+    uint64 chainId,
     uint256 firstValue,
     uint256 secondValue,
     uint256 thirdValue,
     uint256 valueLimit
-  ) public {
+  ) public supportChainId(chainId) {
     // Bound values to reasonable ranges
     firstValue = bound(firstValue, 1, type(uint256).max / 3);
     secondValue = bound(secondValue, 1, type(uint256).max / 3);
@@ -660,6 +756,7 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     // Set valueLimit to allow first two calls but not the third
     SessionPermissions memory perms = SessionPermissions({
       signer: sessionWallet.addr,
+      chainId: chainId,
       valueLimit: valueLimit,
       deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](3)
