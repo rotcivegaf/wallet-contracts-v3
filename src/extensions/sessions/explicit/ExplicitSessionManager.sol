@@ -60,6 +60,11 @@ abstract contract ExplicitSessionManager is IExplicitSessionManager, PermissionV
       revert SessionErrors.InvalidSessionSigner(sessionSigner);
     }
 
+    // Check if session chainId is valid
+    if (sessionPermissions.chainId != 0 && sessionPermissions.chainId != block.chainid) {
+      revert SessionErrors.InvalidChainId(sessionPermissions.chainId);
+    }
+
     // Check if session has expired.
     if (sessionPermissions.deadline != 0 && block.timestamp > sessionPermissions.deadline) {
       revert SessionErrors.SessionExpired(sessionPermissions.deadline);

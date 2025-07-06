@@ -8,6 +8,8 @@ library SessionErrors {
 
   /// @notice Invalid session signer
   error InvalidSessionSigner(address invalidSigner);
+  /// @notice Invalid chainId
+  error InvalidChainId(uint256 invalidChainId);
   /// @notice Invalid self call
   error InvalidSelfCall();
   /// @notice Invalid delegate call
