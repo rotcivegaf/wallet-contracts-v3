@@ -4,7 +4,7 @@ pragma solidity ^0.8.18;
 import { Calls } from "./Calls.sol";
 import { IAccount, PackedUserOperation } from "./interfaces/IAccount.sol";
 import { IERC1271, IERC1271_MAGIC_VALUE_HASH } from "./interfaces/IERC1271.sol";
-import { Entrypoint } from "./interfaces/IEntrypoint.sol";
+import { IEntryPoint } from "./interfaces/IEntryPoint.sol";
 
 abstract contract ERC4337 is IAccount, Calls {
 
@@ -12,7 +12,7 @@ abstract contract ERC4337 is IAccount, Calls {
 
   address public immutable entrypoint;
 
-  error InvalidEntrypoint(address _entrypoint);
+  error InvalidEntryPoint(address _entrypoint);
   error ERC4337Disabled();
 
   constructor(
@@ -31,13 +31,13 @@ abstract contract ERC4337 is IAccount, Calls {
     }
 
     if (msg.sender != entrypoint) {
-      revert InvalidEntrypoint(msg.sender);
+      revert InvalidEntryPoint(msg.sender);
     }
 
     // userOp.nonce is validated by the entrypoint
 
     if (missingAccountFunds != 0) {
-      Entrypoint(entrypoint).depositTo{value: missingAccountFunds}(address(this));
+      IEntryPoint(entrypoint).depositTo{value: missingAccountFunds}(address(this));
     }
 
     if (this.isValidSignature(userOpHash, userOp.signature) != IERC1271_MAGIC_VALUE_HASH) {
@@ -55,7 +55,7 @@ abstract contract ERC4337 is IAccount, Calls {
     }
 
     if (msg.sender != entrypoint) {
-      revert InvalidEntrypoint(msg.sender);
+      revert InvalidEntryPoint(msg.sender);
     }
 
     this.selfExecute(_payload);
