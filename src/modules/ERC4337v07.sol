@@ -6,7 +6,7 @@ import { IAccount, PackedUserOperation } from "./interfaces/IAccount.sol";
 import { IERC1271, IERC1271_MAGIC_VALUE_HASH } from "./interfaces/IERC1271.sol";
 import { IEntryPoint } from "./interfaces/IEntryPoint.sol";
 
-abstract contract ERC4337 is IAccount, Calls {
+abstract contract ERC4337v07 is IAccount, Calls {
 
   uint256 internal constant SIG_VALIDATION_FAILED = 1;
 
