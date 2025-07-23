@@ -37,7 +37,7 @@ abstract contract ERC4337v07 is IAccount, Calls {
     // userOp.nonce is validated by the entrypoint
 
     if (missingAccountFunds != 0) {
-      IEntryPoint(entrypoint).depositTo{value: missingAccountFunds}(address(this));
+      IEntryPoint(entrypoint).depositTo{ value: missingAccountFunds }(address(this));
     }
 
     if (this.isValidSignature(userOpHash, userOp.signature) != IERC1271_MAGIC_VALUE_HASH) {
