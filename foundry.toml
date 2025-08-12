@@ -5,6 +5,7 @@ libs = ["lib"]
 via-ir = false
 fs_permissions = [{ access = "read-write", path = "/tmp"}]
 solc = "0.8.28"
+evm_version = "paris"
 
 [fmt]
 # Explicitly define all formatting rules
