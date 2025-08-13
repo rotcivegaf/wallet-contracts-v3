@@ -2,7 +2,9 @@
 src = "src"
 out = "out"
 libs = ["lib"]
-via-ir = false
+via-ir = true
+optimizer = true
+optimizer_runs = 4294967295
 fs_permissions = [{ access = "read-write", path = "/tmp"}]
 solc = "0.8.28"
 evm_version = "paris"
