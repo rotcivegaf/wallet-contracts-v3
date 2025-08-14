@@ -123,8 +123,8 @@ abstract contract ExplicitSessionManager is IExplicitSessionManager, PermissionV
   ) internal view {
     // Limits call is only required if there are usage limits used
     if (sessionUsageLimits.length > 0) {
-      // Verify the last call is the increment call
-      if (call.to != address(this) || call.behaviorOnError != Payload.BEHAVIOR_REVERT_ON_ERROR) {
+      // Verify the last call is the increment call and cannot be skipped
+      if (call.to != address(this) || call.behaviorOnError != Payload.BEHAVIOR_REVERT_ON_ERROR || call.onlyFallback) {
         revert SessionErrors.InvalidLimitUsageIncrement();
       }
 

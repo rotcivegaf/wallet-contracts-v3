@@ -50,10 +50,16 @@ contract SessionManager is ISapient, ImplicitSessionManager, ExplicitSessionMana
     SessionUsageLimits[] memory sessionUsageLimits = new SessionUsageLimits[](payload.calls.length);
 
     for (uint256 i = 0; i < payload.calls.length; i++) {
-      // General validation
       Payload.Call calldata call = payload.calls[i];
+
+      // Ban delegate calls
       if (call.delegateCall) {
         revert SessionErrors.InvalidDelegateCall();
+      }
+
+      // Check if this call could cause usage limits to be skipped
+      if (call.behaviorOnError == Payload.BEHAVIOR_ABORT_ON_ERROR) {
+        revert SessionErrors.InvalidBehavior();
       }
 
       // Validate call signature
