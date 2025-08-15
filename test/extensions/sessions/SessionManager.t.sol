@@ -7,6 +7,8 @@ import { SessionTestBase } from "test/extensions/sessions/SessionTestBase.sol";
 import { Emitter } from "test/mocks/Emitter.sol";
 import { PrimitivesRPC } from "test/utils/PrimitivesRPC.sol";
 
+import { Factory } from "src/Factory.sol";
+import { Stage1Module } from "src/Stage1Module.sol";
 import { SessionErrors } from "src/extensions/sessions/SessionErrors.sol";
 import { SessionManager } from "src/extensions/sessions/SessionManager.sol";
 import { SessionSig } from "src/extensions/sessions/SessionSig.sol";
@@ -17,6 +19,9 @@ import {
 import { Attestation, LibAttestation } from "src/extensions/sessions/implicit/Attestation.sol";
 import { Payload } from "src/modules/Payload.sol";
 import { ISapient } from "src/modules/interfaces/ISapient.sol";
+
+import { CanReenter } from "test/mocks/CanReenter.sol";
+import { MockERC20 } from "test/mocks/MockERC20.sol";
 
 contract SessionManagerTest is SessionTestBase {
 
@@ -158,6 +163,219 @@ contract SessionManagerTest is SessionTestBase {
     bytes32 imageHash = sessionManager.recoverSapientSignature(payload, encodedSig);
     bytes32 expectedImageHash = PrimitivesRPC.sessionImageHash(vm, topology);
     assertEq(imageHash, expectedImageHash);
+  }
+
+  function testIncrementReentrancy() external {
+    MockERC20 token = new MockERC20();
+    CanReenter canReenter = new CanReenter();
+    Factory factory = new Factory();
+    Stage1Module stage1Module = new Stage1Module(address(factory), address(0));
+
+    // --- Session Permissions ---
+    // Create a SessionPermissions struct granting permission for calls to explicitTarget.
+    SessionPermissions memory sessionPerms = SessionPermissions({
+      signer: sessionWallet.addr,
+      chainId: 0,
+      valueLimit: 0,
+      deadline: uint64(block.timestamp + 1 days),
+      permissions: new Permission[](2)
+    });
+    // Permission with an empty rules set allows all calls to the target.
+    ParameterRule[] memory rules = new ParameterRule[](2);
+    // Rules for explicitTarget in call 0.
+    rules[0] = ParameterRule({
+      cumulative: false,
+      operation: ParameterOperation.EQUAL,
+      value: bytes32(uint256(uint32(MockERC20.transfer.selector)) << 224),
+      offset: 0,
+      mask: bytes32(uint256(uint32(0xffffffff)) << 224)
+    });
+    rules[1] = ParameterRule({
+      cumulative: true,
+      operation: ParameterOperation.LESS_THAN_OR_EQUAL,
+      value: bytes32(uint256(1 ether)),
+      offset: 4 + 32, // offset the param (selector is 4 bytes)
+      mask: bytes32(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)
+    });
+    sessionPerms.permissions[0] = Permission({ target: address(token), rules: rules });
+    sessionPerms.permissions[1] = Permission({ target: address(canReenter), rules: new ParameterRule[](0) }); // Unlimited access
+
+    // Build the session topology using PrimitiveRPC.
+    string memory topology = PrimitivesRPC.sessionEmpty(vm, identityWallet.addr);
+    string memory sessionPermsJson = _sessionPermissionsToJSON(sessionPerms);
+    topology = PrimitivesRPC.sessionExplicitAdd(vm, sessionPermsJson, topology);
+
+    // Topology hash
+    bytes32 topologyHash = PrimitivesRPC.sessionImageHash(vm, topology);
+
+    // Create wallet for this topology
+    string memory config = PrimitivesRPC.newConfig(
+      vm,
+      1,
+      0,
+      string(
+        abi.encodePacked(
+          "sapient:", vm.toString(topologyHash), ":", vm.toString(address(sessionManager)), ":", vm.toString(uint256(1))
+        )
+      )
+    );
+    bytes32 configHash = PrimitivesRPC.getImageHash(vm, config);
+    address payable wallet = payable(factory.deploy(address(stage1Module), configHash));
+
+    // Transfer tokens to the wallet (2 ether)
+    token.transfer(wallet, 2 ether);
+
+    // Build the reentrant payload
+    // Call 1: transfer 0.5 ether to the bad guy
+    // Call 2: update the usage limit
+    Payload.Decoded memory reentrantPayload = _buildPayload(2);
+    reentrantPayload.nonce = 1;
+    reentrantPayload.calls[0] = Payload.Call({
+      to: address(token),
+      value: 0,
+      data: abi.encodeWithSelector(token.transfer.selector, explicitTarget, 0.5 ether),
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    UsageLimit[] memory reentrantLimits = new UsageLimit[](1);
+    reentrantLimits[0] = UsageLimit({
+      usageHash: keccak256(abi.encode(sessionWallet.addr, sessionPerms.permissions[0], uint256(1))),
+      usageAmount: 0.5 ether
+    });
+
+    // Call 2: update the usage limit
+    reentrantPayload.calls[1] = Payload.Call({
+      to: address(sessionManager),
+      value: 0,
+      data: abi.encodeWithSelector(sessionManager.incrementUsageLimit.selector, reentrantLimits),
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    // Encode the call signatures for the reentrant payload
+    string[] memory reentrantCallSignatures = new string[](2);
+    string memory sessionSignature = _signAndEncodeRSV(
+      SessionSig.hashCallWithReplayProtection(reentrantPayload.calls[0], reentrantPayload), sessionWallet
+    );
+    reentrantCallSignatures[0] = _explicitCallSignatureToJSON(0, sessionSignature);
+    sessionSignature = _signAndEncodeRSV(
+      SessionSig.hashCallWithReplayProtection(reentrantPayload.calls[1], reentrantPayload), sessionWallet
+    );
+    reentrantCallSignatures[1] = _explicitCallSignatureToJSON(0, sessionSignature);
+    address[] memory reentrantExplicitSigners = new address[](1);
+    reentrantExplicitSigners[0] = sessionWallet.addr;
+    address[] memory reentrantImplicitSigners = new address[](0);
+    bytes memory reentrantEncodedSig = PrimitivesRPC.sessionEncodeCallSignatures(
+      vm, topology, reentrantCallSignatures, reentrantExplicitSigners, reentrantImplicitSigners
+    );
+
+    // Encode the main signature for the reentrant payload
+    bytes memory reentrantMainSignature = PrimitivesRPC.toEncodedSignature(
+      vm,
+      config,
+      string(abi.encodePacked(vm.toString(address(sessionManager)), ":sapient:", vm.toString(reentrantEncodedSig))),
+      false
+    );
+
+    // Pack reentrant payload
+    bytes memory reentrantPackedPayload = PrimitivesRPC.toPackedPayload(vm, reentrantPayload);
+
+    // Encode the execute function call
+    bytes memory reentrantExecuteData = abi.encodeWithSelector(
+      canReenter.doAnotherCall.selector,
+      address(wallet),
+      abi.encodeWithSelector(Stage1Module(wallet).execute.selector, reentrantPackedPayload, reentrantMainSignature)
+    );
+
+    // Build a payload with two calls:
+    //   Call 1: transfer tokens to the bad guy
+    //   Call 2: re-enter and transfer more tokens to the bad guy
+    //   Call 3: the required incrementUsageLimit call (self–call)
+    Payload.Decoded memory payload = _buildPayload(3);
+
+    // --- Explicit Call 1 ---
+    payload.calls[0] = Payload.Call({
+      to: address(token),
+      value: 0,
+      data: abi.encodeWithSelector(token.transfer.selector, explicitTarget, 1 ether),
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    // --- Explicit Call 2 ---
+    payload.calls[1] = Payload.Call({
+      to: address(canReenter),
+      value: 0,
+      data: reentrantExecuteData,
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    // --- Explicit Call 3 ---
+    UsageLimit[] memory limits = new UsageLimit[](1);
+    limits[0] = UsageLimit({
+      usageHash: keccak256(abi.encode(sessionWallet.addr, sessionPerms.permissions[0], uint256(1))),
+      usageAmount: 1 ether
+    });
+
+    payload.calls[2] = Payload.Call({
+      to: address(sessionManager),
+      value: 0,
+      data: abi.encodeWithSelector(sessionManager.incrementUsageLimit.selector, limits),
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    // --- Call Signatures ---
+    string[] memory callSignatures = new string[](3);
+    {
+      // Sign the explicit call (call 0) using the session key.
+      sessionSignature =
+        _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload.calls[0], payload), sessionWallet);
+      callSignatures[0] = _explicitCallSignatureToJSON(0, sessionSignature);
+      // Sign the explicit call (call 1) using the session key.
+      sessionSignature =
+        _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload.calls[1], payload), sessionWallet);
+      callSignatures[1] = _explicitCallSignatureToJSON(1, sessionSignature);
+      // Sign the self call (call 2) using the session key.
+      sessionSignature =
+        _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload.calls[2], payload), sessionWallet);
+      callSignatures[2] = _explicitCallSignatureToJSON(0, sessionSignature);
+    }
+
+    // Encode the full signature.
+    address[] memory explicitSigners = new address[](1);
+    explicitSigners[0] = sessionWallet.addr;
+    address[] memory implicitSigners = new address[](0);
+    bytes memory encodedSig =
+      PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, explicitSigners, implicitSigners);
+
+    // Encode the main signature
+    bytes memory mainSignature = PrimitivesRPC.toEncodedSignature(
+      vm,
+      config,
+      string(abi.encodePacked(vm.toString(address(sessionManager)), ":sapient:", vm.toString(encodedSig))),
+      false
+    );
+
+    // Execute the payload
+    bytes memory packedPayload = PrimitivesRPC.toPackedPayload(vm, payload);
+    vm.expectRevert();
+    Stage1Module(wallet).execute(packedPayload, mainSignature);
+
+    // Bad guy should have 0 funds
+    assertEq(token.balanceOf(explicitTarget), 0);
   }
 
   function testInvalidPayloadKindReverts() public {
