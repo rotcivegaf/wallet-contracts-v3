@@ -321,7 +321,7 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     usage.limits = new UsageLimit[](0);
     usage.totalValueUsed = 0;
 
-    vm.expectRevert(SessionErrors.InvalidSelfCall.selector);
+    vm.expectRevert(SessionErrors.InvalidValue.selector);
     harness.validateExplicitCall(payload, 0, wallet, sessionWallet.addr, permsArr, 0, usage);
   }
 

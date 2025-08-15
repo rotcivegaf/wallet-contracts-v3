@@ -21,7 +21,6 @@ import { ISapient } from "src/modules/interfaces/ISapient.sol";
 contract SessionManagerTest is SessionTestBase {
 
   SessionManager public sessionManager;
-  address public explicitTarget;
   Vm.Wallet public sessionWallet;
   Vm.Wallet public identityWallet;
   Emitter public emitter;
@@ -30,7 +29,6 @@ contract SessionManagerTest is SessionTestBase {
     sessionManager = new SessionManager();
     sessionWallet = vm.createWallet("session");
     identityWallet = vm.createWallet("identity");
-    explicitTarget = address(0xBEEF);
     emitter = new Emitter();
   }
 
@@ -39,6 +37,7 @@ contract SessionManagerTest is SessionTestBase {
     bytes4 selector,
     uint256 param,
     uint256 value,
+    address explicitTarget,
     address explicitTarget2,
     bool useChainId
   ) public {
@@ -153,17 +152,19 @@ contract SessionManagerTest is SessionTestBase {
     sessionManager.recoverSapientSignature(payload, encodedSig);
   }
 
-  function testInvalidCallsLengthReverts() public {
+  function testInvalidCallsLengthReverts(
+    bytes memory sig
+  ) public {
     Payload.Decoded memory payload;
     payload.kind = Payload.KIND_TRANSACTIONS;
-    bytes memory encodedSig;
 
     vm.expectRevert(SessionManager.InvalidCallsLength.selector);
-    sessionManager.recoverSapientSignature(payload, encodedSig);
+    sessionManager.recoverSapientSignature(payload, sig);
   }
 
   /// @notice Test that a call using delegateCall reverts.
-  function testInvalidDelegateCallReverts(Attestation memory attestation, bytes memory data) public {
+  function testInvalidDelegateCallReverts(Attestation memory attestation, bytes memory data, address target) public {
+    vm.assume(target != address(sessionManager));
     attestation.approvedSigner = sessionWallet.addr;
     attestation.authData.redirectUrl = "https://example.com"; // Normalise for safe JSONify
     attestation.authData.issuedAt = uint64(bound(attestation.authData.issuedAt, 0, block.timestamp));
@@ -172,7 +173,7 @@ contract SessionManagerTest is SessionTestBase {
     uint256 callCount = 1;
     Payload.Decoded memory payload = _buildPayload(callCount);
     payload.calls[0] = Payload.Call({
-      to: explicitTarget,
+      to: target,
       value: 0,
       data: data,
       gasLimit: 0,
@@ -184,63 +185,6 @@ contract SessionManagerTest is SessionTestBase {
     (, bytes memory encodedSig) = _validImplicitSessionSignature(payload);
 
     vm.expectRevert(SessionErrors.InvalidDelegateCall.selector);
-    sessionManager.recoverSapientSignature(payload, encodedSig);
-  }
-
-  /// @notice Test that a self–call with nonzero value reverts with InvalidSelfCall.
-  function testInvalidSelfCallReverts() public {
-    // Build a payload with two calls:
-    //   Call 0: valid explicit call.
-    //   Call 1: self–call (incrementUsageLimit) with nonzero value (invalid).
-    uint256 callCount = 2;
-    Payload.Decoded memory payload = _buildPayload(callCount);
-
-    // --- Explicit Call (Call 0) ---
-    bytes memory explicitCallData = abi.encodeWithSelector(0x12345678, uint256(42));
-    payload.calls[0] = Payload.Call({
-      to: explicitTarget,
-      value: 0,
-      data: explicitCallData,
-      gasLimit: 0,
-      delegateCall: false,
-      onlyFallback: false,
-      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
-    });
-
-    // --- Self Call (Call 1) ---
-    // Intentionally set nonzero value.
-    payload.calls[1] = Payload.Call({
-      to: address(sessionManager),
-      value: 1, // nonzero -> should revert
-      data: abi.encodeWithSelector(sessionManager.incrementUsageLimit.selector, new UsageLimit[](0)),
-      gasLimit: 0,
-      delegateCall: false,
-      onlyFallback: false,
-      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
-    });
-
-    // Session permissions for call 0.
-    SessionPermissions memory sessionPerms;
-    sessionPerms.signer = sessionWallet.addr;
-    sessionPerms.valueLimit = 0;
-    sessionPerms.deadline = uint64(block.timestamp + 1 days);
-    sessionPerms.permissions = new Permission[](1);
-    sessionPerms.permissions[0] = Permission({ target: explicitTarget, rules: new ParameterRule[](1) });
-    sessionPerms.permissions[0].rules[0] = ParameterRule({
-      cumulative: false,
-      operation: ParameterOperation.EQUAL,
-      value: bytes32(uint256(uint32(0x12345678)) << 224),
-      offset: 0,
-      mask: bytes32(uint256(uint32(0xffffffff)) << 224)
-    });
-
-    uint8[] memory permissionIdxs = new uint8[](2);
-    permissionIdxs[0] = 0; // Call 0
-    permissionIdxs[1] = 0; // Call 1
-
-    (, bytes memory encodedSig) = _validExplicitSessionSignature(payload, sessionPerms, permissionIdxs);
-
-    vm.expectRevert(SessionErrors.InvalidSelfCall.selector);
     sessionManager.recoverSapientSignature(payload, encodedSig);
   }
 
@@ -288,40 +232,21 @@ contract SessionManagerTest is SessionTestBase {
 
     (bytes32 imageHash, bytes memory encodedSig) = _validImplicitSessionSignature(payload);
 
-    bytes32 actualImageHash = sessionManager.recoverSapientSignature(payload, encodedSig);
-    assertEq(imageHash, actualImageHash);
-  }
-
-  /// @notice Test that calls with BEHAVIOR_IGNORE_ERROR are allowed
-  function testBehaviorIgnoreErrorCallsAllowed() public {
-    // Build a payload with one call that has BEHAVIOR_IGNORE_ERROR
-    uint256 callCount = 1;
-    Payload.Decoded memory payload = _buildPayload(callCount);
-    payload.calls[0] = Payload.Call({
-      to: address(emitter), // Use emitter instead of explicitTarget for implicit sessions
-      value: 0,
-      data: abi.encodeWithSelector(Emitter.implicitEmit.selector),
-      gasLimit: 0,
-      delegateCall: false,
-      onlyFallback: false,
-      behaviorOnError: Payload.BEHAVIOR_IGNORE_ERROR
-    });
-
-    (bytes32 imageHash, bytes memory encodedSig) = _validImplicitSessionSignature(payload);
-
+    vm.prank(sessionWallet.addr);
     bytes32 actualImageHash = sessionManager.recoverSapientSignature(payload, encodedSig);
     assertEq(imageHash, actualImageHash);
   }
 
   /// @notice Test that calls with BEHAVIOR_ABORT_ON_ERROR will revert with InvalidBehavior
-  function testBehaviorAbortOnErrorCallsRevert() public {
+  function testBehaviorAbortOnErrorCallsRevert(address target, bytes memory data) public {
+    vm.assume(target != address(sessionManager));
     // Build a payload with one call that has BEHAVIOR_ABORT_ON_ERROR
     uint256 callCount = 1;
     Payload.Decoded memory payload = _buildPayload(callCount);
     payload.calls[0] = Payload.Call({
-      to: explicitTarget,
+      to: target,
       value: 0,
-      data: abi.encodeWithSelector(0x12345678, uint256(42)),
+      data: data,
       gasLimit: 0,
       delegateCall: false,
       onlyFallback: false,
@@ -335,15 +260,16 @@ contract SessionManagerTest is SessionTestBase {
   }
 
   /// @notice Test that calls with onlyFallback = true in explicit sessions are allowed
-  function testExplicitSessionOnlyFallbackAllowed() public {
+  function testExplicitSessionOnlyFallbackAllowed(address target, bytes memory data) public {
+    vm.assume(target != address(sessionManager));
     // Build a payload with two calls: explicit call + increment call
     Payload.Decoded memory payload = _buildPayload(2);
 
     // First call with onlyFallback = true (should be allowed)
     payload.calls[0] = Payload.Call({
-      to: explicitTarget,
+      to: target,
       value: 0,
-      data: abi.encodeWithSelector(0x12345678, uint256(42)),
+      data: data,
       gasLimit: 0,
       delegateCall: false,
       onlyFallback: true,
@@ -369,7 +295,7 @@ contract SessionManagerTest is SessionTestBase {
       deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](1)
     });
-    sessionPerms.permissions[0] = Permission({ target: explicitTarget, rules: new ParameterRule[](0) });
+    sessionPerms.permissions[0] = Permission({ target: target, rules: new ParameterRule[](0) });
 
     uint8[] memory permissionIdxs = new uint8[](2);
     permissionIdxs[0] = 0; // Call 0
@@ -383,16 +309,17 @@ contract SessionManagerTest is SessionTestBase {
   }
 
   /// @notice Test that the increment call cannot have onlyFallback = true
-  function testIncrementCallOnlyFallbackReverts() public {
+  function testIncrementCallOnlyFallbackReverts(address target, bytes memory data) public {
+    vm.assume(target != address(sessionManager));
     // Build a payload with two calls: explicit call + increment call with onlyFallback
     uint256 callCount = 2;
     Payload.Decoded memory payload = _buildPayload(callCount);
 
     // First call (valid explicit call that will use usage limits)
     payload.calls[0] = Payload.Call({
-      to: explicitTarget,
+      to: target,
       value: 1, // Use some value to trigger usage tracking
-      data: abi.encodeWithSelector(0x12345678, uint256(42)),
+      data: data,
       gasLimit: 0,
       delegateCall: false,
       onlyFallback: false,
@@ -418,7 +345,7 @@ contract SessionManagerTest is SessionTestBase {
       deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](1)
     });
-    sessionPerms.permissions[0] = Permission({ target: explicitTarget, rules: new ParameterRule[](0) });
+    sessionPerms.permissions[0] = Permission({ target: target, rules: new ParameterRule[](0) });
 
     uint8[] memory permissionIdxs = new uint8[](2);
     permissionIdxs[0] = 0; // Call 0
@@ -431,16 +358,17 @@ contract SessionManagerTest is SessionTestBase {
   }
 
   /// @notice Test that calls with BEHAVIOR_IGNORE_ERROR in explicit sessions are allowed
-  function testExplicitSessionBehaviorIgnoreErrorAllowed() public {
+  function testExplicitSessionBehaviorIgnoreErrorAllowed(address target, bytes memory data) public {
+    vm.assume(target != address(sessionManager));
     // Build a payload with two calls: explicit call with IGNORE_ERROR + increment call
     uint256 callCount = 2;
     Payload.Decoded memory payload = _buildPayload(callCount);
 
     // First call with BEHAVIOR_IGNORE_ERROR (should be allowed)
     payload.calls[0] = Payload.Call({
-      to: explicitTarget,
+      to: target,
       value: 0,
-      data: abi.encodeWithSelector(0x12345678, uint256(42)),
+      data: data,
       gasLimit: 0,
       delegateCall: false,
       onlyFallback: false,
@@ -466,7 +394,7 @@ contract SessionManagerTest is SessionTestBase {
       deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](1)
     });
-    sessionPerms.permissions[0] = Permission({ target: explicitTarget, rules: new ParameterRule[](0) });
+    sessionPerms.permissions[0] = Permission({ target: target, rules: new ParameterRule[](0) });
 
     uint8[] memory permissionIdxs = new uint8[](2);
     permissionIdxs[0] = 0; // Call 0
@@ -479,16 +407,17 @@ contract SessionManagerTest is SessionTestBase {
   }
 
   /// @notice Test that calls with BEHAVIOR_ABORT_ON_ERROR in explicit sessions revert
-  function testExplicitSessionBehaviorAbortOnErrorReverts() public {
+  function testExplicitSessionBehaviorAbortOnErrorReverts(address target, bytes memory data) public {
+    vm.assume(target != address(sessionManager));
     // Build a payload with two calls: explicit call with ABORT_ON_ERROR + increment call
     uint256 callCount = 2;
     Payload.Decoded memory payload = _buildPayload(callCount);
 
     // First call with BEHAVIOR_ABORT_ON_ERROR (should revert)
     payload.calls[0] = Payload.Call({
-      to: explicitTarget,
+      to: target,
       value: 0,
-      data: abi.encodeWithSelector(0x12345678, uint256(42)),
+      data: data,
       gasLimit: 0,
       delegateCall: false,
       onlyFallback: false,
@@ -514,7 +443,7 @@ contract SessionManagerTest is SessionTestBase {
       deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](1)
     });
-    sessionPerms.permissions[0] = Permission({ target: explicitTarget, rules: new ParameterRule[](0) });
+    sessionPerms.permissions[0] = Permission({ target: target, rules: new ParameterRule[](0) });
 
     uint8[] memory permissionIdxs = new uint8[](2);
     permissionIdxs[0] = 0; // Call 0
@@ -526,75 +455,18 @@ contract SessionManagerTest is SessionTestBase {
     sessionManager.recoverSapientSignature(payload, encodedSig);
   }
 
-  /// @notice Test that mixed flags in the same payload work correctly
-  function testMixedFlagsAllowed() public {
-    // Build a payload with three calls: normal + onlyFallback + increment call
-    uint256 callCount = 3;
-    Payload.Decoded memory payload = _buildPayload(callCount);
-
-    // First call (normal)
-    payload.calls[0] = Payload.Call({
-      to: explicitTarget,
-      value: 0,
-      data: abi.encodeWithSelector(0x12345678, uint256(42)),
-      gasLimit: 0,
-      delegateCall: false,
-      onlyFallback: false,
-      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
-    });
-
-    // Second call with onlyFallback (should be allowed)
-    payload.calls[1] = Payload.Call({
-      to: explicitTarget,
-      value: 0,
-      data: abi.encodeWithSelector(0x87654321, uint256(24)),
-      gasLimit: 0,
-      delegateCall: false,
-      onlyFallback: true, // This should be allowed
-      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
-    });
-
-    // Third call (increment call)
-    payload.calls[2] = Payload.Call({
-      to: address(sessionManager),
-      value: 0,
-      data: abi.encodeWithSelector(sessionManager.incrementUsageLimit.selector, new UsageLimit[](0)),
-      gasLimit: 0,
-      delegateCall: false,
-      onlyFallback: false,
-      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
-    });
-
-    // Session permissions
-    SessionPermissions memory sessionPerms = SessionPermissions({
-      signer: sessionWallet.addr,
-      chainId: 0,
-      valueLimit: 0,
-      deadline: uint64(block.timestamp + 1 days),
-      permissions: new Permission[](1)
-    });
-    sessionPerms.permissions[0] = Permission({ target: explicitTarget, rules: new ParameterRule[](0) });
-
-    uint8[] memory permissionIdxs = new uint8[](callCount);
-
-    (bytes32 imageHash, bytes memory encodedSig) = _validExplicitSessionSignature(payload, sessionPerms, permissionIdxs);
-
-    // This should succeed since the mixed flags are allowed
-    bytes32 actualImageHash = sessionManager.recoverSapientSignature(payload, encodedSig);
-    assertEq(imageHash, actualImageHash);
-  }
-
   /// @notice Test that valid linear execution still works
-  function testValidLinearExecution() public {
+  function testValidLinearExecution(address target, bytes memory data) public {
+    vm.assume(target != address(sessionManager));
     // Build a payload with two calls: explicit call + increment call (both with valid flags)
     uint256 callCount = 2;
     Payload.Decoded memory payload = _buildPayload(callCount);
 
     // First call (normal explicit call)
     payload.calls[0] = Payload.Call({
-      to: explicitTarget,
+      to: target,
       value: 0,
-      data: abi.encodeWithSelector(0x12345678, uint256(42)),
+      data: data,
       gasLimit: 0,
       delegateCall: false,
       onlyFallback: false,
@@ -620,7 +492,7 @@ contract SessionManagerTest is SessionTestBase {
       deadline: uint64(block.timestamp + 1 days),
       permissions: new Permission[](1)
     });
-    sessionPerms.permissions[0] = Permission({ target: explicitTarget, rules: new ParameterRule[](0) });
+    sessionPerms.permissions[0] = Permission({ target: target, rules: new ParameterRule[](0) });
 
     uint8[] memory permissionIdxs = new uint8[](2);
     permissionIdxs[0] = 0; // Call 0

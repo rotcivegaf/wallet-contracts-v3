@@ -78,8 +78,11 @@ abstract contract ExplicitSessionManager is IExplicitSessionManager, PermissionV
 
     // Calls to incrementUsageLimit are the only allowed calls to this contract
     if (call.to == address(this)) {
+      if (call.value > 0) {
+        revert SessionErrors.InvalidValue();
+      }
       bytes4 selector = bytes4(call.data[0:4]);
-      if (call.value > 0 || selector != IExplicitSessionManager.incrementUsageLimit.selector) {
+      if (selector != IExplicitSessionManager.incrementUsageLimit.selector) {
         revert SessionErrors.InvalidSelfCall();
       }
       // No permissions required
