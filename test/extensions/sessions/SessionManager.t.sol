@@ -89,7 +89,7 @@ contract SessionManagerTest is SessionTestBase {
     Payload.Decoded memory payload = _buildPayload(3);
 
     // --- Explicit Call 1 ---
-    payload.calls[0] = Payload.Call({
+    payload.calls[1] = Payload.Call({
       to: explicitTarget,
       value: value,
       data: callData,
@@ -100,7 +100,7 @@ contract SessionManagerTest is SessionTestBase {
     });
 
     // --- Explicit Call 2 ---
-    payload.calls[1] = Payload.Call({
+    payload.calls[2] = Payload.Call({
       to: explicitTarget2,
       value: 0,
       data: callData, // Reuse this because permission for this target is open
@@ -119,7 +119,7 @@ contract SessionManagerTest is SessionTestBase {
       });
       limits[1] =
         UsageLimit({ usageHash: keccak256(abi.encode(sessionWallet.addr, VALUE_TRACKING_ADDRESS)), usageAmount: value });
-      payload.calls[2] = Payload.Call({
+      payload.calls[0] = Payload.Call({
         to: address(sessionManager),
         value: 0,
         data: abi.encodeWithSelector(sessionManager.incrementUsageLimit.selector, limits),
@@ -132,8 +132,8 @@ contract SessionManagerTest is SessionTestBase {
 
     uint8[] memory permissionIdxs = new uint8[](3);
     permissionIdxs[0] = 0; // Call 0
-    permissionIdxs[1] = 1; // Call 1
-    permissionIdxs[2] = 0; // Call 2
+    permissionIdxs[1] = 0; // Call 1
+    permissionIdxs[2] = 1; // Call 2
 
     (bytes32 imageHash, bytes memory encodedSig) = _validExplicitSessionSignature(payload, sessionPerms, permissionIdxs);
 
@@ -203,31 +203,32 @@ contract SessionManagerTest is SessionTestBase {
     token.transfer(wallet, 2 ether);
 
     // Build the reentrant payload
+    // Call 0: update the usage limit
     // Call 1: transfer 0.5 ether to the bad guy
-    // Call 2: update the usage limit
     Payload.Decoded memory reentrantPayload = _buildPayload(2);
     reentrantPayload.nonce = 1;
+
+    UsageLimit[] memory reentrantLimits = new UsageLimit[](1);
+    reentrantLimits[0] = UsageLimit({
+      usageHash: keccak256(abi.encode(sessionWallet.addr, sessionPerms.permissions[0], uint256(1))),
+      usageAmount: 1 ether
+    });
+
+    // Call 0: update the usage limit
     reentrantPayload.calls[0] = Payload.Call({
-      to: address(token),
+      to: address(sessionManager),
       value: 0,
-      data: abi.encodeWithSelector(token.transfer.selector, badGuy.addr, 0.5 ether),
+      data: abi.encodeWithSelector(sessionManager.incrementUsageLimit.selector, reentrantLimits),
       gasLimit: 0,
       delegateCall: false,
       onlyFallback: false,
       behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
     });
 
-    UsageLimit[] memory reentrantLimits = new UsageLimit[](1);
-    reentrantLimits[0] = UsageLimit({
-      usageHash: keccak256(abi.encode(sessionWallet.addr, sessionPerms.permissions[0], uint256(1))),
-      usageAmount: 0.5 ether
-    });
-
-    // Call 2: update the usage limit
     reentrantPayload.calls[1] = Payload.Call({
-      to: address(sessionManager),
+      to: address(token),
       value: 0,
-      data: abi.encodeWithSelector(sessionManager.incrementUsageLimit.selector, reentrantLimits),
+      data: abi.encodeWithSelector(token.transfer.selector, badGuy.addr, 1 ether),
       gasLimit: 0,
       delegateCall: false,
       onlyFallback: false,
@@ -275,8 +276,25 @@ contract SessionManagerTest is SessionTestBase {
     //   Call 3: the required incrementUsageLimit call (self–call)
     Payload.Decoded memory payload = _buildPayload(3);
 
-    // --- Explicit Call 1 ---
+    // --- Explicit Call 0 ---
+    UsageLimit[] memory limits = new UsageLimit[](1);
+    limits[0] = UsageLimit({
+      usageHash: keccak256(abi.encode(sessionWallet.addr, sessionPerms.permissions[0], uint256(0.5 ether))),
+      usageAmount: 0.5 ether
+    });
+
     payload.calls[0] = Payload.Call({
+      to: address(sessionManager),
+      value: 0,
+      data: abi.encodeWithSelector(sessionManager.incrementUsageLimit.selector, limits),
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    // --- Explicit Call 1 ---
+    payload.calls[1] = Payload.Call({
       to: address(token),
       value: 0,
       data: abi.encodeWithSelector(token.transfer.selector, badGuy.addr, 1 ether),
@@ -287,27 +305,10 @@ contract SessionManagerTest is SessionTestBase {
     });
 
     // --- Explicit Call 2 ---
-    payload.calls[1] = Payload.Call({
+    payload.calls[2] = Payload.Call({
       to: address(canReenter),
       value: 0,
       data: reentrantExecuteData,
-      gasLimit: 0,
-      delegateCall: false,
-      onlyFallback: false,
-      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
-    });
-
-    // --- Explicit Call 3 ---
-    UsageLimit[] memory limits = new UsageLimit[](1);
-    limits[0] = UsageLimit({
-      usageHash: keccak256(abi.encode(sessionWallet.addr, sessionPerms.permissions[0], uint256(1))),
-      usageAmount: 1 ether
-    });
-
-    payload.calls[2] = Payload.Call({
-      to: address(sessionManager),
-      value: 0,
-      data: abi.encodeWithSelector(sessionManager.incrementUsageLimit.selector, limits),
       gasLimit: 0,
       delegateCall: false,
       onlyFallback: false,
@@ -324,11 +325,11 @@ contract SessionManagerTest is SessionTestBase {
       // Sign the explicit call (call 1) using the session key.
       sessionSignature =
         _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload.calls[1], payload), sessionWallet);
-      callSignatures[1] = _explicitCallSignatureToJSON(1, sessionSignature);
+      callSignatures[1] = _explicitCallSignatureToJSON(0, sessionSignature);
       // Sign the self call (call 2) using the session key.
       sessionSignature =
         _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload.calls[2], payload), sessionWallet);
-      callSignatures[2] = _explicitCallSignatureToJSON(0, sessionSignature);
+      callSignatures[2] = _explicitCallSignatureToJSON(1, sessionSignature);
     }
 
     // Encode the full signature.

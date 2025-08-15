@@ -116,7 +116,7 @@ abstract contract ExplicitSessionManager is IExplicitSessionManager, PermissionV
   }
 
   /// @notice Verifies the limit usage increment
-  /// @param call The call to validate
+  /// @param call The first call in the payload, which is expected to be the increment call
   /// @param sessionUsageLimits The session usage limits
   /// @dev Reverts if the required increment call is missing or invalid
   /// @dev If no usage limits are used, this function does nothing
@@ -126,7 +126,7 @@ abstract contract ExplicitSessionManager is IExplicitSessionManager, PermissionV
   ) internal view {
     // Limits call is only required if there are usage limits used
     if (sessionUsageLimits.length > 0) {
-      // Verify the last call is the increment call and cannot be skipped
+      // Verify the first call is the increment call and cannot be skipped
       if (call.to != address(this) || call.behaviorOnError != Payload.BEHAVIOR_REVERT_ON_ERROR || call.onlyFallback) {
         revert SessionErrors.InvalidLimitUsageIncrement();
       }
