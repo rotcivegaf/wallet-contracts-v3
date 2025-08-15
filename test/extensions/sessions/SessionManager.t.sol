@@ -49,6 +49,8 @@ contract SessionManagerTest is SessionTestBase {
     vm.assume(explicitTarget != explicitTarget2);
     vm.assume(value > 0);
     vm.assume(param > 0);
+    vm.assume(explicitTarget != address(sessionManager));
+    vm.assume(explicitTarget2 != address(sessionManager));
     bytes memory callData = abi.encodeWithSelector(selector, param);
 
     // --- Session Permissions ---
