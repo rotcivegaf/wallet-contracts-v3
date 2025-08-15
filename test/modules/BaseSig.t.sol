@@ -2117,8 +2117,18 @@ contract BaseSigTest is AdvTest {
     signatures[1] = vars.signature1to2;
     vars.chainedSignature = PrimitivesRPC.concatSignatures(vm, signatures);
 
-    vm.expectRevert(abi.encodeWithSelector(BaseSig.UnusedSnapshot.selector, vars.snapshot));
-    baseSigImp.recoverPub(params.payload, vars.chainedSignature, false, address(0));
+    if (params.snapshotImageHash == bytes32(0)) {
+      // Snapshot imageHash is 0, checkpointer is considered disabled
+      (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint,) =
+        baseSigImp.recoverPub(params.payload, vars.chainedSignature, false, address(0));
+      assertEq(threshold, 1);
+      assertEq(weight, 1);
+      assertEq(imageHash, vars.config1ImageHash);
+      assertEq(checkpoint, params.checkpoint1);
+    } else {
+      vm.expectRevert(abi.encodeWithSelector(BaseSig.UnusedSnapshot.selector, vars.snapshot));
+      baseSigImp.recoverPub(params.payload, vars.chainedSignature, false, address(0));
+    }
   }
 
 }
