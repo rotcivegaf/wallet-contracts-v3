@@ -145,6 +145,7 @@ contract SessionManagerTest is SessionTestBase {
     CanReenter canReenter = new CanReenter();
     Factory factory = new Factory();
     Stage1Module stage1Module = new Stage1Module(address(factory), address(0));
+    Vm.Wallet memory badGuy = vm.createWallet("badGuy");
 
     // --- Session Permissions ---
     // Create a SessionPermissions struct granting permission for calls to explicitTarget.
@@ -157,7 +158,6 @@ contract SessionManagerTest is SessionTestBase {
     });
     // Permission with an empty rules set allows all calls to the target.
     ParameterRule[] memory rules = new ParameterRule[](2);
-    // Rules for explicitTarget in call 0.
     rules[0] = ParameterRule({
       cumulative: false,
       operation: ParameterOperation.EQUAL,
@@ -208,7 +208,7 @@ contract SessionManagerTest is SessionTestBase {
     reentrantPayload.calls[0] = Payload.Call({
       to: address(token),
       value: 0,
-      data: abi.encodeWithSelector(token.transfer.selector, explicitTarget, 0.5 ether),
+      data: abi.encodeWithSelector(token.transfer.selector, badGuy.addr, 0.5 ether),
       gasLimit: 0,
       delegateCall: false,
       onlyFallback: false,
@@ -277,7 +277,7 @@ contract SessionManagerTest is SessionTestBase {
     payload.calls[0] = Payload.Call({
       to: address(token),
       value: 0,
-      data: abi.encodeWithSelector(token.transfer.selector, explicitTarget, 1 ether),
+      data: abi.encodeWithSelector(token.transfer.selector, badGuy.addr, 1 ether),
       gasLimit: 0,
       delegateCall: false,
       onlyFallback: false,
@@ -350,7 +350,7 @@ contract SessionManagerTest is SessionTestBase {
     Stage1Module(wallet).execute(packedPayload, mainSignature);
 
     // Bad guy should have 0 funds
-    assertEq(token.balanceOf(explicitTarget), 0);
+    assertEq(token.balanceOf(badGuy.addr), 0);
   }
 
   function testInvalidPayloadKindReverts() public {
