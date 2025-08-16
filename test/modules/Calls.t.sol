@@ -8,7 +8,6 @@ import { AdvTest } from "../utils/TestUtils.sol";
 
 import { Payload } from "../../src/modules/Payload.sol";
 
-import { IDelegatedExtension } from "../../src/modules/interfaces/IDelegatedExtension.sol";
 import { PrimitivesRPC } from "../utils/PrimitivesRPC.sol";
 
 contract CallsImp is Calls {
@@ -53,7 +52,7 @@ contract CallsImp is Calls {
 
 }
 
-contract MockDelegatecall is IDelegatedExtension {
+contract MockDelegatecall { // extends IDelegatedExtension  (but we make it payable for the test)
 
   event OpHash(bytes32 _opHash);
   event StartingGas(uint256 _startingGas);
@@ -69,7 +68,7 @@ contract MockDelegatecall is IDelegatedExtension {
     uint256 _numCalls,
     uint256 _space,
     bytes calldata _data
-  ) external {
+  ) external payable {
     emit OpHash(_opHash);
     emit StartingGas(_startingGas);
     emit Index(_index);
@@ -78,6 +77,8 @@ contract MockDelegatecall is IDelegatedExtension {
     emit Data(_data);
   }
 
+  receive() external payable {}
+  fallback() external payable {}
 }
 
 struct CallsPayload {
