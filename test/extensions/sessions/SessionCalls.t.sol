@@ -186,7 +186,7 @@ contract SessionCallsTest is SessionTestBase {
     payload.calls[2] = _validCall(call2, call2Revert);
     payload.calls[3] = _validCall(call3, call3Revert);
 
-    // totalValue is calculated from calls[1] and calls[2]
+    // totalValue is calculated from calls[1] through calls[3]
     uint256 totalValue = payload.calls[1].value + payload.calls[2].value + payload.calls[3].value;
     vm.assume(totalValue > 0); // Required to use an increment permission
 

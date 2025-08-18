@@ -564,6 +564,44 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     harness.validateLimitUsageIncrement(incCall, usageArr);
   }
 
+  function test_validateLimitUsageIncrement_RuleAndValue(UsageLimit memory limit, uint256 value) public view {
+    limit.usageAmount = bound(limit.usageAmount, 1, type(uint256).max);
+    value = bound(value, 1, type(uint256).max);
+
+    // Prepare a call that is intended to be the increment call.
+    Payload.Call memory incCall = Payload.Call({
+      to: address(harness),
+      value: 0,
+      data: "", // will be filled with expected encoding
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    // Prepare session usage limits with a nonzero totalValueUsed.
+    SessionUsageLimits memory usage;
+    usage.signer = sessionWallet.addr;
+    usage.limits = new UsageLimit[](1);
+    usage.limits[0] = limit;
+    usage.totalValueUsed = value;
+
+    SessionUsageLimits[] memory usageArr = new SessionUsageLimits[](1);
+    usageArr[0] = usage;
+    // Construct the expected usage increment.
+    UsageLimit[] memory limitsArr = new UsageLimit[](2);
+    limitsArr[0] = limit;
+    limitsArr[1] =
+      UsageLimit({ usageHash: keccak256(abi.encode(sessionWallet.addr, VALUE_TRACKING_ADDRESS)), usageAmount: value });
+
+    // Encode the expected increment call data.
+    bytes memory expectedData = abi.encodeWithSelector(harness.incrementUsageLimit.selector, limitsArr);
+    incCall.data = expectedData;
+
+    // This call should pass without revert.
+    harness.validateLimitUsageIncrement(incCall, usageArr);
+  }
+
   function test_validateLimitUsageIncrement_InvalidBehaviorOnError() public {
     // Prepare a call with correct target but incorrect behaviorOnError.
     Payload.Call memory incCall = Payload.Call({

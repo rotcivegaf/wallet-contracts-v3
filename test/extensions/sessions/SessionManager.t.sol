@@ -356,6 +356,129 @@ contract SessionManagerTest is SessionTestBase {
     assertEq(token.balanceOf(badGuy.addr), 0);
   }
 
+  function _prepareIncrementOverMultipleCalls(
+    address wallet,
+    address target,
+    uint256 startIncrement,
+    uint256 value1,
+    uint256 value2,
+    uint256 ruleValue
+  ) internal returns (Payload.Decoded memory payload, bytes32 imageHash, bytes memory encodedSig) {
+    vm.assume(target.code.length == 0);
+
+    // Session permissions
+    SessionPermissions memory sessionPerms = SessionPermissions({
+      signer: sessionWallet.addr,
+      chainId: 0,
+      valueLimit: 0,
+      deadline: uint64(block.timestamp + 1 days),
+      permissions: new Permission[](1)
+    });
+    sessionPerms.permissions[0] = Permission({ target: target, rules: new ParameterRule[](1) });
+    sessionPerms.permissions[0].rules[0] = ParameterRule({
+      cumulative: true,
+      operation: ParameterOperation.LESS_THAN_OR_EQUAL,
+      value: bytes32(uint256(ruleValue)),
+      offset: 0,
+      mask: bytes32(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)
+    });
+
+    // Set the initial limit usage
+    UsageLimit[] memory limits = new UsageLimit[](1);
+    limits[0] = UsageLimit({
+      usageHash: keccak256(abi.encode(sessionWallet.addr, sessionPerms.permissions[0], uint256(0))),
+      usageAmount: startIncrement
+    });
+    vm.prank(wallet);
+    sessionManager.incrementUsageLimit(limits);
+    assertEq(sessionManager.getLimitUsage(wallet, limits[0].usageHash), startIncrement);
+
+    // Call 0: increment the usage limit
+    payload = _buildPayload(3);
+    limits[0].usageAmount = startIncrement + value1 + value2;
+    payload.calls[0] = Payload.Call({
+      to: address(sessionManager),
+      value: 0,
+      data: abi.encodeWithSelector(sessionManager.incrementUsageLimit.selector, limits),
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    // Use limit
+    payload.calls[1] = Payload.Call({
+      to: target,
+      value: 0,
+      data: abi.encodePacked(uint256(value1)),
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+    payload.calls[2] = Payload.Call({
+      to: target,
+      value: 0,
+      data: abi.encodePacked(uint256(value2)),
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    uint8[] memory permissionIdxs = new uint8[](3);
+
+    (imageHash, encodedSig) = _validExplicitSessionSignature(payload, sessionPerms, permissionIdxs);
+
+    return (payload, imageHash, encodedSig);
+  }
+
+  function testIncrementOverMultipleCalls_Invalid(
+    address wallet,
+    address target,
+    uint256 startIncrement,
+    uint256 value1,
+    uint256 value2,
+    uint256 ruleValue
+  ) public {
+    startIncrement = bound(startIncrement, 0, 1 ether);
+    value1 = bound(value1, 1, 1 ether);
+    value2 = bound(value2, 1, 1 ether);
+
+    ruleValue = bound(ruleValue, 0, startIncrement + value1 + value2 - 1);
+
+    Payload.Decoded memory payload;
+    bytes memory encodedSig;
+    (payload,, encodedSig) =
+      _prepareIncrementOverMultipleCalls(wallet, target, startIncrement, value1, value2, ruleValue);
+
+    vm.prank(wallet);
+    vm.expectRevert(SessionErrors.InvalidPermission.selector);
+    sessionManager.recoverSapientSignature(payload, encodedSig);
+  }
+
+  function testIncrementOverMultipleCalls_Valid(
+    address wallet,
+    address target,
+    uint256 startIncrement,
+    uint256 value1,
+    uint256 value2,
+    uint256 ruleValue
+  ) public {
+    startIncrement = bound(startIncrement, 0, 1 ether);
+    value1 = bound(value1, 1, 1 ether);
+    value2 = bound(value2, 1, 1 ether);
+
+    ruleValue = bound(ruleValue, startIncrement + value1 + value2, 100 ether);
+
+    (Payload.Decoded memory payload, bytes32 imageHash, bytes memory encodedSig) =
+      _prepareIncrementOverMultipleCalls(wallet, target, startIncrement, value1, value2, ruleValue);
+
+    vm.prank(wallet);
+    bytes32 actualImageHash = sessionManager.recoverSapientSignature(payload, encodedSig);
+    assertEq(imageHash, actualImageHash);
+  }
+
   function testInvalidPayloadKindReverts() public {
     Payload.Decoded memory payload;
     bytes memory encodedSig;
