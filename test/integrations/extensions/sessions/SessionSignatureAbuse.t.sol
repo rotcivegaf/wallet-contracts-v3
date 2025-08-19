@@ -92,4 +92,43 @@ contract IntegrationSessionSignatureAbuseTest is ExtendedSessionTestBase {
     wallet.execute(PrimitivesRPC.toPackedPayload(vm, payload), signature);
   }
 
+  function test_CrossChain_ReplayProtection_RepeatableCall() public {
+    // Create default wallet
+    string memory topology = _createDefaultTopology();
+    (Stage1Module wallet, string memory config,) = _createWallet(topology);
+
+    // Build cross chain supported payload
+    Payload.Decoded memory payload1 = _buildPayload(1);
+    payload1.noChainId = true;
+    payload1.calls[0].to = address(mockTarget);
+
+    // Sign
+    string[] memory callSignatures1 = new string[](1);
+    bytes32 callHash = SessionSig.hashCallWithReplayProtection(payload1.calls[0], payload1);
+    string memory sessionSignature = _signAndEncodeRSV(callHash, sessionWallet);
+    callSignatures1[0] = _explicitCallSignatureToJSON(0, sessionSignature);
+
+    // Assume the signature is submitted on chain 1. Attacker reads signature and crafts replay attack, duplicating call for chain 2.
+    Payload.Decoded memory payload2 = _buildPayload(2);
+    payload2.noChainId = true;
+    payload2.calls[0] = payload1.calls[0];
+    payload2.calls[1] = payload1.calls[0];
+
+    // Sign
+    string[] memory callSignatures2 = new string[](2);
+    callSignatures2[0] = callSignatures1[0];
+    callSignatures2[1] = callSignatures1[0];
+
+    // Construct signature
+    bytes memory sessionSignatures2 =
+      PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures2, explicitSigners, implicitSigners);
+    string memory signatures2 =
+      string(abi.encodePacked(vm.toString(address(sessionManager)), ":sapient:", vm.toString(sessionSignatures2)));
+    bytes memory signature2 = PrimitivesRPC.toEncodedSignature(vm, config, signatures2, !payload2.noChainId);
+
+    // Execute
+    // vm.expectRevert(abi.encodeWithSelector(SessionErrors.InvalidSessionSigner.selector, address(0)));
+    wallet.execute(PrimitivesRPC.toPackedPayload(vm, payload2), signature2);
+  }
+
 }
