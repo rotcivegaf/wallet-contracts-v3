@@ -84,9 +84,9 @@ abstract contract SessionTestBase is AdvTest {
     json = string.concat(json, vm.toString(uint8(rule.operation)));
     json = string.concat(json, ',"value":"');
     json = string.concat(json, vm.toString(rule.value));
-    json = string.concat(json, '","offset":');
+    json = string.concat(json, '","offset":"');
     json = string.concat(json, vm.toString(rule.offset));
-    json = string.concat(json, ',"mask":"');
+    json = string.concat(json, '","mask":"');
     json = string.concat(json, vm.toString(rule.mask));
     json = string.concat(json, '"}');
     return json;
