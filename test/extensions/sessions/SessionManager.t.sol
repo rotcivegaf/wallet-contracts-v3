@@ -237,13 +237,10 @@ contract SessionManagerTest is SessionTestBase {
 
     // Encode the call signatures for the reentrant payload
     string[] memory reentrantCallSignatures = new string[](2);
-    string memory sessionSignature = _signAndEncodeRSV(
-      SessionSig.hashCallWithReplayProtection(reentrantPayload.calls[0], reentrantPayload), sessionWallet
-    );
+    string memory sessionSignature =
+      _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(reentrantPayload, 0), sessionWallet);
     reentrantCallSignatures[0] = _explicitCallSignatureToJSON(0, sessionSignature);
-    sessionSignature = _signAndEncodeRSV(
-      SessionSig.hashCallWithReplayProtection(reentrantPayload.calls[1], reentrantPayload), sessionWallet
-    );
+    sessionSignature = _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(reentrantPayload, 1), sessionWallet);
     reentrantCallSignatures[1] = _explicitCallSignatureToJSON(0, sessionSignature);
     address[] memory reentrantExplicitSigners = new address[](1);
     reentrantExplicitSigners[0] = sessionWallet.addr;
@@ -319,16 +316,13 @@ contract SessionManagerTest is SessionTestBase {
     string[] memory callSignatures = new string[](3);
     {
       // Sign the explicit call (call 0) using the session key.
-      sessionSignature =
-        _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload.calls[0], payload), sessionWallet);
+      sessionSignature = _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload, 0), sessionWallet);
       callSignatures[0] = _explicitCallSignatureToJSON(0, sessionSignature);
       // Sign the explicit call (call 1) using the session key.
-      sessionSignature =
-        _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload.calls[1], payload), sessionWallet);
+      sessionSignature = _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload, 1), sessionWallet);
       callSignatures[1] = _explicitCallSignatureToJSON(0, sessionSignature);
       // Sign the self call (call 2) using the session key.
-      sessionSignature =
-        _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload.calls[2], payload), sessionWallet);
+      sessionSignature = _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload, 2), sessionWallet);
       callSignatures[2] = _explicitCallSignatureToJSON(1, sessionSignature);
     }
 
@@ -897,7 +891,7 @@ contract SessionManagerTest is SessionTestBase {
     string[] memory callSignatures = new string[](callCount);
     for (uint256 i; i < callCount; i++) {
       string memory sessionSignature =
-        _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload.calls[i], payload), sessionWallet);
+        _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload, i), sessionWallet);
       callSignatures[i] = _explicitCallSignatureToJSON(permissionIdxs[i], sessionSignature);
     }
 

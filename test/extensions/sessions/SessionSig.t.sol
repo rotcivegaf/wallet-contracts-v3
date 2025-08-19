@@ -89,7 +89,7 @@ contract SessionSigTest is SessionTestBase {
     string memory callSignature;
     {
       uint8 permissionIdx = 0;
-      bytes32 callHash = SessionSig.hashCallWithReplayProtection(payload.calls[0], payload);
+      bytes32 callHash = SessionSig.hashCallWithReplayProtection(payload, 0);
       string memory sessionSignature = _signAndEncodeRSV(callHash, sessionWallet);
       callSignature = _explicitCallSignatureToJSON(permissionIdx, sessionSignature);
     }
@@ -299,12 +299,12 @@ contract SessionSigTest is SessionTestBase {
     string[] memory callSignatures = new string[](2);
     {
       // First call signed by sessionWallet
-      bytes32 callHash = SessionSig.hashCallWithReplayProtection(payload.calls[0], payload);
+      bytes32 callHash = SessionSig.hashCallWithReplayProtection(payload, 0);
       string memory sessionSignature1 = _signAndEncodeRSV(callHash, sessionWallet);
       callSignatures[0] = _explicitCallSignatureToJSON(0, sessionSignature1);
 
       // Second call signed by sessionWallet2
-      callHash = SessionSig.hashCallWithReplayProtection(payload.calls[1], payload);
+      callHash = SessionSig.hashCallWithReplayProtection(payload, 1);
       string memory sessionSignature2 = _signAndEncodeRSV(callHash, sessionWallet2);
       callSignatures[1] = _explicitCallSignatureToJSON(1, sessionSignature2);
     }

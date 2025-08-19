@@ -34,7 +34,7 @@ contract IntegrationSessionSignatureAbuseTest is ExtendedSessionTestBase {
 
     // Build the signature
     string[] memory callSignatures = new string[](1);
-    bytes32 payloadHash = SessionSig.hashCallWithReplayProtection(payload.calls[0], payload);
+    bytes32 payloadHash = SessionSig.hashCallWithReplayProtection(payload, 0);
     bytes32 r = bytes32(0); // Force the signature to return address(0)
     assertEq(ecrecover(payloadHash, v, r, s), address(0));
     callSignatures[0] = _explicitCallSignatureToJSON(
@@ -104,9 +104,13 @@ contract IntegrationSessionSignatureAbuseTest is ExtendedSessionTestBase {
 
     // Sign
     string[] memory callSignatures1 = new string[](1);
-    bytes32 callHash = SessionSig.hashCallWithReplayProtection(payload1.calls[0], payload1);
+    bytes32 callHash = SessionSig.hashCallWithReplayProtection(payload1, 0);
     string memory sessionSignature = _signAndEncodeRSV(callHash, sessionWallet);
     callSignatures1[0] = _explicitCallSignatureToJSON(0, sessionSignature);
+
+    address[] memory explicitSigners = new address[](1);
+    explicitSigners[0] = sessionWallet.addr;
+    address[] memory implicitSigners = new address[](0);
 
     // Assume the signature is submitted on chain 1. Attacker reads signature and crafts replay attack, duplicating call for chain 2.
     Payload.Decoded memory payload2 = _buildPayload(2);
@@ -127,8 +131,13 @@ contract IntegrationSessionSignatureAbuseTest is ExtendedSessionTestBase {
     bytes memory signature2 = PrimitivesRPC.toEncodedSignature(vm, config, signatures2, !payload2.noChainId);
 
     // Execute
-    // vm.expectRevert(abi.encodeWithSelector(SessionErrors.InvalidSessionSigner.selector, address(0)));
-    wallet.execute(PrimitivesRPC.toPackedPayload(vm, payload2), signature2);
+    try wallet.execute(PrimitivesRPC.toPackedPayload(vm, payload2), signature2) {
+      revert("Execution should fail");
+    } catch (bytes memory reason) {
+      // We don't validate the address in the error
+      bytes4 errorSelector = bytes4(reason);
+      assertEq(errorSelector, SessionErrors.InvalidSessionSigner.selector);
+    }
   }
 
 }
