@@ -56,4 +56,40 @@ contract IntegrationSessionSignatureAbuseTest is ExtendedSessionTestBase {
     wallet.execute(packedPayload, encodedSignature);
   }
 
+  function test_PermissionIndex_OutOfRange_reverts_MissingPermission(
+    FuzzPermission[] memory fuzzPermissions,
+    uint8 permissionIndex
+  ) public {
+    // Create permissions for test
+    Permission[] memory permissions = _fuzzToPermissions(fuzzPermissions, 3, 3);
+
+    permissionIndex = uint8(bound(permissionIndex, permissions.length, 2 ** 7 - 1));
+    SessionPermissions memory sessionPerms = SessionPermissions({
+      signer: sessionWallet.addr,
+      chainId: block.chainid,
+      valueLimit: 0,
+      deadline: uint64(block.timestamp + 1 days),
+      permissions: permissions
+    });
+
+    // Create a topology with the session signer
+    string memory topology = _createTopology(sessionPerms);
+
+    // Create a wallet with the topology
+    (Stage1Module wallet, string memory config,) = _createWallet(topology);
+
+    // Build the payload
+    Payload.Decoded memory payload = _buildPayload(1);
+    payload.calls[0].to = address(mockTarget);
+
+    // Build the signature
+    uint8[] memory permissionIdxs = new uint8[](1);
+    permissionIdxs[0] = permissionIndex;
+    bytes memory signature = _validExplicitSignature(payload, sessionWallet, config, topology, permissionIdxs);
+
+    // Execute
+    vm.expectRevert(abi.encodeWithSelector(SessionErrors.MissingPermission.selector, permissionIndex));
+    wallet.execute(PrimitivesRPC.toPackedPayload(vm, payload), signature);
+  }
+
 }
