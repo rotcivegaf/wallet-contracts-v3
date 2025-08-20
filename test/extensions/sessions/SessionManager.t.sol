@@ -478,15 +478,15 @@ contract SessionManagerTest is SessionTestBase {
     bytes memory encodedSig;
 
     payload.kind = Payload.KIND_MESSAGE;
-    vm.expectRevert(SessionManager.InvalidPayloadKind.selector);
+    vm.expectRevert(SessionErrors.InvalidPayloadKind.selector);
     sessionManager.recoverSapientSignature(payload, encodedSig);
 
     payload.kind = Payload.KIND_CONFIG_UPDATE;
-    vm.expectRevert(SessionManager.InvalidPayloadKind.selector);
+    vm.expectRevert(SessionErrors.InvalidPayloadKind.selector);
     sessionManager.recoverSapientSignature(payload, encodedSig);
 
     payload.kind = Payload.KIND_DIGEST;
-    vm.expectRevert(SessionManager.InvalidPayloadKind.selector);
+    vm.expectRevert(SessionErrors.InvalidPayloadKind.selector);
     sessionManager.recoverSapientSignature(payload, encodedSig);
   }
 
@@ -496,7 +496,7 @@ contract SessionManagerTest is SessionTestBase {
     Payload.Decoded memory payload;
     payload.kind = Payload.KIND_TRANSACTIONS;
 
-    vm.expectRevert(SessionManager.InvalidCallsLength.selector);
+    vm.expectRevert(SessionErrors.InvalidCallsLength.selector);
     sessionManager.recoverSapientSignature(payload, sig);
   }
 

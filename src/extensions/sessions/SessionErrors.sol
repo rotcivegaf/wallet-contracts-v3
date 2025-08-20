@@ -20,6 +20,10 @@ library SessionErrors {
   error InvalidValue();
   /// @notice Invalid node type in session configuration
   error InvalidNodeType(uint256 flag);
+  /// @notice Error thrown when the payload kind is invalid
+  error InvalidPayloadKind();
+  /// @notice Error thrown when the calls length is invalid
+  error InvalidCallsLength();
 
   // ---- Explicit session errors ----
 

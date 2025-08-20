@@ -23,11 +23,6 @@ using LibBytes for bytes;
 /// @notice Manager for smart sessions
 contract SessionManager is ISapient, ImplicitSessionManager, ExplicitSessionManager {
 
-  /// @notice Error thrown when the payload kind is invalid
-  error InvalidPayloadKind();
-  /// @notice Error thrown when the calls length is invalid
-  error InvalidCallsLength();
-
   /// @inheritdoc ISapient
   function recoverSapientSignature(
     Payload.Decoded calldata payload,
@@ -35,10 +30,10 @@ contract SessionManager is ISapient, ImplicitSessionManager, ExplicitSessionMana
   ) external view returns (bytes32) {
     // Validate outer Payload
     if (payload.kind != Payload.KIND_TRANSACTIONS) {
-      revert InvalidPayloadKind();
+      revert SessionErrors.InvalidPayloadKind();
     }
     if (payload.calls.length == 0) {
-      revert InvalidCallsLength();
+      revert SessionErrors.InvalidCallsLength();
     }
 
     // Decode signature
