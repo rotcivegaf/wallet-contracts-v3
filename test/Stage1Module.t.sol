@@ -19,6 +19,8 @@ import { ISapient } from "../src/modules/interfaces/ISapient.sol";
 import { PrimitivesRPC } from "./utils/PrimitivesRPC.sol";
 import { AdvTest } from "./utils/TestUtils.sol";
 
+import { CanReenter } from "test/mocks/CanReenter.sol";
+
 contract TestStage1Module is AdvTest {
 
   event ImageHashUpdated(bytes32 newImageHash);
@@ -1151,6 +1153,83 @@ contract TestStage1Module is AdvTest {
     // Recover the parented payload
     vm.prank(params.parentWallet);
     Stage1Auth(vars.wallet).recoverSapientSignature(params.payload, vars.parentedSignature);
+  }
+
+  function test_forbid_reentrancy(
+    uint16 _threshold,
+    uint56 _checkpoint,
+    uint8 _weight
+  ) external {
+    CanReenter canReenter = new CanReenter();
+    _weight = uint8(bound(_weight, 0, 255));
+    _threshold = uint16(bound(_threshold, 0, _weight));
+    _checkpoint = uint56(bound(_checkpoint, 0, type(uint56).max));
+
+    uint256 signerPk = boundPk(uint256(1));
+    address signer = vm.addr(signerPk);
+
+    string memory ce;
+    ce = string(abi.encodePacked(ce, "signer:", vm.toString(signer), ":", vm.toString(_weight)));
+    string memory config = PrimitivesRPC.newConfig(vm, _threshold, _checkpoint, ce);
+
+    address payable wallet = payable(factory.deploy(address(stage1Module), PrimitivesRPC.getImageHash(vm, config)));
+
+    // Build the inner payload
+    Payload.Decoded memory innerPayload;
+    innerPayload.kind = Payload.KIND_TRANSACTIONS;
+    innerPayload.calls = new Payload.Call[](1);
+    innerPayload.space = 2;
+    innerPayload.calls[0] = Payload.Call({
+      to: address(1),
+      value: 0,
+      data: bytes(""),
+      gasLimit: 100000,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    // Sign the inner payload
+    (uint256 v, bytes32 r, bytes32 s) = vm.sign(signerPk, Payload.hashFor(innerPayload, address(wallet)));
+    bytes memory innerSignature = PrimitivesRPC.toEncodedSignature(
+      vm,
+      config,
+      string(abi.encodePacked(vm.toString(signer), ":hash:", vm.toString(r), ":", vm.toString(s), ":", vm.toString(v))),
+      true
+    );
+
+    // Pack the inner payload
+    bytes memory innerPackedPayload = PrimitivesRPC.toPackedPayload(vm, innerPayload);
+
+    // Build the outer payload
+    Payload.Decoded memory outerPayload;
+    outerPayload.kind = Payload.KIND_TRANSACTIONS;
+    outerPayload.calls = new Payload.Call[](1);
+    outerPayload.calls[0] = Payload.Call({
+      to: address(canReenter),
+      value: 0,
+      data: abi.encodeWithSelector(CanReenter.doAnotherCall.selector, address(wallet), abi.encodeWithSelector(Stage1Module(wallet).execute.selector, innerPackedPayload, innerSignature)),
+      gasLimit: 1000000,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    // Sign the outer payload
+    (v, r, s) = vm.sign(signerPk, Payload.hashFor(outerPayload, address(wallet)));
+    bytes memory outerSignature = PrimitivesRPC.toEncodedSignature(
+      vm,
+      config,
+      string(abi.encodePacked(vm.toString(signer), ":hash:", vm.toString(r), ":", vm.toString(s), ":", vm.toString(v))),
+      true
+    );
+
+    // Pack the outer payload
+    bytes memory outerPackedPayload = PrimitivesRPC.toPackedPayload(vm, outerPayload);
+
+    // Execute the outer payload
+    vm.expectRevert();
+    Stage1Module(wallet).execute(outerPackedPayload, outerSignature);
   }
 
   receive() external payable { }
