@@ -133,11 +133,17 @@ contract GuestTest is AdvTest {
     Payload.Decoded memory decoded = toDecodedGuestPayload(p);
     boundToLegalPayload(decoded);
 
+    decoded.calls[callIndex].to = boundNoPrecompile(decoded.calls[callIndex].to);
+
     for (uint256 i = 0; i < decoded.calls.length; i++) {
       decoded.calls[i].to = boundNoPrecompile(decoded.calls[i].to);
       decoded.calls[i].value = 0;
       decoded.calls[i].delegateCall = false;
       decoded.calls[i].gasLimit = bound(decoded.calls[i].gasLimit, 0, 1_000_000_000);
+
+      if (decoded.calls[i].to == decoded.calls[callIndex].to && i != callIndex) {
+        decoded.calls[i].behaviorOnError = Payload.BEHAVIOR_IGNORE_ERROR;
+      }
 
       if (i == callIndex) {
         decoded.calls[i].behaviorOnError = Payload.BEHAVIOR_IGNORE_ERROR;
@@ -178,11 +184,17 @@ contract GuestTest is AdvTest {
     Payload.Decoded memory decoded = toDecodedGuestPayload(p);
     boundToLegalPayload(decoded);
 
+    decoded.calls[callIndex].to = boundNoPrecompile(decoded.calls[callIndex].to);
+
     for (uint256 i = 0; i < decoded.calls.length; i++) {
       decoded.calls[i].to = boundNoPrecompile(decoded.calls[i].to);
       decoded.calls[i].value = 0;
       decoded.calls[i].delegateCall = false;
       decoded.calls[i].gasLimit = bound(decoded.calls[i].gasLimit, 0, 1_000_000_000);
+
+      if (decoded.calls[i].to == decoded.calls[callIndex].to && i != callIndex) {
+        decoded.calls[i].behaviorOnError = Payload.BEHAVIOR_IGNORE_ERROR;
+      }
 
       if (i == callIndex) {
         decoded.calls[i].behaviorOnError = Payload.BEHAVIOR_REVERT_ON_ERROR;
@@ -210,11 +222,17 @@ contract GuestTest is AdvTest {
     Payload.Decoded memory decoded = toDecodedGuestPayload(p);
     boundToLegalPayload(decoded);
 
+    decoded.calls[callIndex].to = boundNoPrecompile(decoded.calls[callIndex].to);
+
     for (uint256 i = 0; i < decoded.calls.length; i++) {
       decoded.calls[i].to = boundNoPrecompile(decoded.calls[i].to);
       decoded.calls[i].value = 0;
       decoded.calls[i].delegateCall = false;
       decoded.calls[i].gasLimit = bound(decoded.calls[i].gasLimit, 0, 1_000_000_000);
+
+      if (decoded.calls[i].to == decoded.calls[callIndex].to && i != callIndex) {
+        decoded.calls[i].behaviorOnError = Payload.BEHAVIOR_IGNORE_ERROR;
+      }
 
       if (i == callIndex) {
         decoded.calls[i].behaviorOnError = Payload.BEHAVIOR_ABORT_ON_ERROR;
