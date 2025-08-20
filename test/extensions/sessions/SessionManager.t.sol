@@ -500,6 +500,15 @@ contract SessionManagerTest is SessionTestBase {
     sessionManager.recoverSapientSignature(payload, sig);
   }
 
+  function testInvalidSpaceReverts(uint160 space, bytes memory sig) public {
+    space = uint160(bound(space, sessionManager.MAX_SPACE() + 1, type(uint160).max));
+
+    Payload.Decoded memory payload;
+
+    vm.expectRevert(SessionErrors.InvalidCallsLength.selector);
+    sessionManager.recoverSapientSignature(payload, sig);
+  }
+
   /// @notice Test that a call using delegateCall reverts.
   function testInvalidDelegateCallReverts(Attestation memory attestation, bytes memory data, address target) public {
     vm.assume(target != address(sessionManager));

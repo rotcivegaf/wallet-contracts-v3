@@ -23,6 +23,10 @@ using LibBytes for bytes;
 /// @notice Manager for smart sessions
 contract SessionManager is ISapient, ImplicitSessionManager, ExplicitSessionManager {
 
+  /// @notice Maximum nonce space allowed for sessions use.
+  /// @dev This is half the available nonce space.
+  uint256 public constant MAX_SPACE = type(uint160).max / 2;
+
   /// @inheritdoc ISapient
   function recoverSapientSignature(
     Payload.Decoded calldata payload,
@@ -31,6 +35,9 @@ contract SessionManager is ISapient, ImplicitSessionManager, ExplicitSessionMana
     // Validate outer Payload
     if (payload.kind != Payload.KIND_TRANSACTIONS) {
       revert SessionErrors.InvalidPayloadKind();
+    }
+    if (payload.space > MAX_SPACE) {
+      revert SessionErrors.InvalidSpace(payload.space);
     }
     if (payload.calls.length == 0) {
       revert SessionErrors.InvalidCallsLength();

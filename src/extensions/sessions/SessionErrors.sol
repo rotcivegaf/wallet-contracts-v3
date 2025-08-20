@@ -24,6 +24,8 @@ library SessionErrors {
   error InvalidPayloadKind();
   /// @notice Error thrown when the calls length is invalid
   error InvalidCallsLength();
+  /// @notice Error thrown when the payload space is invalid
+  error InvalidSpace(uint256 space);
 
   // ---- Explicit session errors ----
 
