@@ -1155,11 +1155,7 @@ contract TestStage1Module is AdvTest {
     Stage1Auth(vars.wallet).recoverSapientSignature(params.payload, vars.parentedSignature);
   }
 
-  function test_forbid_reentrancy(
-    uint16 _threshold,
-    uint56 _checkpoint,
-    uint8 _weight
-  ) external {
+  function test_forbid_reentrancy(uint16 _threshold, uint56 _checkpoint, uint8 _weight) external {
     CanReenter canReenter = new CanReenter();
     _weight = uint8(bound(_weight, 0, 255));
     _threshold = uint16(bound(_threshold, 0, _weight));
@@ -1208,7 +1204,11 @@ contract TestStage1Module is AdvTest {
     outerPayload.calls[0] = Payload.Call({
       to: address(canReenter),
       value: 0,
-      data: abi.encodeWithSelector(CanReenter.doAnotherCall.selector, address(wallet), abi.encodeWithSelector(Stage1Module(wallet).execute.selector, innerPackedPayload, innerSignature)),
+      data: abi.encodeWithSelector(
+        CanReenter.doAnotherCall.selector,
+        address(wallet),
+        abi.encodeWithSelector(Stage1Module(wallet).execute.selector, innerPackedPayload, innerSignature)
+      ),
       gasLimit: 1000000,
       delegateCall: false,
       onlyFallback: false,
