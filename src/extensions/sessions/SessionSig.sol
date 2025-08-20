@@ -166,7 +166,7 @@ library SessionSig {
           uint8 v;
           (r, s, v, pointer) = encodedSignature.readRSVCompact(pointer);
 
-          bytes32 callHash = hashCallWithReplayProtection(payload.calls[i], payload);
+          bytes32 callHash = hashCallWithReplayProtection(payload, i);
           callSignature.sessionSigner = ecrecover(callHash, v, r, s);
           if (callSignature.sessionSigner == address(0)) {
             revert SessionErrors.InvalidSessionSigner(address(0));
@@ -394,16 +394,22 @@ library SessionSig {
   }
 
   /// @notice Hashes a call with replay protection.
-  /// @dev The replay protection is based on the chainId, space, and nonce in the payload.
-  /// @param call The call to hash
+  /// @dev The replay protection is based on the chainId, space, nonce and index in the payload.
   /// @param payload The payload to hash
+  /// @param callIdx The index of the call to hash
   /// @return callHash The hash of the call with replay protection
   function hashCallWithReplayProtection(
-    Payload.Call calldata call,
-    Payload.Decoded calldata payload
+    Payload.Decoded calldata payload,
+    uint256 callIdx
   ) public view returns (bytes32 callHash) {
     return keccak256(
-      abi.encodePacked(payload.noChainId ? 0 : block.chainid, payload.space, payload.nonce, Payload.hashCall(call))
+      abi.encodePacked(
+        payload.noChainId ? 0 : block.chainid,
+        payload.space,
+        payload.nonce,
+        callIdx,
+        Payload.hashCall(payload.calls[callIdx])
+      )
     );
   }
 

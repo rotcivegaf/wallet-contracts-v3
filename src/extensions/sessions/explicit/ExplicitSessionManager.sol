@@ -78,11 +78,14 @@ abstract contract ExplicitSessionManager is IExplicitSessionManager, PermissionV
 
     // Calls to incrementUsageLimit are the only allowed calls to this contract
     if (call.to == address(this)) {
-      bytes4 selector = bytes4(call.data[0:4]);
-      if (call.value > 0 || selector != IExplicitSessionManager.incrementUsageLimit.selector) {
-        revert SessionErrors.InvalidSelfCall();
+      if (callIdx != 0) {
+        // IncrementUsageLimit call is only allowed as the first call
+        revert SessionErrors.InvalidLimitUsageIncrement();
       }
-      // No permissions required
+      if (call.value > 0) {
+        revert SessionErrors.InvalidValue();
+      }
+      // No permissions required for the increment call
       return sessionUsageLimits;
     }
 
@@ -113,7 +116,7 @@ abstract contract ExplicitSessionManager is IExplicitSessionManager, PermissionV
   }
 
   /// @notice Verifies the limit usage increment
-  /// @param call The call to validate
+  /// @param call The first call in the payload, which is expected to be the increment call
   /// @param sessionUsageLimits The session usage limits
   /// @dev Reverts if the required increment call is missing or invalid
   /// @dev If no usage limits are used, this function does nothing
@@ -123,8 +126,8 @@ abstract contract ExplicitSessionManager is IExplicitSessionManager, PermissionV
   ) internal view {
     // Limits call is only required if there are usage limits used
     if (sessionUsageLimits.length > 0) {
-      // Verify the last call is the increment call
-      if (call.to != address(this) || call.behaviorOnError != Payload.BEHAVIOR_REVERT_ON_ERROR) {
+      // Verify the first call is the increment call and cannot be skipped
+      if (call.to != address(this) || call.behaviorOnError != Payload.BEHAVIOR_REVERT_ON_ERROR || call.onlyFallback) {
         revert SessionErrors.InvalidLimitUsageIncrement();
       }
 
@@ -155,6 +158,11 @@ abstract contract ExplicitSessionManager is IExplicitSessionManager, PermissionV
       bytes32 expectedDataHash = keccak256(expectedData);
       bytes32 actualDataHash = keccak256(call.data);
       if (actualDataHash != expectedDataHash) {
+        revert SessionErrors.InvalidLimitUsageIncrement();
+      }
+    } else {
+      // Do not allow self calls if there are no usage limits
+      if (call.to == address(this)) {
         revert SessionErrors.InvalidLimitUsageIncrement();
       }
     }
