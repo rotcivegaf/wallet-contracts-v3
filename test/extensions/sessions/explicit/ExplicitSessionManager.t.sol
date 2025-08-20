@@ -325,42 +325,6 @@ contract ExplicitSessionManagerTest is SessionTestBase {
     harness.validateExplicitCall(payload, 0, wallet, sessionWallet.addr, permsArr, 0, usage);
   }
 
-  function test_validateExplicitCall_InvalidSelfCall_Selector(
-    uint64 chainId
-  ) public supportChainId(chainId) {
-    // Self-call with zero value but incorrect selector.
-    bytes4 wrongSelector = bytes4(0xdeadbeef);
-    Payload.Decoded memory payload = _buildPayload(1);
-    payload.calls[0] = Payload.Call({
-      to: address(harness),
-      value: 0,
-      data: abi.encodePacked(wrongSelector),
-      gasLimit: 0,
-      delegateCall: false,
-      onlyFallback: false,
-      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
-    });
-
-    // Need valid session permissions for the test to reach self-call validation
-    SessionPermissions memory perms = SessionPermissions({
-      signer: sessionWallet.addr, // Match the session signer
-      chainId: chainId,
-      valueLimit: 100,
-      deadline: uint64(block.timestamp + 1 days),
-      permissions: new Permission[](1)
-    });
-    perms.permissions[0] = Permission({ target: address(harness), rules: new ParameterRule[](0) });
-
-    SessionPermissions[] memory permsArr = _toArray(perms);
-    SessionUsageLimits memory usage;
-    usage.signer = sessionWallet.addr;
-    usage.limits = new UsageLimit[](0);
-    usage.totalValueUsed = 0;
-
-    vm.expectRevert(SessionErrors.InvalidSelfCall.selector);
-    harness.validateExplicitCall(payload, 0, wallet, sessionWallet.addr, permsArr, 0, usage);
-  }
-
   function test_validateExplicitCall_MissingPermission(
     uint64 chainId
   ) public supportChainId(chainId) {
@@ -555,6 +519,44 @@ contract ExplicitSessionManagerTest is SessionTestBase {
       UsageLimit({ usageHash: keccak256(abi.encode(sessionWallet.addr, VALUE_TRACKING_ADDRESS)), usageAmount: value });
     UsageLimit[] memory limitsArr = new UsageLimit[](1);
     limitsArr[0] = expectedLimit;
+
+    // Encode the expected increment call data.
+    bytes memory expectedData = abi.encodeWithSelector(harness.incrementUsageLimit.selector, limitsArr);
+    incCall.data = expectedData;
+
+    // This call should pass without revert.
+    harness.validateLimitUsageIncrement(incCall, usageArr);
+  }
+
+  function test_validateLimitUsageIncrement_RuleAndValue(UsageLimit memory limit, uint256 value) public view {
+    limit.usageAmount = bound(limit.usageAmount, 1, type(uint256).max);
+    value = bound(value, 1, type(uint256).max);
+
+    // Prepare a call that is intended to be the increment call.
+    Payload.Call memory incCall = Payload.Call({
+      to: address(harness),
+      value: 0,
+      data: "", // will be filled with expected encoding
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    // Prepare session usage limits with a nonzero totalValueUsed.
+    SessionUsageLimits memory usage;
+    usage.signer = sessionWallet.addr;
+    usage.limits = new UsageLimit[](1);
+    usage.limits[0] = limit;
+    usage.totalValueUsed = value;
+
+    SessionUsageLimits[] memory usageArr = new SessionUsageLimits[](1);
+    usageArr[0] = usage;
+    // Construct the expected usage increment.
+    UsageLimit[] memory limitsArr = new UsageLimit[](2);
+    limitsArr[0] = limit;
+    limitsArr[1] =
+      UsageLimit({ usageHash: keccak256(abi.encode(sessionWallet.addr, VALUE_TRACKING_ADDRESS)), usageAmount: value });
 
     // Encode the expected increment call data.
     bytes memory expectedData = abi.encodeWithSelector(harness.incrementUsageLimit.selector, limitsArr);

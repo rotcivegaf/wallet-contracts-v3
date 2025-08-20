@@ -122,7 +122,7 @@ contract SessionCallsTest is SessionTestBase {
     string[] memory callSignatures = new string[](3);
     for (uint256 i = 0; i < 3; i++) {
       string memory sessionSignature =
-        _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload.calls[i], payload), sessionWallet);
+        _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload, i), sessionWallet);
       callSignatures[i] = _explicitCallSignatureToJSON(0, sessionSignature);
     }
     address[] memory explicitSigners = new address[](1);
@@ -186,7 +186,7 @@ contract SessionCallsTest is SessionTestBase {
     payload.calls[2] = _validCall(call2, call2Revert);
     payload.calls[3] = _validCall(call3, call3Revert);
 
-    // totalValue is calculated from calls[1] and calls[2]
+    // totalValue is calculated from calls[1] through calls[3]
     uint256 totalValue = payload.calls[1].value + payload.calls[2].value + payload.calls[3].value;
     vm.assume(totalValue > 0); // Required to use an increment permission
 
@@ -234,7 +234,7 @@ contract SessionCallsTest is SessionTestBase {
     string[] memory callSignatures = new string[](4);
     for (uint256 i; i < 4; i++) {
       string memory sessionSignature =
-        _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload.calls[i], payload), sessionWallet);
+        _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload, i), sessionWallet);
       callSignatures[i] = _explicitCallSignatureToJSON(0, sessionSignature);
     }
     address[] memory explicitSigners = new address[](1);

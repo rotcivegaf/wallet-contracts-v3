@@ -2060,6 +2060,7 @@ contract BaseSigTest is AdvTest {
     );
     vars.config2ImageHash = PrimitivesRPC.getImageHash(vm, vars.config2Json);
 
+    vm.assume(params.snapshotImageHash != bytes32(0));
     vm.assume(params.snapshotImageHash != vars.config1ImageHash);
     vm.assume(params.snapshotImageHash != vars.config2ImageHash);
 

@@ -237,13 +237,10 @@ contract SessionManagerTest is SessionTestBase {
 
     // Encode the call signatures for the reentrant payload
     string[] memory reentrantCallSignatures = new string[](2);
-    string memory sessionSignature = _signAndEncodeRSV(
-      SessionSig.hashCallWithReplayProtection(reentrantPayload.calls[0], reentrantPayload), sessionWallet
-    );
+    string memory sessionSignature =
+      _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(reentrantPayload, 0), sessionWallet);
     reentrantCallSignatures[0] = _explicitCallSignatureToJSON(0, sessionSignature);
-    sessionSignature = _signAndEncodeRSV(
-      SessionSig.hashCallWithReplayProtection(reentrantPayload.calls[1], reentrantPayload), sessionWallet
-    );
+    sessionSignature = _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(reentrantPayload, 1), sessionWallet);
     reentrantCallSignatures[1] = _explicitCallSignatureToJSON(0, sessionSignature);
     address[] memory reentrantExplicitSigners = new address[](1);
     reentrantExplicitSigners[0] = sessionWallet.addr;
@@ -319,16 +316,13 @@ contract SessionManagerTest is SessionTestBase {
     string[] memory callSignatures = new string[](3);
     {
       // Sign the explicit call (call 0) using the session key.
-      sessionSignature =
-        _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload.calls[0], payload), sessionWallet);
+      sessionSignature = _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload, 0), sessionWallet);
       callSignatures[0] = _explicitCallSignatureToJSON(0, sessionSignature);
       // Sign the explicit call (call 1) using the session key.
-      sessionSignature =
-        _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload.calls[1], payload), sessionWallet);
+      sessionSignature = _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload, 1), sessionWallet);
       callSignatures[1] = _explicitCallSignatureToJSON(0, sessionSignature);
       // Sign the self call (call 2) using the session key.
-      sessionSignature =
-        _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload.calls[2], payload), sessionWallet);
+      sessionSignature = _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload, 2), sessionWallet);
       callSignatures[2] = _explicitCallSignatureToJSON(1, sessionSignature);
     }
 
@@ -356,20 +350,143 @@ contract SessionManagerTest is SessionTestBase {
     assertEq(token.balanceOf(badGuy.addr), 0);
   }
 
+  function _prepareIncrementOverMultipleCalls(
+    address wallet,
+    address target,
+    uint256 startIncrement,
+    uint256 value1,
+    uint256 value2,
+    uint256 ruleValue
+  ) internal returns (Payload.Decoded memory payload, bytes32 imageHash, bytes memory encodedSig) {
+    vm.assume(target.code.length == 0);
+
+    // Session permissions
+    SessionPermissions memory sessionPerms = SessionPermissions({
+      signer: sessionWallet.addr,
+      chainId: 0,
+      valueLimit: 0,
+      deadline: uint64(block.timestamp + 1 days),
+      permissions: new Permission[](1)
+    });
+    sessionPerms.permissions[0] = Permission({ target: target, rules: new ParameterRule[](1) });
+    sessionPerms.permissions[0].rules[0] = ParameterRule({
+      cumulative: true,
+      operation: ParameterOperation.LESS_THAN_OR_EQUAL,
+      value: bytes32(uint256(ruleValue)),
+      offset: 0,
+      mask: bytes32(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)
+    });
+
+    // Set the initial limit usage
+    UsageLimit[] memory limits = new UsageLimit[](1);
+    limits[0] = UsageLimit({
+      usageHash: keccak256(abi.encode(sessionWallet.addr, sessionPerms.permissions[0], uint256(0))),
+      usageAmount: startIncrement
+    });
+    vm.prank(wallet);
+    sessionManager.incrementUsageLimit(limits);
+    assertEq(sessionManager.getLimitUsage(wallet, limits[0].usageHash), startIncrement);
+
+    // Call 0: increment the usage limit
+    payload = _buildPayload(3);
+    limits[0].usageAmount = startIncrement + value1 + value2;
+    payload.calls[0] = Payload.Call({
+      to: address(sessionManager),
+      value: 0,
+      data: abi.encodeWithSelector(sessionManager.incrementUsageLimit.selector, limits),
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    // Use limit
+    payload.calls[1] = Payload.Call({
+      to: target,
+      value: 0,
+      data: abi.encodePacked(uint256(value1)),
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+    payload.calls[2] = Payload.Call({
+      to: target,
+      value: 0,
+      data: abi.encodePacked(uint256(value2)),
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    uint8[] memory permissionIdxs = new uint8[](3);
+
+    (imageHash, encodedSig) = _validExplicitSessionSignature(payload, sessionPerms, permissionIdxs);
+
+    return (payload, imageHash, encodedSig);
+  }
+
+  function testIncrementOverMultipleCalls_Invalid(
+    address wallet,
+    address target,
+    uint256 startIncrement,
+    uint256 value1,
+    uint256 value2,
+    uint256 ruleValue
+  ) public {
+    startIncrement = bound(startIncrement, 0, 1 ether);
+    value1 = bound(value1, 1, 1 ether);
+    value2 = bound(value2, 1, 1 ether);
+
+    ruleValue = bound(ruleValue, 0, startIncrement + value1 + value2 - 1);
+
+    Payload.Decoded memory payload;
+    bytes memory encodedSig;
+    (payload,, encodedSig) =
+      _prepareIncrementOverMultipleCalls(wallet, target, startIncrement, value1, value2, ruleValue);
+
+    vm.prank(wallet);
+    vm.expectRevert(SessionErrors.InvalidPermission.selector);
+    sessionManager.recoverSapientSignature(payload, encodedSig);
+  }
+
+  function testIncrementOverMultipleCalls_Valid(
+    address wallet,
+    address target,
+    uint256 startIncrement,
+    uint256 value1,
+    uint256 value2,
+    uint256 ruleValue
+  ) public {
+    startIncrement = bound(startIncrement, 0, 1 ether);
+    value1 = bound(value1, 1, 1 ether);
+    value2 = bound(value2, 1, 1 ether);
+
+    ruleValue = bound(ruleValue, startIncrement + value1 + value2, 100 ether);
+
+    (Payload.Decoded memory payload, bytes32 imageHash, bytes memory encodedSig) =
+      _prepareIncrementOverMultipleCalls(wallet, target, startIncrement, value1, value2, ruleValue);
+
+    vm.prank(wallet);
+    bytes32 actualImageHash = sessionManager.recoverSapientSignature(payload, encodedSig);
+    assertEq(imageHash, actualImageHash);
+  }
+
   function testInvalidPayloadKindReverts() public {
     Payload.Decoded memory payload;
     bytes memory encodedSig;
 
     payload.kind = Payload.KIND_MESSAGE;
-    vm.expectRevert(SessionManager.InvalidPayloadKind.selector);
+    vm.expectRevert(SessionErrors.InvalidPayloadKind.selector);
     sessionManager.recoverSapientSignature(payload, encodedSig);
 
     payload.kind = Payload.KIND_CONFIG_UPDATE;
-    vm.expectRevert(SessionManager.InvalidPayloadKind.selector);
+    vm.expectRevert(SessionErrors.InvalidPayloadKind.selector);
     sessionManager.recoverSapientSignature(payload, encodedSig);
 
     payload.kind = Payload.KIND_DIGEST;
-    vm.expectRevert(SessionManager.InvalidPayloadKind.selector);
+    vm.expectRevert(SessionErrors.InvalidPayloadKind.selector);
     sessionManager.recoverSapientSignature(payload, encodedSig);
   }
 
@@ -379,7 +496,16 @@ contract SessionManagerTest is SessionTestBase {
     Payload.Decoded memory payload;
     payload.kind = Payload.KIND_TRANSACTIONS;
 
-    vm.expectRevert(SessionManager.InvalidCallsLength.selector);
+    vm.expectRevert(SessionErrors.InvalidCallsLength.selector);
+    sessionManager.recoverSapientSignature(payload, sig);
+  }
+
+  function testInvalidSpaceReverts(uint160 space, bytes memory sig) public {
+    space = uint160(bound(space, sessionManager.MAX_SPACE() + 1, type(uint160).max));
+
+    Payload.Decoded memory payload;
+
+    vm.expectRevert(SessionErrors.InvalidCallsLength.selector);
     sessionManager.recoverSapientSignature(payload, sig);
   }
 
@@ -581,9 +707,7 @@ contract SessionManagerTest is SessionTestBase {
   /// @notice Test that calls with BEHAVIOR_IGNORE_ERROR in explicit sessions are allowed
   function testExplicitSessionBehaviorIgnoreErrorAllowed(address target, bytes memory data) public {
     vm.assume(target != address(sessionManager));
-    // Build a payload with two calls: explicit call with IGNORE_ERROR + increment call
-    uint256 callCount = 2;
-    Payload.Decoded memory payload = _buildPayload(callCount);
+    Payload.Decoded memory payload = _buildPayload(1);
 
     // First call with BEHAVIOR_IGNORE_ERROR (should be allowed)
     payload.calls[0] = Payload.Call({
@@ -596,17 +720,6 @@ contract SessionManagerTest is SessionTestBase {
       behaviorOnError: Payload.BEHAVIOR_IGNORE_ERROR
     });
 
-    // Second call (increment call)
-    payload.calls[1] = Payload.Call({
-      to: address(sessionManager),
-      value: 0,
-      data: abi.encodeWithSelector(sessionManager.incrementUsageLimit.selector, new UsageLimit[](0)),
-      gasLimit: 0,
-      delegateCall: false,
-      onlyFallback: false,
-      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
-    });
-
     // Session permissions
     SessionPermissions memory sessionPerms = SessionPermissions({
       signer: sessionWallet.addr,
@@ -617,11 +730,7 @@ contract SessionManagerTest is SessionTestBase {
     });
     sessionPerms.permissions[0] = Permission({ target: target, rules: new ParameterRule[](0) });
 
-    uint8[] memory permissionIdxs = new uint8[](2);
-    permissionIdxs[0] = 0; // Call 0
-    permissionIdxs[1] = 0; // Call 1
-
-    (bytes32 imageHash, bytes memory encodedSig) = _validExplicitSessionSignature(payload, sessionPerms, permissionIdxs);
+    (bytes32 imageHash, bytes memory encodedSig) = _validExplicitSessionSignature(payload, sessionPerms, new uint8[](1));
 
     bytes32 actualImageHash = sessionManager.recoverSapientSignature(payload, encodedSig);
     assertEq(imageHash, actualImageHash);
@@ -630,9 +739,7 @@ contract SessionManagerTest is SessionTestBase {
   /// @notice Test that calls with BEHAVIOR_ABORT_ON_ERROR in explicit sessions revert
   function testExplicitSessionBehaviorAbortOnErrorReverts(address target, bytes memory data) public {
     vm.assume(target != address(sessionManager));
-    // Build a payload with two calls: explicit call with ABORT_ON_ERROR + increment call
-    uint256 callCount = 2;
-    Payload.Decoded memory payload = _buildPayload(callCount);
+    Payload.Decoded memory payload = _buildPayload(1);
 
     // First call with BEHAVIOR_ABORT_ON_ERROR (should revert)
     payload.calls[0] = Payload.Call({
@@ -645,17 +752,6 @@ contract SessionManagerTest is SessionTestBase {
       behaviorOnError: Payload.BEHAVIOR_ABORT_ON_ERROR // This should revert
      });
 
-    // Second call (increment call)
-    payload.calls[1] = Payload.Call({
-      to: address(sessionManager),
-      value: 0,
-      data: abi.encodeWithSelector(sessionManager.incrementUsageLimit.selector, new UsageLimit[](0)),
-      gasLimit: 0,
-      delegateCall: false,
-      onlyFallback: false,
-      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
-    });
-
     // Session permissions
     SessionPermissions memory sessionPerms = SessionPermissions({
       signer: sessionWallet.addr,
@@ -666,11 +762,7 @@ contract SessionManagerTest is SessionTestBase {
     });
     sessionPerms.permissions[0] = Permission({ target: target, rules: new ParameterRule[](0) });
 
-    uint8[] memory permissionIdxs = new uint8[](2);
-    permissionIdxs[0] = 0; // Call 0
-    permissionIdxs[1] = 0; // Call 1
-
-    (, bytes memory encodedSig) = _validExplicitSessionSignature(payload, sessionPerms, permissionIdxs);
+    (, bytes memory encodedSig) = _validExplicitSessionSignature(payload, sessionPerms, new uint8[](1));
 
     vm.expectRevert(SessionErrors.InvalidBehavior.selector);
     sessionManager.recoverSapientSignature(payload, encodedSig);
@@ -679,9 +771,7 @@ contract SessionManagerTest is SessionTestBase {
   /// @notice Test that valid linear execution still works
   function testValidLinearExecution(address target, bytes memory data) public {
     vm.assume(target != address(sessionManager));
-    // Build a payload with two calls: explicit call + increment call (both with valid flags)
-    uint256 callCount = 2;
-    Payload.Decoded memory payload = _buildPayload(callCount);
+    Payload.Decoded memory payload = _buildPayload(1);
 
     // First call (normal explicit call)
     payload.calls[0] = Payload.Call({
@@ -694,17 +784,6 @@ contract SessionManagerTest is SessionTestBase {
       behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR // Valid behavior
      });
 
-    // Second call (increment call with valid flags)
-    payload.calls[1] = Payload.Call({
-      to: address(sessionManager),
-      value: 0,
-      data: abi.encodeWithSelector(sessionManager.incrementUsageLimit.selector, new UsageLimit[](0)),
-      gasLimit: 0,
-      delegateCall: false,
-      onlyFallback: false, // Valid flag
-      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR // Valid behavior
-     });
-
     // Session permissions
     SessionPermissions memory sessionPerms = SessionPermissions({
       signer: sessionWallet.addr,
@@ -715,11 +794,7 @@ contract SessionManagerTest is SessionTestBase {
     });
     sessionPerms.permissions[0] = Permission({ target: target, rules: new ParameterRule[](0) });
 
-    uint8[] memory permissionIdxs = new uint8[](2);
-    permissionIdxs[0] = 0; // Call 0
-    permissionIdxs[1] = 0; // Call 1
-
-    (bytes32 imageHash, bytes memory encodedSig) = _validExplicitSessionSignature(payload, sessionPerms, permissionIdxs);
+    (bytes32 imageHash, bytes memory encodedSig) = _validExplicitSessionSignature(payload, sessionPerms, new uint8[](1));
 
     // This should succeed since all flags are valid for linear execution
     bytes32 actualImageHash = sessionManager.recoverSapientSignature(payload, encodedSig);
@@ -774,7 +849,7 @@ contract SessionManagerTest is SessionTestBase {
     string[] memory callSignatures = new string[](callCount);
     for (uint256 i; i < callCount; i++) {
       string memory sessionSignature =
-        _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload.calls[i], payload), sessionWallet);
+        _signAndEncodeRSV(SessionSig.hashCallWithReplayProtection(payload, i), sessionWallet);
       callSignatures[i] = _explicitCallSignatureToJSON(permissionIdxs[i], sessionSignature);
     }
 

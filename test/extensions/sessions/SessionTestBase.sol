@@ -84,9 +84,9 @@ abstract contract SessionTestBase is AdvTest {
     json = string.concat(json, vm.toString(uint8(rule.operation)));
     json = string.concat(json, ',"value":"');
     json = string.concat(json, vm.toString(rule.value));
-    json = string.concat(json, '","offset":');
+    json = string.concat(json, '","offset":"');
     json = string.concat(json, vm.toString(rule.offset));
-    json = string.concat(json, ',"mask":"');
+    json = string.concat(json, '","mask":"');
     json = string.concat(json, vm.toString(rule.mask));
     json = string.concat(json, '"}');
     return json;
@@ -120,10 +120,9 @@ abstract contract SessionTestBase is AdvTest {
     Vm.Wallet memory identitySigner,
     Attestation memory attestation
   ) internal view returns (string memory) {
-    Payload.Call memory call = payload.calls[callIdx];
     bytes32 attestationHash = attestation.toHash();
     string memory identitySignature = _signAndEncodeRSV(attestationHash, identitySigner);
-    bytes32 callHash = SessionSig.hashCallWithReplayProtection(call, payload);
+    bytes32 callHash = SessionSig.hashCallWithReplayProtection(payload, callIdx);
     string memory sessionSignature = _signAndEncodeRSV(callHash, signer);
     return _implicitCallSignatureToJSON(attestation, sessionSignature, identitySignature);
   }
