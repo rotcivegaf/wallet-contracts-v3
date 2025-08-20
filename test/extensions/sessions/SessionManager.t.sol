@@ -609,10 +609,11 @@ contract SessionManagerTest is SessionTestBase {
   /// @notice Test that calls with onlyFallback = true in explicit sessions are allowed
   function testExplicitSessionOnlyFallbackAllowed(address target, bytes memory data) public {
     vm.assume(target != address(sessionManager));
-    // Build a payload with two calls: explicit call + increment call
-    Payload.Decoded memory payload = _buildPayload(2);
+    // Build a payload with one call: explicit call
+    Payload.Decoded memory payload = _buildPayload(1);
 
     // First call with onlyFallback = true (should be allowed)
+    // increment call is not allowed since there is no consumption of the usage limit
     payload.calls[0] = Payload.Call({
       to: target,
       value: 0,
@@ -620,17 +621,6 @@ contract SessionManagerTest is SessionTestBase {
       gasLimit: 0,
       delegateCall: false,
       onlyFallback: true,
-      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
-    });
-
-    // Second call (increment call)
-    payload.calls[1] = Payload.Call({
-      to: address(sessionManager),
-      value: 0,
-      data: abi.encodeWithSelector(sessionManager.incrementUsageLimit.selector, new UsageLimit[](0)),
-      gasLimit: 0,
-      delegateCall: false,
-      onlyFallback: false,
       behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
     });
 
@@ -644,9 +634,8 @@ contract SessionManagerTest is SessionTestBase {
     });
     sessionPerms.permissions[0] = Permission({ target: target, rules: new ParameterRule[](0) });
 
-    uint8[] memory permissionIdxs = new uint8[](2);
+    uint8[] memory permissionIdxs = new uint8[](1);
     permissionIdxs[0] = 0; // Call 0
-    permissionIdxs[1] = 0; // Call 1
 
     (bytes32 imageHash, bytes memory encodedSig) = _validExplicitSessionSignature(payload, sessionPerms, permissionIdxs);
 
