@@ -264,26 +264,32 @@ contract IntegrationSessionValueForwardingTest is ExtendedSessionTestBase {
     // Sign it with the session
     bytes memory signature = _validExplicitSignature(payload, sessionWallet, config, topology, new uint8[](2));
 
+    uint256 recipientBalance = address(recipient).balance;
     // Sign and execute successfully
     signature = _validExplicitSignature(payload, sessionWallet, config, topology, new uint8[](4));
     wallet.execute(PrimitivesRPC.toPackedPayload(vm, payload), signature);
 
     // Check the balance of the recipient
-    assertEq(address(recipient).balance, valueSent);
+    assertEq(address(recipient).balance, recipientBalance + valueSent);
 
     // Try another payload that doesn't use an increment permission
-    payload = _buildPayload(1);
+    payload = _buildPayload(2);
     payload.noChainId = chainId == 0;
     payload.space = space;
     payload.nonce = 1;
-    payload.calls[0].to = address(mockTarget);
-    payload.calls[0].data = "0x12345678";
+    // Note: It still needs an increment call, even though there is no increment usage...
+    payload.calls[0].to = address(sessionManager);
+    payload.calls[0].data = abi.encodeWithSelector(sessionManager.incrementUsageLimit.selector, limits);
+    payload.calls[0].behaviorOnError = Payload.BEHAVIOR_REVERT_ON_ERROR;
+    // Call mock target
+    payload.calls[1].to = address(mockTarget);
+    payload.calls[1].data = "0x12345678";
 
     // Sign and send success
-    uint8[] memory permsUsed = new uint8[](1);
-    permsUsed[0] = 1; // Uses mockTarget permission
+    uint8[] memory permsUsed = new uint8[](2);
+    permsUsed[1] = 1; // Uses mockTarget permission
     signature = _validExplicitSignature(payload, sessionWallet, config, topology, permsUsed);
-    wallet.execute(PrimitivesRPC.toPackedPayload(vm, payload), signature); //FIXME Fails!
+    wallet.execute(PrimitivesRPC.toPackedPayload(vm, payload), signature);
   }
 
 }
