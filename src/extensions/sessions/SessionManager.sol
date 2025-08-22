@@ -24,8 +24,8 @@ using LibBytes for bytes;
 contract SessionManager is ISapient, ImplicitSessionManager, ExplicitSessionManager {
 
   /// @notice Maximum nonce space allowed for sessions use.
-  /// @dev This is half the available nonce space.
-  uint256 public constant MAX_SPACE = type(uint160).max / 2;
+  /// @dev This excludes half the possible bits (uint160 vs uint80)
+  uint256 public constant MAX_SPACE = type(uint80).max - 1;
 
   /// @inheritdoc ISapient
   function recoverSapientSignature(

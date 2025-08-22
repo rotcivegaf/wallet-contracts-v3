@@ -158,14 +158,12 @@ contract GuestTest is AdvTest {
     bytes memory revertData = abi.encodeWithSignature("Error(string)", "Test error");
     vm.mockCallRevert(decoded.calls[callIndex].to, decoded.calls[callIndex].data, revertData);
 
-    // Expect the failure event
-    vm.expectEmit(true, true, true, true);
-    emit CallFailed(opHash, callIndex, revertData);
-
-    // Expect success or skipped events for remaining calls
-    for (uint256 i = callIndex + 1; i < decoded.calls.length; i++) {
+    for (uint256 i = 0; i < decoded.calls.length; i++) {
       vm.expectEmit(true, true, true, true);
-      if (i == callIndex + 1 || !decoded.calls[i].onlyFallback) {
+
+      if (decoded.calls[i].to == decoded.calls[callIndex].to) {
+        emit CallFailed(opHash, i, revertData);
+      } else if ((i != 0 && decoded.calls[i - 1].to == decoded.calls[callIndex].to) || !decoded.calls[i].onlyFallback) {
         vm.expectCall(decoded.calls[i].to, decoded.calls[i].data);
         emit CallSucceeded(opHash, i);
       } else {
@@ -282,5 +280,4 @@ contract GuestTest is AdvTest {
     assertEq(address(to1).balance, _value1);
     assertEq(address(to2).balance, _value2);
   }
-
 }
