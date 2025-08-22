@@ -29,7 +29,7 @@ abstract contract ReentrancyGuard {
 
     // By storing the original value once again, a refund is triggered (see
     // https://eips.ethereum.org/EIPS/eip-2200)
-    // Notice that because contructors are not available
+    // Notice that because constructors are not available
     // we always start with _INITIAL_VALUE, not _NOT_ENTERED
     Storage.writeBytes32(STATUS_KEY, _NOT_ENTERED);
   }
