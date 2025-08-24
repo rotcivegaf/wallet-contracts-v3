@@ -134,6 +134,8 @@ contract GuestTest is AdvTest {
     boundToLegalPayload(decoded);
 
     decoded.calls[callIndex].to = boundNoPrecompile(decoded.calls[callIndex].to);
+    address failureAddress = decoded.calls[callIndex].to;
+    bytes32 failureDataHash = keccak256(decoded.calls[callIndex].data);
 
     for (uint256 i = 0; i < decoded.calls.length; i++) {
       decoded.calls[i].to = boundNoPrecompile(decoded.calls[i].to);
@@ -141,13 +143,11 @@ contract GuestTest is AdvTest {
       decoded.calls[i].delegateCall = false;
       decoded.calls[i].gasLimit = bound(decoded.calls[i].gasLimit, 0, 1_000_000_000);
 
-      if (decoded.calls[i].to == decoded.calls[callIndex].to && i != callIndex) {
-        decoded.calls[i].behaviorOnError = Payload.BEHAVIOR_IGNORE_ERROR;
-      }
-
       if (i == callIndex) {
         decoded.calls[i].behaviorOnError = Payload.BEHAVIOR_IGNORE_ERROR;
         decoded.calls[i].onlyFallback = false;
+      } else if (decoded.calls[i].to == failureAddress) {
+        decoded.calls[i].behaviorOnError = Payload.BEHAVIOR_IGNORE_ERROR;
       }
     }
 
@@ -158,16 +158,19 @@ contract GuestTest is AdvTest {
     bytes memory revertData = abi.encodeWithSignature("Error(string)", "Test error");
     vm.mockCallRevert(decoded.calls[callIndex].to, decoded.calls[callIndex].data, revertData);
 
+    bool errorFlag = false;
     for (uint256 i = 0; i < decoded.calls.length; i++) {
       vm.expectEmit(true, true, true, true);
 
-      if (decoded.calls[i].to == decoded.calls[callIndex].to) {
-        emit CallFailed(opHash, i, revertData);
-      } else if ((i != 0 && decoded.calls[i - 1].to == decoded.calls[callIndex].to) || !decoded.calls[i].onlyFallback) {
-        vm.expectCall(decoded.calls[i].to, decoded.calls[i].data);
-        emit CallSucceeded(opHash, i);
-      } else {
+      if (!errorFlag && decoded.calls[i].onlyFallback) {
         emit CallSkipped(opHash, i);
+      } else if (decoded.calls[i].to == failureAddress && keccak256(decoded.calls[i].data) == failureDataHash) {
+        emit CallFailed(opHash, i, revertData);
+        errorFlag = true;
+      } else {
+        emit CallSucceeded(opHash, i);
+        vm.expectCall(decoded.calls[i].to, decoded.calls[i].data);
+        errorFlag = false;
       }
     }
 
@@ -280,4 +283,5 @@ contract GuestTest is AdvTest {
     assertEq(address(to1).balance, _value1);
     assertEq(address(to2).balance, _value2);
   }
+
 }
