@@ -3,11 +3,15 @@ pragma solidity ^0.8.27;
 
 import { Factory } from "../../src/Factory.sol";
 import { Stage1Module } from "../../src/Stage1Module.sol";
+import { Calls } from "../../src/modules/Calls.sol";
 
 import { ERC4337v07 } from "../../src/modules/ERC4337v07.sol";
 import { Payload } from "../../src/modules/Payload.sol";
+import { ReentrancyGuard } from "../../src/modules/ReentrancyGuard.sol";
 import { IAccount, PackedUserOperation } from "../../src/modules/interfaces/IAccount.sol";
 import { IEntryPoint } from "../../src/modules/interfaces/IEntryPoint.sol";
+
+import { CanReenter } from "../mocks/CanReenter.sol";
 import { Emitter } from "../mocks/Emitter.sol";
 import { PrimitivesRPC } from "../utils/PrimitivesRPC.sol";
 import { AdvTest } from "../utils/TestUtils.sol";
@@ -204,6 +208,69 @@ contract ERC4337v07Test is AdvTest {
     // Execute the userOp via the entrypoint.
     vm.prank(address(entryPoint));
     Stage1Module(wallet).executeUserOp(packedPayload);
+  }
+
+  function test_executeUserOp_protected_from_reentry() external {
+    // Setup a mock contract that can attempt reentry
+    CanReenter canReenter = new CanReenter();
+
+    // Create an inner payload that will be called during reentry
+    Payload.Decoded memory innerPayload;
+    innerPayload.kind = Payload.KIND_TRANSACTIONS;
+    innerPayload.calls = new Payload.Call[](1);
+    innerPayload.calls[0] = Payload.Call({
+      to: address(0x123), // Some target
+      value: 0,
+      data: bytes(""),
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_IGNORE_ERROR
+    });
+
+    // Sign the inner payload
+    bytes32 innerHash = Payload.hashFor(innerPayload, wallet);
+    (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPk, innerHash);
+    string memory innerSignatures =
+      string(abi.encodePacked(vm.toString(signer), ":hash:", vm.toString(r), ":", vm.toString(s), ":", vm.toString(v)));
+    bytes memory innerEncodedSignature = PrimitivesRPC.toEncodedSignature(vm, walletConfig, innerSignatures, true);
+
+    // Pack the inner payload
+    bytes memory innerPackedPayload = PrimitivesRPC.toPackedPayload(vm, innerPayload);
+
+    // Create an outer payload that calls the canReenter contract
+    Payload.Decoded memory outerPayload;
+    outerPayload.kind = Payload.KIND_TRANSACTIONS;
+    outerPayload.calls = new Payload.Call[](1);
+    outerPayload.calls[0] = Payload.Call({
+      to: address(canReenter),
+      value: 0,
+      data: abi.encodeWithSelector(
+        CanReenter.doAnotherCall.selector,
+        address(wallet),
+        abi.encodeWithSelector(Stage1Module(wallet).executeUserOp.selector, innerPackedPayload)
+      ),
+      gasLimit: 1000000,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_IGNORE_ERROR
+    });
+
+    // Sign the outer payload
+    (v, r, s) = vm.sign(signerPk, Payload.hashFor(outerPayload, wallet));
+    string memory outerSignatures =
+      string(abi.encodePacked(vm.toString(signer), ":hash:", vm.toString(r), ":", vm.toString(s), ":", vm.toString(v)));
+    bytes memory outerEncodedSignature = PrimitivesRPC.toEncodedSignature(vm, walletConfig, outerSignatures, true);
+
+    // Pack the outer payload
+    bytes memory outerPackedPayload = PrimitivesRPC.toPackedPayload(vm, outerPayload);
+
+    // Execute the outer payload
+    bytes32 outerHash = Payload.hashFor(outerPayload, wallet);
+    vm.expectEmit(true, true, true, true, address(wallet));
+    emit Calls.CallFailed(outerHash, 0, abi.encodeWithSelector(bytes4(keccak256("Error(string)")), "Call failed"));
+    vm.prank(address(entryPoint));
+    Stage1Module(wallet).executeUserOp(outerPackedPayload);
   }
 
 }
