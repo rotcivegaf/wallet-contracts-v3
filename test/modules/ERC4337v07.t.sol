@@ -7,9 +7,7 @@ import { Calls } from "../../src/modules/Calls.sol";
 
 import { ERC4337v07 } from "../../src/modules/ERC4337v07.sol";
 import { Payload } from "../../src/modules/Payload.sol";
-import { ReentrancyGuard } from "../../src/modules/ReentrancyGuard.sol";
-import { IAccount, PackedUserOperation } from "../../src/modules/interfaces/IAccount.sol";
-import { IEntryPoint } from "../../src/modules/interfaces/IEntryPoint.sol";
+import { PackedUserOperation } from "../../src/modules/interfaces/IAccount.sol";
 
 import { CanReenter } from "../mocks/CanReenter.sol";
 import { Emitter } from "../mocks/Emitter.sol";
