@@ -6,11 +6,12 @@ import { Nonce } from "./Nonce.sol";
 import { Payload } from "./Payload.sol";
 import { BaseAuth } from "./auth/BaseAuth.sol";
 import { IDelegatedExtension } from "./interfaces/IDelegatedExtension.sol";
+import { ReentrancyGuard } from "./ReentrancyGuard.sol";
 
 /// @title Calls
 /// @author Agustin Aguilar, Michael Standen, William Hua
 /// @notice Contract for executing calls
-abstract contract Calls is BaseAuth, Nonce {
+abstract contract Calls is ReentrancyGuard, BaseAuth, Nonce {
 
   /// @notice Emitted when a call succeeds
   event CallSucceeded(bytes32 _opHash, uint256 _index);
@@ -31,7 +32,7 @@ abstract contract Calls is BaseAuth, Nonce {
   /// @notice Execute a call
   /// @param _payload The payload
   /// @param _signature The signature
-  function execute(bytes calldata _payload, bytes calldata _signature) external payable virtual {
+  function execute(bytes calldata _payload, bytes calldata _signature) external payable virtual nonReentrant {
     uint256 startingGas = gasleft();
     Payload.Decoded memory decoded = Payload.fromPackedCalls(_payload);
 

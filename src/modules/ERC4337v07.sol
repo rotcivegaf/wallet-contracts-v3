@@ -2,11 +2,13 @@
 pragma solidity ^0.8.18;
 
 import { Calls } from "./Calls.sol";
+
+import { ReentrancyGuard } from "./ReentrancyGuard.sol";
 import { IAccount, PackedUserOperation } from "./interfaces/IAccount.sol";
 import { IERC1271_MAGIC_VALUE_HASH } from "./interfaces/IERC1271.sol";
 import { IEntryPoint } from "./interfaces/IEntryPoint.sol";
 
-abstract contract ERC4337v07 is IAccount, Calls {
+abstract contract ERC4337v07 is ReentrancyGuard, IAccount, Calls {
 
   uint256 internal constant SIG_VALIDATION_FAILED = 1;
 
@@ -49,7 +51,7 @@ abstract contract ERC4337v07 is IAccount, Calls {
 
   function executeUserOp(
     bytes calldata _payload
-  ) external {
+  ) external nonReentrant {
     if (entrypoint == address(0)) {
       revert ERC4337Disabled();
     }
