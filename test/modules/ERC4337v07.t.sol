@@ -211,13 +211,6 @@ contract ERC4337v07Test is AdvTest {
       behaviorOnError: Payload.BEHAVIOR_IGNORE_ERROR
     });
 
-    // Sign the inner payload
-    bytes32 innerHash = Payload.hashFor(innerPayload, wallet);
-    (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPk, innerHash);
-    string memory innerSignatures =
-      string(abi.encodePacked(vm.toString(signer), ":hash:", vm.toString(r), ":", vm.toString(s), ":", vm.toString(v)));
-    bytes memory innerEncodedSignature = PrimitivesRPC.toEncodedSignature(vm, walletConfig, innerSignatures, true);
-
     // Pack the inner payload
     bytes memory innerPackedPayload = PrimitivesRPC.toPackedPayload(vm, innerPayload);
 
@@ -238,12 +231,6 @@ contract ERC4337v07Test is AdvTest {
       onlyFallback: false,
       behaviorOnError: Payload.BEHAVIOR_IGNORE_ERROR
     });
-
-    // Sign the outer payload
-    (v, r, s) = vm.sign(signerPk, Payload.hashFor(outerPayload, wallet));
-    string memory outerSignatures =
-      string(abi.encodePacked(vm.toString(signer), ":hash:", vm.toString(r), ":", vm.toString(s), ":", vm.toString(v)));
-    bytes memory outerEncodedSignature = PrimitivesRPC.toEncodedSignature(vm, walletConfig, outerSignatures, true);
 
     // Pack the outer payload
     bytes memory outerPackedPayload = PrimitivesRPC.toPackedPayload(vm, outerPayload);
