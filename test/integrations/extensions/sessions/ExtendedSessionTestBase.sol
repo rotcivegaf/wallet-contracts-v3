@@ -8,12 +8,12 @@ import { SessionTestBase } from "test/extensions/sessions/SessionTestBase.sol";
 import { AcceptAll } from "test/mocks/AcceptAll.sol";
 import { PrimitivesRPC } from "test/utils/PrimitivesRPC.sol";
 
+import { EntryPoint } from "account-abstraction/core/EntryPoint.sol";
 import { Factory } from "src/Factory.sol";
 import { Stage1Module } from "src/Stage1Module.sol";
-import {
-  SessionErrors, SessionManager, SessionPermissions, SessionSig
-} from "src/extensions/sessions/SessionManager.sol";
+import { SessionManager, SessionPermissions, SessionSig } from "src/extensions/sessions/SessionManager.sol";
 import { ParameterOperation, ParameterRule, Permission } from "src/extensions/sessions/explicit/Permission.sol";
+import { Attestation } from "src/extensions/sessions/implicit/Attestation.sol";
 import { Payload } from "src/modules/Payload.sol";
 
 /// @notice Session signature abuse tests.
@@ -25,13 +25,15 @@ contract ExtendedSessionTestBase is SessionTestBase {
   Vm.Wallet public sessionWallet;
   Vm.Wallet public identityWallet;
   AcceptAll public mockTarget;
+  EntryPoint public entryPoint;
 
   function setUp() public virtual {
     sessionWallet = vm.createWallet("session");
     identityWallet = vm.createWallet("identity");
     sessionManager = new SessionManager();
     factory = new Factory();
-    module = new Stage1Module(address(factory), address(0));
+    entryPoint = new EntryPoint();
+    module = new Stage1Module(address(factory), address(entryPoint));
   }
 
   function _createDefaultTopology() internal returns (string memory topology) {
@@ -86,6 +88,39 @@ contract ExtendedSessionTestBase is SessionTestBase {
     address[] memory explicitSigners = new address[](1);
     explicitSigners[0] = signer.addr;
     address[] memory implicitSigners = new address[](0);
+    bytes memory sessionSignatures =
+      PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, explicitSigners, implicitSigners);
+    string memory signatures =
+      string(abi.encodePacked(vm.toString(address(sessionManager)), ":sapient:", vm.toString(sessionSignatures)));
+    signature = PrimitivesRPC.toEncodedSignature(vm, config, signatures, !payload.noChainId);
+  }
+
+  function _createValidAttestation(
+    Vm.Wallet memory signer
+  ) internal view returns (Attestation memory) {
+    Attestation memory attestation;
+    attestation.approvedSigner = signer.addr;
+    attestation.authData.redirectUrl = "https://example.com";
+    attestation.authData.issuedAt = uint64(block.timestamp);
+    return attestation;
+  }
+
+  function _validImplicitSignature(
+    Payload.Decoded memory payload,
+    Vm.Wallet memory signer,
+    string memory config,
+    string memory topology
+  ) internal returns (bytes memory signature) {
+    uint256 callCount = payload.calls.length;
+    string[] memory callSignatures = new string[](callCount);
+    Attestation memory attestation = _createValidAttestation(signer);
+    for (uint256 i; i < callCount; i++) {
+      callSignatures[i] = _createImplicitCallSignature(payload, i, signer, identityWallet, attestation);
+    }
+
+    address[] memory explicitSigners = new address[](0);
+    address[] memory implicitSigners = new address[](1);
+    implicitSigners[0] = signer.addr;
     bytes memory sessionSignatures =
       PrimitivesRPC.sessionEncodeCallSignatures(vm, topology, callSignatures, explicitSigners, implicitSigners);
     string memory signatures =
