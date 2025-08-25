@@ -22,6 +22,7 @@ contract IntegrationERC4337v07Test is AdvTest {
   string public walletConfig;
   bytes32 public walletImageHash;
   Vm.Wallet public signer;
+  Emitter public emitter;
 
   function setUp() public {
     factory = new Factory();
@@ -33,6 +34,9 @@ contract IntegrationERC4337v07Test is AdvTest {
     walletConfig =
       PrimitivesRPC.newConfig(vm, 1, 0, string(abi.encodePacked("signer:", vm.toString(signer.addr), ":1")));
     walletImageHash = PrimitivesRPC.getImageHash(vm, walletConfig);
+
+    // Setup a mock contract to call.
+    emitter = new Emitter();
   }
 
   // --- Helper Functions ---
@@ -54,19 +58,9 @@ contract IntegrationERC4337v07Test is AdvTest {
 
   // --- tests ---
 
-  function test_Entrypoint_happypath(
-    address beneficiary
-  ) external {
-    vm.assume(beneficiary != address(0));
-    beneficiary = boundNoPrecompile(beneficiary);
-    vm.assume(beneficiary.code.length == 0);
-
-    // Deploy the wallet
-    wallet = payable(factory.deploy(address(stage1Module), walletImageHash));
-
-    // Setup a mock contract to call.
-    Emitter emitter = new Emitter();
-
+  function _prepareUserOp(
+    address sender
+  ) internal returns (PackedUserOperation memory) {
     // Create a payload to call the emitter contract.
     Payload.Decoded memory decodedPayload;
     decodedPayload.kind = Payload.KIND_TRANSACTIONS;
@@ -84,7 +78,7 @@ contract IntegrationERC4337v07Test is AdvTest {
     bytes memory packedPayload = PrimitivesRPC.toPackedPayload(vm, decodedPayload);
 
     // Gas stuff
-    uint256 verificationGasLimit = 100_000;
+    uint256 verificationGasLimit = 1_000_000;
     uint256 callGasLimit = 100_000;
     uint256 preVerificationGas = 100_000;
     uint256 maxFeePerGas = block.basefee;
@@ -95,7 +89,7 @@ contract IntegrationERC4337v07Test is AdvTest {
     // Construct the UserOp.
     PackedUserOperation memory userOp;
     userOp.callData = abi.encodeWithSelector(ERC4337v07.executeUserOp.selector, packedPayload);
-    userOp.sender = wallet;
+    userOp.sender = sender;
     userOp.nonce = 0;
     userOp.initCode = "";
     userOp.accountGasLimits = bytes32(abi.encodePacked(uint128(verificationGasLimit), uint128(callGasLimit)));
@@ -103,7 +97,21 @@ contract IntegrationERC4337v07Test is AdvTest {
     userOp.gasFees = bytes32(abi.encodePacked(uint128(maxPriorityFeePerGas), uint128(maxFeePerGas)));
     userOp.paymasterAndData = "";
 
+    return userOp;
+  }
+
+  function test_Entrypoint_happypath(
+    address beneficiary
+  ) external {
+    vm.assume(beneficiary != address(0));
+    beneficiary = boundNoPrecompile(beneficiary);
+    vm.assume(beneficiary.code.length == 0);
+
+    // Deploy the wallet
+    wallet = payable(factory.deploy(address(stage1Module), walletImageHash));
+
     // Get the userOpHash that the EntryPoint will use by calling its getUserOpHash function
+    PackedUserOperation memory userOp = _prepareUserOp(wallet);
     bytes32 userOpHash = entryPoint.getUserOpHash(userOp);
 
     // Create a signature for the userOpHash using the wallet's signer config.
@@ -135,48 +143,13 @@ contract IntegrationERC4337v07Test is AdvTest {
     beneficiary = boundNoPrecompile(beneficiary);
     vm.assume(beneficiary.code.length == 0);
 
-    // Setup a mock contract to call.
-    Emitter emitter = new Emitter();
-
     address predictedWallet = predictWalletAddress(walletImageHash);
 
-    // Create a payload to call the emitter contract.
-    Payload.Decoded memory decodedPayload;
-    decodedPayload.kind = Payload.KIND_TRANSACTIONS;
-    decodedPayload.calls = new Payload.Call[](1);
-    decodedPayload.calls[0] = Payload.Call({
-      to: address(emitter),
-      value: 0,
-      data: abi.encodeWithSelector(Emitter.explicitEmit.selector),
-      gasLimit: 0,
-      delegateCall: false,
-      onlyFallback: false,
-      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
-    });
-
-    bytes memory packedPayload = PrimitivesRPC.toPackedPayload(vm, decodedPayload);
-
-    // Gas stuff
-    uint256 verificationGasLimit = 1_000_000;
-    uint256 callGasLimit = 100_000;
-    uint256 preVerificationGas = 100_000;
-    uint256 maxFeePerGas = block.basefee;
-    uint256 maxPriorityFeePerGas = block.basefee;
-    uint256 totalGasLimit = verificationGasLimit + callGasLimit + preVerificationGas;
-    vm.deal(predictedWallet, totalGasLimit * (maxFeePerGas + maxPriorityFeePerGas));
-
-    // Construct the UserOp.
-    PackedUserOperation memory userOp;
-    userOp.callData = abi.encodeWithSelector(ERC4337v07.executeUserOp.selector, packedPayload);
-    userOp.sender = predictedWallet;
-    userOp.nonce = 0;
+    // Prepare the userOp with initcode.
+    PackedUserOperation memory userOp = _prepareUserOp(predictedWallet);
     userOp.initCode = abi.encodePacked(
       address(factory), abi.encodeWithSelector(Factory.deploy.selector, address(stage1Module), walletImageHash)
-    ); // Deploy args
-    userOp.accountGasLimits = bytes32(abi.encodePacked(uint128(verificationGasLimit), uint128(callGasLimit)));
-    userOp.preVerificationGas = preVerificationGas;
-    userOp.gasFees = bytes32(abi.encodePacked(uint128(maxPriorityFeePerGas), uint128(maxFeePerGas)));
-    userOp.paymasterAndData = "";
+    );
 
     // Get the userOpHash that the EntryPoint will use by calling its getUserOpHash function
     bytes32 userOpHash = entryPoint.getUserOpHash(userOp);
