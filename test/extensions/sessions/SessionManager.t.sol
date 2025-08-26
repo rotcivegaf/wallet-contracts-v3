@@ -459,6 +459,7 @@ contract SessionManagerTest is SessionTestBase {
     uint256 value2,
     uint256 ruleValue
   ) public {
+    vm.assume(target != wallet);
     startIncrement = bound(startIncrement, 0, 1 ether);
     value1 = bound(value1, 1, 1 ether);
     value2 = bound(value2, 1, 1 ether);

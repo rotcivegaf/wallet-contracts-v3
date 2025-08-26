@@ -5,7 +5,7 @@ import { ExtendedSessionTestBase, Vm } from "./ExtendedSessionTestBase.sol";
 import { PrimitivesRPC } from "test/utils/PrimitivesRPC.sol";
 
 import { Stage1Module } from "src/Stage1Module.sol";
-import { SessionManager, SessionPermissions, SessionSig } from "src/extensions/sessions/SessionManager.sol";
+import { SessionErrors, SessionPermissions } from "src/extensions/sessions/SessionManager.sol";
 import { ParameterRule, Permission } from "src/extensions/sessions/explicit/Permission.sol";
 
 import { Payload } from "src/modules/Payload.sol";
@@ -65,6 +65,7 @@ contract IntegrationSessionSelfCall is ExtendedSessionTestBase {
 
     // Execute the self call payload
     bytes memory packedPayload = PrimitivesRPC.toPackedPayload(vm, payload);
+    vm.expectRevert(abi.encodeWithSelector(SessionErrors.InvalidSelfCall.selector));
     wallet.execute(packedPayload, signature);
   }
 
