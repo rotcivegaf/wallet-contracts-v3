@@ -58,6 +58,10 @@ contract SessionManager is ISapient, ImplicitSessionManager, ExplicitSessionMana
       if (call.delegateCall) {
         revert SessionErrors.InvalidDelegateCall();
       }
+      // Ban self calls to the wallet
+      if (call.to == wallet) {
+        revert SessionErrors.InvalidSelfCall();
+      }
 
       // Check if this call could cause usage limits to be skipped
       if (call.behaviorOnError == Payload.BEHAVIOR_ABORT_ON_ERROR) {
