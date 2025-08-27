@@ -291,4 +291,68 @@ contract PermissionValidatorTest is Test {
     assertFalse(success, "Should fail when target does not match");
   }
 
+  function test_validatePermission_ZeroMaskAndValueAlwaysPasses(bytes calldata callData, uint256 offset) public view {
+    // Focus on offsets within calldata. Some overflow allowed.
+    offset = bound(offset, 0, callData.length);
+
+    Permission memory permission = Permission({ target: TARGET, rules: new ParameterRule[](1) });
+    permission.rules[0] = ParameterRule({
+      cumulative: false,
+      operation: ParameterOperation.EQUAL,
+      value: bytes32(0),
+      offset: offset,
+      mask: bytes32(0)
+    });
+
+    Payload.Call memory call = Payload.Call({
+      to: TARGET,
+      value: 0,
+      data: callData,
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    UsageLimit[] memory emptyLimits = new UsageLimit[](0);
+    (bool success,) = validator.validatePermission(permission, call, TEST_WALLET, TEST_SIGNER, emptyLimits);
+    assertTrue(success, "Should succeed when mask and value is 0");
+  }
+
+  function test_validatePermission_OverflowCalldata_TreatedAsZero(bytes calldata callData, uint256 offset) public view {
+    // Ensure there is some overlap with the call data when available
+    uint256 maxOffset = callData.length > 0 ? callData.length - 1 : 0;
+    offset = bound(offset, 0, maxOffset);
+
+    bytes32 value;
+    if (offset < callData.length) {
+      // Get the value from the call data
+      value = bytes32(callData[offset:callData.length]);
+    }
+
+    Permission memory permission = Permission({ target: TARGET, rules: new ParameterRule[](1) });
+    permission.rules[0] = ParameterRule({
+      cumulative: false,
+      operation: ParameterOperation.EQUAL,
+      value: value,
+      offset: offset,
+      mask: bytes32(type(uint256).max) // All bits mapped
+     });
+
+    Payload.Call memory call = Payload.Call({
+      to: TARGET,
+      value: 0,
+      data: callData,
+      gasLimit: 0,
+      delegateCall: false,
+      onlyFallback: false,
+      behaviorOnError: Payload.BEHAVIOR_REVERT_ON_ERROR
+    });
+
+    UsageLimit[] memory emptyLimits = new UsageLimit[](0);
+    (bool success,) = validator.validatePermission(permission, call, TEST_WALLET, TEST_SIGNER, emptyLimits);
+    assertTrue(success, "Should succeed as overflowed calldata is treated as 0");
+    // Note This test appears to pass however in practice memory accessed outside the calldata should be zeroed out using the mask.
+  }
+
 }
