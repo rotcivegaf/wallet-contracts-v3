@@ -128,6 +128,12 @@ contract ImplicitSessionManagerTest is SessionTestBase {
     }
     // Any unsorted blacklist WILL result in missed detection of a blacklisted address in the list
     assertEq(missedBlacklist, true);
+
+    // Sorting the blacklist will result in all blacklisted addresses being detected
+    blacklist = _sortAddressesMemory(blacklist);
+    for (uint256 i = 0; i < blacklist.length; i++) {
+      assertEq(sessionManager.isAddressBlacklisted(blacklist[i], blacklist), true);
+    }
   }
 
   /// @notice Test for delegateCall not allowed.
