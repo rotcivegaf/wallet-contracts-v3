@@ -159,14 +159,14 @@ The global flag byte controls the overall payload structure:
 
 ```
 Global Flag: [7][6][5][4][3][2][1][0]
-             │  │  │  │  │  │  │  └─ Space flag
-             │  │  │  │  │  │  └───── Nonce size (bits 1-3)
-             │  │  │  │  │  └──────── Single call flag
-             │  │  │  │  └─────────── Call count size
-             │  │  │  └─────────────── Reserved
-             │  │  └────────────────── Reserved
-             │  └───────────────────── Reserved
-             └──────────────────────── Reserved
+             │  │  │  │  │  │  │  └── [0] Space flag
+             │  │  │  │  │  │  └───── [1][0] Nonce size
+             │  │  │  │  │  └──────── [2][1] Nonce size
+             │  │  │  │  └─────────── [3][2] Nonce size
+             │  │  │  └────────────── [4] Single call flag
+             │  │  └───────────────── [5] Call count size
+             │  └──────────────────── [6] Reserved
+             └─────────────────────── [7] Reserved
 ```
 
 **Space Flag (Bit 0):**
@@ -201,14 +201,14 @@ Each call begins with a flags byte that controls its execution parameters:
 
 ```
 Call Flags: [7][6][5][4][3][2][1][0]
-            │  │  │  │  │  │  │  └─ Self-call flag
-            │  │  │  │  │  │  └───── Value flag
-            │  │  │  │  │  └──────── Data flag
-            │  │  │  │  └─────────── Gas limit flag
-            │  │  │  └─────────────── Delegate call flag
-            │  │  └────────────────── Fallback-only flag
-            │  └───────────────────── Behavior on error (bits 6-7)
-            └──────────────────────── Reserved
+            │  │  │  │  │  │  │  └─── [0] Self-call flag
+            │  │  │  │  │  │  └────── [1] Value flag
+            │  │  │  │  │  └───────── [2] Data flag
+            │  │  │  │  └──────────── [3] Gas limit flag
+            │  │  │  └─────────────── [4] Delegate call flag
+            │  │  └────────────────── [5] Fallback-only flag
+            │  └───────────────────── [6][0] Behavior on error
+            └──────────────────────── [7][1] Behavior on error
 ```
 
 **Self-call Flag (Bit 0):**
