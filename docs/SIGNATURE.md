@@ -59,15 +59,15 @@ Putting it together:
 
 ### **Example of a Top-level Signature Byte**
 
-Suppose the top-level `signatureFlag` is `0x6A` in hex. Converting `0x6A` to binary:
+Suppose the top-level `signatureFlag` is `0x74` in hex. Converting `0x74` to binary:
 
 ```
-0x6A = 01101010 in binary
+0x74 = 01110100 in binary
         ^ ^ ^ ^
 bit 7:  0 (reserved)
 bit 6:  1 => checkpointer usage
 bit 5:  1 => threshold uses 2 bytes
-bits 4..2: 0b101 => checkpoint size = 5 bytes
+bits 4..2: 101 => checkpoint size = 5 bytes
 bit 1:  0 => normal (not "no chain id")
 bit 0:  0 => not chained
 ```
