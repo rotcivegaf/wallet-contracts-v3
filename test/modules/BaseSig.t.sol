@@ -1311,6 +1311,421 @@ contract BaseSigTest is AdvTest {
     assertEq(opHash, Payload.hashFor(params.payload, address(baseSigImp)));
   }
 
+  struct test_checkpointer_migrate_from_no_checkpointer_params {
+    Payload.Decoded payload;
+    address checkpointer;
+    uint56 checkpoint1;
+    uint56 checkpoint2;
+    uint256 signer1pk;
+    uint256 signer2pk;
+    uint8 threshold;
+    uint8 weight;
+    bytes checkpointerData;
+  }
+
+  struct test_checkpointer_migrate_from_no_checkpointer_vars {
+    address signer1addr;
+    address signer2addr;
+    string config1Json;
+    string config2Json;
+    bytes32 config1ImageHash;
+    bytes32 config2ImageHash;
+    bytes signature1to2;
+    bytes signature2toPayload;
+    bytes32 r1;
+    bytes32 r2;
+    bytes32 s1;
+    bytes32 s2;
+    uint8 v1;
+    uint8 v2;
+    Payload.Decoded payloadApprove2;
+    bytes chainedSignature;
+    Snapshot snapshot;
+  }
+
+  function test_checkpointer_migrate_from_no_checkpointer(
+    test_checkpointer_migrate_from_no_checkpointer_params memory params
+  ) external {
+    vm.assume(params.payload.calls.length < 3);
+    test_checkpointer_migrate_from_no_checkpointer_vars memory vars;
+    boundToLegalPayload(params.payload);
+
+    params.checkpointer = boundNoPrecompile(params.checkpointer);
+    params.signer1pk = boundPk(params.signer1pk);
+    params.signer2pk = boundPk(params.signer2pk);
+    vars.signer1addr = vm.addr(params.signer1pk);
+    vars.signer2addr = vm.addr(params.signer2pk);
+
+    params.weight = uint8(bound(params.weight, params.threshold, type(uint8).max));
+
+    // Ensure checkpoint2 > checkpoint1 for proper ordering
+    params.checkpoint1 = uint56(bound(params.checkpoint1, 0, type(uint56).max - 1));
+    params.checkpoint2 = uint56(bound(params.checkpoint2, params.checkpoint1 + 1, type(uint56).max));
+
+    // Create config1 (old config without checkpointer)
+    vars.config1Json = PrimitivesRPC.newConfig(
+      vm,
+      params.threshold,
+      params.checkpoint1,
+      string(abi.encodePacked("signer:", vm.toString(vars.signer1addr), ":", vm.toString(params.weight)))
+    );
+    vars.config1ImageHash = PrimitivesRPC.getImageHash(vm, vars.config1Json);
+
+    // Create config2 (new config with checkpointer)
+    vars.config2Json = PrimitivesRPC.newConfigWithCheckpointer(
+      vm,
+      params.checkpointer,
+      params.threshold,
+      params.checkpoint2,
+      string(abi.encodePacked("signer:", vm.toString(vars.signer2addr), ":", vm.toString(params.weight)))
+    );
+    vars.config2ImageHash = PrimitivesRPC.getImageHash(vm, vars.config2Json);
+
+    // Create config update payload from config1 to config2
+    vars.payloadApprove2.kind = Payload.KIND_CONFIG_UPDATE;
+    vars.payloadApprove2.imageHash = vars.config2ImageHash;
+    vars.payloadApprove2.noChainId = true;
+
+    // Sign the config update payload with config1 (no checkpointer)
+    (vars.v1, vars.r1, vars.s1) = vm.sign(params.signer1pk, Payload.hashFor(vars.payloadApprove2, address(baseSigImp)));
+    vars.signature1to2 = PrimitivesRPC.toEncodedSignature(
+      vm,
+      vars.config1Json,
+      string(
+        abi.encodePacked(
+          vm.toString(vars.signer1addr),
+          ":hash:",
+          vm.toString(vars.r1),
+          ":",
+          vm.toString(vars.s1),
+          ":",
+          vm.toString(vars.v1)
+        )
+      ),
+      false
+    );
+
+    // Sign the main payload with config2 (with checkpointer)
+    (vars.v2, vars.r2, vars.s2) = vm.sign(params.signer2pk, Payload.hashFor(params.payload, address(baseSigImp)));
+    vars.signature2toPayload = PrimitivesRPC.toEncodedSignatureWithCheckpointerData(
+      vm,
+      vars.config2Json,
+      string(
+        abi.encodePacked(
+          vm.toString(vars.signer2addr),
+          ":hash:",
+          vm.toString(vars.r2),
+          ":",
+          vm.toString(vars.s2),
+          ":",
+          vm.toString(vars.v2)
+        )
+      ),
+      !params.payload.noChainId,
+      params.checkpointerData
+    );
+
+    // Mock the checkpointer to return the new config's snapshot
+    vars.snapshot.imageHash = vars.config2ImageHash;
+    vars.snapshot.checkpoint = params.checkpoint2;
+
+    vm.mockCall(
+      params.checkpointer, abi.encodeWithSelector(ICheckpointer.snapshotFor.selector), abi.encode(vars.snapshot)
+    );
+
+    // Create chained signature (reverse order: final signature first, then intermediate)
+    bytes[] memory signatures = new bytes[](2);
+    signatures[0] = vars.signature2toPayload;
+    signatures[1] = vars.signature1to2;
+    vars.chainedSignature = PrimitivesRPC.concatSignatures(vm, signatures);
+
+    (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint, bytes32 opHash) =
+      baseSigImp.recoverPub(params.payload, vars.chainedSignature, false, address(0));
+    assertEq(threshold, params.threshold);
+    assertEq(weight, params.weight);
+    assertEq(imageHash, vars.config1ImageHash); // Should recover to the first config in the chain
+    assertEq(checkpoint, params.checkpoint1); // Should use checkpoint from the first config
+    assertEq(opHash, Payload.hashFor(params.payload, address(baseSigImp)));
+  }
+
+  struct test_checkpointer_migrate_to_no_checkpointer_params {
+    Payload.Decoded payload;
+    address checkpointer;
+    uint56 checkpoint1;
+    uint56 checkpoint2;
+    uint256 signer1pk;
+    uint256 signer2pk;
+    uint8 threshold;
+    uint8 weight;
+    bytes checkpointerData;
+  }
+
+  struct test_checkpointer_migrate_to_no_checkpointer_vars {
+    address signer1addr;
+    address signer2addr;
+    string config1Json;
+    string config2Json;
+    bytes32 config1ImageHash;
+    bytes32 config2ImageHash;
+    bytes signature1to2;
+    bytes signature2toPayload;
+    bytes32 r1;
+    bytes32 r2;
+    bytes32 s1;
+    bytes32 s2;
+    uint8 v1;
+    uint8 v2;
+    Payload.Decoded payloadApprove2;
+    bytes chainedSignature;
+    Snapshot snapshot;
+  }
+
+  function test_checkpointer_migrate_to_no_checkpointer(
+    test_checkpointer_migrate_to_no_checkpointer_params memory params
+  ) external {
+    vm.assume(params.payload.calls.length < 3);
+    test_checkpointer_migrate_to_no_checkpointer_vars memory vars;
+    boundToLegalPayload(params.payload);
+
+    params.checkpointer = boundNoPrecompile(params.checkpointer);
+    params.signer1pk = boundPk(params.signer1pk);
+    params.signer2pk = boundPk(params.signer2pk);
+    vars.signer1addr = vm.addr(params.signer1pk);
+    vars.signer2addr = vm.addr(params.signer2pk);
+
+    params.weight = uint8(bound(params.weight, params.threshold, type(uint8).max));
+
+    // Ensure checkpoint2 > checkpoint1 for proper ordering
+    params.checkpoint1 = uint56(bound(params.checkpoint1, 0, type(uint56).max - 1));
+    params.checkpoint2 = uint56(bound(params.checkpoint2, params.checkpoint1 + 1, type(uint56).max));
+
+    // Create config1 (old config with checkpointer)
+    vars.config1Json = PrimitivesRPC.newConfigWithCheckpointer(
+      vm,
+      params.checkpointer,
+      params.threshold,
+      params.checkpoint1,
+      string(abi.encodePacked("signer:", vm.toString(vars.signer1addr), ":", vm.toString(params.weight)))
+    );
+    vars.config1ImageHash = PrimitivesRPC.getImageHash(vm, vars.config1Json);
+
+    // Create config2 (new config without checkpointer)
+    vars.config2Json = PrimitivesRPC.newConfig(
+      vm,
+      params.threshold,
+      params.checkpoint2,
+      string(abi.encodePacked("signer:", vm.toString(vars.signer2addr), ":", vm.toString(params.weight)))
+    );
+    vars.config2ImageHash = PrimitivesRPC.getImageHash(vm, vars.config2Json);
+
+    // Create config update payload from config1 to config2
+    vars.payloadApprove2.kind = Payload.KIND_CONFIG_UPDATE;
+    vars.payloadApprove2.imageHash = vars.config2ImageHash;
+    vars.payloadApprove2.noChainId = true;
+
+    // Sign the config update payload with config1 (with checkpointer)
+    (vars.v1, vars.r1, vars.s1) = vm.sign(params.signer1pk, Payload.hashFor(vars.payloadApprove2, address(baseSigImp)));
+    vars.signature1to2 = PrimitivesRPC.toEncodedSignatureWithCheckpointerData(
+      vm,
+      vars.config1Json,
+      string(
+        abi.encodePacked(
+          vm.toString(vars.signer1addr),
+          ":hash:",
+          vm.toString(vars.r1),
+          ":",
+          vm.toString(vars.s1),
+          ":",
+          vm.toString(vars.v1)
+        )
+      ),
+      false,
+      params.checkpointerData
+    );
+
+    // Sign the main payload with config2 (without checkpointer)
+    (vars.v2, vars.r2, vars.s2) = vm.sign(params.signer2pk, Payload.hashFor(params.payload, address(baseSigImp)));
+    vars.signature2toPayload = PrimitivesRPC.toEncodedSignature(
+      vm,
+      vars.config2Json,
+      string(
+        abi.encodePacked(
+          vm.toString(vars.signer2addr),
+          ":hash:",
+          vm.toString(vars.r2),
+          ":",
+          vm.toString(vars.s2),
+          ":",
+          vm.toString(vars.v2)
+        )
+      ),
+      !params.payload.noChainId
+    );
+
+    // Mock the checkpointer to return the old config's snapshot
+    vars.snapshot.imageHash = vars.config1ImageHash;
+    vars.snapshot.checkpoint = params.checkpoint1;
+
+    vm.mockCall(
+      params.checkpointer, abi.encodeWithSelector(ICheckpointer.snapshotFor.selector), abi.encode(vars.snapshot)
+    );
+
+    // Create chained signature (reverse order: final signature first, then intermediate)
+    bytes[] memory signatures = new bytes[](2);
+    signatures[0] = vars.signature2toPayload;
+    signatures[1] = vars.signature1to2;
+    vars.chainedSignature = PrimitivesRPC.concatSignatures(vm, signatures);
+
+    (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint, bytes32 opHash) =
+      baseSigImp.recoverPub(params.payload, vars.chainedSignature, false, address(0));
+    assertEq(threshold, params.threshold);
+    assertEq(weight, params.weight);
+    assertEq(imageHash, vars.config1ImageHash); // Should recover to the first config in the chain
+    assertEq(checkpoint, params.checkpoint1); // Should use checkpoint from the first config
+    assertEq(opHash, Payload.hashFor(params.payload, address(baseSigImp)));
+  }
+
+  struct test_checkpointer_migrate_from_snapshot_to_snapshot_params {
+    Payload.Decoded payload;
+    address checkpointerA;
+    address checkpointerB;
+    uint56 checkpoint1;
+    uint56 checkpoint2;
+    uint256 signerpk;
+    uint8 threshold;
+    uint8 weight;
+    bytes checkpointerAData;
+  }
+
+  struct test_checkpointer_migrate_from_snapshot_to_snapshot_vars {
+    address signeraddr;
+    string config1Json;
+    string config2Json;
+    bytes32 config1ImageHash;
+    bytes32 config2ImageHash;
+    bytes signature1to2;
+    bytes signature2toPayload;
+    bytes32 r1;
+    bytes32 r2;
+    bytes32 s1;
+    bytes32 s2;
+    uint8 v1;
+    uint8 v2;
+    Payload.Decoded payloadApprove2;
+    bytes chainedSignature;
+    Snapshot snapshotA;
+  }
+
+  function test_checkpointer_migrate_from_snapshot_to_snapshot(
+    test_checkpointer_migrate_from_snapshot_to_snapshot_params memory params
+  ) external {
+    vm.assume(params.payload.calls.length < 3);
+    test_checkpointer_migrate_from_snapshot_to_snapshot_vars memory vars;
+    boundToLegalPayload(params.payload);
+
+    params.checkpointerA = boundNoPrecompile(params.checkpointerA);
+    params.checkpointerB = boundNoPrecompile(params.checkpointerB);
+    // Ensure checkpointerA != checkpointerB
+    vm.assume(params.checkpointerA != params.checkpointerB);
+
+    params.signerpk = boundPk(params.signerpk);
+    vars.signeraddr = vm.addr(params.signerpk);
+
+    params.weight = uint8(bound(params.weight, params.threshold, type(uint8).max));
+
+    // Ensure checkpoint2 > checkpoint1 for proper ordering
+    params.checkpoint1 = uint56(bound(params.checkpoint1, 0, type(uint56).max - 1));
+    params.checkpoint2 = uint56(bound(params.checkpoint2, params.checkpoint1 + 1, type(uint56).max));
+
+    // Create config1 (old config with checkpointer A)
+    vars.config1Json = PrimitivesRPC.newConfigWithCheckpointer(
+      vm,
+      params.checkpointerA,
+      params.threshold,
+      params.checkpoint1,
+      string(abi.encodePacked("signer:", vm.toString(vars.signeraddr), ":", vm.toString(params.weight)))
+    );
+    vars.config1ImageHash = PrimitivesRPC.getImageHash(vm, vars.config1Json);
+
+    // Create config2 (new config with checkpointer B)
+    vars.config2Json = PrimitivesRPC.newConfigWithCheckpointer(
+      vm,
+      params.checkpointerB,
+      params.threshold,
+      params.checkpoint2,
+      string(abi.encodePacked("signer:", vm.toString(vars.signeraddr), ":", vm.toString(params.weight)))
+    );
+    vars.config2ImageHash = PrimitivesRPC.getImageHash(vm, vars.config2Json);
+
+    // Create config update payload from config1 to config2
+    vars.payloadApprove2.kind = Payload.KIND_CONFIG_UPDATE;
+    vars.payloadApprove2.imageHash = vars.config2ImageHash;
+    vars.payloadApprove2.noChainId = true;
+
+    // Sign the config update payload with config1 (with checkpointer A)
+    (vars.v1, vars.r1, vars.s1) = vm.sign(params.signerpk, Payload.hashFor(vars.payloadApprove2, address(baseSigImp)));
+    vars.signature1to2 = PrimitivesRPC.toEncodedSignatureWithCheckpointerData(
+      vm,
+      vars.config1Json,
+      string(
+        abi.encodePacked(
+          vm.toString(vars.signeraddr),
+          ":hash:",
+          vm.toString(vars.r1),
+          ":",
+          vm.toString(vars.s1),
+          ":",
+          vm.toString(vars.v1)
+        )
+      ),
+      false,
+      params.checkpointerAData
+    );
+
+    // Sign the main payload with config2 (with checkpointer B)
+    (vars.v2, vars.r2, vars.s2) = vm.sign(params.signerpk, Payload.hashFor(params.payload, address(baseSigImp)));
+    vars.signature2toPayload = PrimitivesRPC.toEncodedSignatureWithCheckpointerData(
+      vm,
+      vars.config2Json,
+      string(
+        abi.encodePacked(
+          vm.toString(vars.signeraddr),
+          ":hash:",
+          vm.toString(vars.r2),
+          ":",
+          vm.toString(vars.s2),
+          ":",
+          vm.toString(vars.v2)
+        )
+      ),
+      !params.payload.noChainId,
+      ""
+    );
+
+    // Mock checkpointer A to return the old config's snapshot
+    vars.snapshotA.imageHash = vars.config1ImageHash;
+    vars.snapshotA.checkpoint = params.checkpoint1;
+
+    // Only checkpointer A is called
+    vm.mockCall(
+      params.checkpointerA, abi.encodeWithSelector(ICheckpointer.snapshotFor.selector), abi.encode(vars.snapshotA)
+    );
+
+    // Create chained signature (reverse order: final signature first, then intermediate)
+    bytes[] memory signatures = new bytes[](2);
+    signatures[0] = vars.signature2toPayload;
+    signatures[1] = vars.signature1to2;
+    vars.chainedSignature = PrimitivesRPC.concatSignatures(vm, signatures);
+
+    (uint256 threshold, uint256 weight, bytes32 imageHash, uint256 checkpoint, bytes32 opHash) =
+      baseSigImp.recoverPub(params.payload, vars.chainedSignature, false, address(0));
+    assertEq(threshold, params.threshold);
+    assertEq(weight, params.weight);
+    assertEq(imageHash, vars.config1ImageHash); // Should recover to the first config in the chain
+    assertEq(checkpoint, params.checkpoint1); // Should use checkpoint from the first config
+    assertEq(opHash, Payload.hashFor(params.payload, address(baseSigImp)));
+  }
+
   struct test_checkpointer_higher_checkpoint_fail_params {
     Payload.Decoded payload;
     address checkpointer;
