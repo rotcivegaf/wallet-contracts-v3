@@ -196,7 +196,7 @@ The blacklist serves two security purposes:
 When an implicit session call is made, both the session signer and the target address are checked against the blacklist. If either appears in the blacklist, the call will be rejected with a `BlacklistedAddress` error.
 
 > [!IMPORTANT]
-> For implicit sessions, the blacklist is mandatory. The blacklist addresses must be sorted or validation may be skipped.
+> For implicit sessions, the blacklist is mandatory. The blacklist addresses must be sorted or validation will fail. This is to allow a binary search during validation.
 
 > [!WARNING]
 > The blacklist doesn't not prevent explicit sessions from calling blacklisted addresses or prevent explicit signers. To block an explicit session or it's permissions, update the wallet configuration to remove the explicit session.

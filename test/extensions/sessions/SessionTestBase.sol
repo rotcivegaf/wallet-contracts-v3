@@ -190,4 +190,20 @@ abstract contract SessionTestBase is AdvTest {
     return arr;
   }
 
+  /// @notice Sorts an array of addresses in memory.
+  /// @param addresses The array of addresses to sort.
+  function _sortAddressesMemory(
+    address[] memory addresses
+  ) internal pure {
+    // Sort the addresses using bubble sort.
+    for (uint256 i = 0; i < addresses.length; i++) {
+      for (uint256 j = 0; j < addresses.length - i - 1; j++) {
+        if (addresses[j] > addresses[j + 1]) {
+          address temp = addresses[j];
+          addresses[j] = addresses[j + 1];
+          addresses[j + 1] = temp;
+        }
+      }
+    }
+  }
 }

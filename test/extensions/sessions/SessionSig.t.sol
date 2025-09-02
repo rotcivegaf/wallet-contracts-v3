@@ -13,6 +13,7 @@ import { ParameterOperation, ParameterRule, Permission } from "src/extensions/se
 import { Attestation, AuthData, LibAttestation } from "src/extensions/sessions/implicit/Attestation.sol";
 import { Payload } from "src/modules/Payload.sol";
 
+
 using LibAttestation for Attestation;
 
 contract SessionSigHarness {
@@ -705,14 +706,16 @@ contract SessionSigTest is SessionTestBase {
   }
 
   function testConfiguration_duplicateBlacklistNodes(
-    address[] memory blacklist
+    address[5] memory fiveBlacklists,
+    uint8 size
   ) public {
-    // Reduce size to max 5
-    if (blacklist.length > 5) {
-      assembly {
-        mstore(blacklist, 5)
-      }
+    size = uint8(bound(size, 0, 5));
+    address[] memory blacklist = new address[](size);
+    for (uint256 i = 0; i < size; i++) {
+      blacklist[i] = fiveBlacklists[i];
     }
+
+    _sortAddressesMemory(blacklist);
 
     bytes memory encoded = new bytes(0);
     for (uint256 i = 0; i < 2; i++) {
@@ -730,14 +733,16 @@ contract SessionSigTest is SessionTestBase {
   }
 
   function testConfiguration_duplicateBlacklistNodes_inBranch(
-    address[] memory blacklist
+    address[5] memory fiveBlacklists,
+    uint8 size
   ) public {
-    // Reduce size to max 5
-    if (blacklist.length > 5) {
-      assembly {
-        mstore(blacklist, 5)
-      }
+    size = uint8(bound(size, 0, 5));
+    address[] memory blacklist = new address[](size);
+    for (uint256 i = 0; i < size; i++) {
+      blacklist[i] = fiveBlacklists[i];
     }
+
+    _sortAddressesMemory(blacklist);
 
     bytes memory encoded = new bytes(0);
     // Blacklist encoding
@@ -812,6 +817,8 @@ contract SessionSigTest is SessionTestBase {
     bool includeImplicitSigner,
     address[] memory implicitBlacklist
   ) public {
+    _sortAddressesMemory(implicitBlacklist);
+
     // Reduce size to max 20
     if (explicitSigners.length > 20) {
       assembly {
