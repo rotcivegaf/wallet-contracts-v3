@@ -93,7 +93,7 @@ contract ImplicitSessionManagerTest is SessionTestBase {
     randomIdx = bound(randomIdx, 0, blacklist.length - 1);
     blacklist[randomIdx] = sessionWallet.addr;
     // Sort the blacklist
-    blacklist = _sortAddressesMemory(blacklist);
+    _sortAddressesMemory(blacklist);
 
     attestation.approvedSigner = sessionWallet.addr;
     Payload.Call memory call =
@@ -141,7 +141,7 @@ contract ImplicitSessionManagerTest is SessionTestBase {
       vm.assume(blacklist[i] != sessionWallet.addr);
     }
     // Sort the blacklist so that binary search in the contract works correctly.
-    blacklist = _sortAddressesMemory(blacklist);
+    _sortAddressesMemory(blacklist);
 
     attestation.approvedSigner = sessionWallet.addr;
     Payload.Call memory call =
@@ -164,28 +164,6 @@ contract ImplicitSessionManagerTest is SessionTestBase {
     vm.expectRevert(abi.encodeWithSelector(SessionErrors.InvalidImplicitResult.selector));
     sessionManager.validateImplicitCall(call, wallet, sessionWallet.addr, attestation, emptyBlacklist);
   }
-
-  // Helpers
-
-  /// @notice Sorts an array of addresses in memory.
-  /// @param addresses The array of addresses to sort.
-  /// @return sortedAddresses The sorted array of addresses.
-  function _sortAddressesMemory(
-    address[] memory addresses
-  ) internal pure returns (address[] memory) {
-    // Sort the addresses using bubble sort.
-    for (uint256 i = 0; i < addresses.length; i++) {
-      for (uint256 j = 0; j < addresses.length - i - 1; j++) {
-        if (addresses[j] > addresses[j + 1]) {
-          address temp = addresses[j];
-          addresses[j] = addresses[j + 1];
-          addresses[j + 1] = temp;
-        }
-      }
-    }
-    return addresses;
-  }
-
 }
 
 contract ImplicitSessionManagerHarness is ImplicitSessionManager {

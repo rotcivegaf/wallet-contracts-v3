@@ -317,8 +317,13 @@ library SessionSig {
 
         // Read the blacklist addresses
         sig.implicitBlacklist = new address[](blacklistCount);
+        address previousAddress;
         for (uint256 i = 0; i < blacklistCount; i++) {
           (sig.implicitBlacklist[i], pointer) = encoded.readAddress(pointer);
+          if (sig.implicitBlacklist[i] < previousAddress) {
+            revert SessionErrors.InvalidBlacklistUnsorted();
+          }
+          previousAddress = sig.implicitBlacklist[i];
         }
 
         // Update the root

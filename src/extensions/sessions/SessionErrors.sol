@@ -50,5 +50,7 @@ library SessionErrors {
   error InvalidBlacklist();
   /// @notice Invalid attestation
   error InvalidAttestation();
+  /// @notice The blacklist was not sorted
+  error InvalidBlacklistUnsorted();
 
 }
