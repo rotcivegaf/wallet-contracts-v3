@@ -8,6 +8,9 @@ import { IAccount, PackedUserOperation } from "./interfaces/IAccount.sol";
 import { IERC1271_MAGIC_VALUE_HASH } from "./interfaces/IERC1271.sol";
 import { IEntryPoint } from "./interfaces/IEntryPoint.sol";
 
+/// @title ERC4337v07
+/// @author Agustin Aguilar, Michael Standen
+/// @notice ERC4337 v7 support
 abstract contract ERC4337v07 is ReentrancyGuard, IAccount, Calls {
 
   uint256 internal constant SIG_VALIDATION_FAILED = 1;
@@ -23,6 +26,7 @@ abstract contract ERC4337v07 is ReentrancyGuard, IAccount, Calls {
     entrypoint = _entrypoint;
   }
 
+  /// @inheritdoc IAccount
   function validateUserOp(
     PackedUserOperation calldata userOp,
     bytes32 userOpHash,
@@ -49,6 +53,9 @@ abstract contract ERC4337v07 is ReentrancyGuard, IAccount, Calls {
     return 0;
   }
 
+  /// @notice Execute a user operation
+  /// @param _payload The packed payload
+  /// @dev This is the execute function for the EntryPoint to call.
   function executeUserOp(
     bytes calldata _payload
   ) external nonReentrant {
