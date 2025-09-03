@@ -130,7 +130,7 @@ contract ImplicitSessionManagerTest is SessionTestBase {
     assertEq(missedBlacklist, true);
 
     // Sorting the blacklist will result in all blacklisted addresses being detected
-    blacklist = _sortAddressesMemory(blacklist);
+    _sortAddressesMemory(blacklist);
     for (uint256 i = 0; i < blacklist.length; i++) {
       assertEq(sessionManager.isAddressBlacklisted(blacklist[i], blacklist), true);
     }
@@ -197,6 +197,7 @@ contract ImplicitSessionManagerTest is SessionTestBase {
     vm.expectRevert(abi.encodeWithSelector(SessionErrors.InvalidImplicitResult.selector));
     sessionManager.validateImplicitCall(call, wallet, sessionWallet.addr, attestation, emptyBlacklist);
   }
+
 }
 
 contract ImplicitSessionManagerHarness is ImplicitSessionManager {
