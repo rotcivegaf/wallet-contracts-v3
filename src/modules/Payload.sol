@@ -100,7 +100,6 @@ library Payload {
     uint256 space;
     uint256 nonce;
     // Message kind
-    // TODO: Maybe native 721 ?
     bytes message;
     // Config update kind
     bytes32 imageHash;
