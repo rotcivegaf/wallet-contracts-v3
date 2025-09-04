@@ -451,18 +451,19 @@ Attestation Encoding:
  │ Audience Hash (bytes32)                      │
  │ Application Data Length (uint24)             │
  │ Application Data (variable bytes)            │
- │ Auth Data Length (uint24)                    │
- │ Auth Data (redirect URL)                     │
+ │ Redirect URL Length (uint24)                 │
+ │ Redirect URL (variable string)               │
+ │ Issued At (uint64)                           │
  └──────────────────────────────────────────────┘
 ```
 
-The Attestation data obtained during authentication. The `Identity Type` is the type of identity that was used to authenticate the user. The `Issuer Hash` is the hash of the issuer. The `Audience Hash` is the hash of the audience. The `Auth Data` is the data obtained during authentication. The `Application Data` can be provided by the dapp.
+The Attestation data obtained during authentication. The `Identity Type` is the type of identity that was used to authenticate the user. The `Issuer Hash` is the hash of the issuer. The `Audience Hash` is the hash of the audience. The `Application Data` can be provided by the dapp. The `Auth Data` contains the redirect URL (string) and issuance timestamp (uint64).
 
 > [!WARNING]
-> The `Application Data` length is encoded using a `uint24`, imposing a maximum size of approximately 16MB per field. Ensure that data lengths are within these limits.
+> The `Application Data` length is encoded using a `uint24`. Ensure that data lengths are within these limits.
 
 > [!NOTE]
-> The `Auth Data` encodes a length (using `uint24` as above) and the redirect URL. This is intentional to support arbitrary backward compatible encodings in future.
+> The `Redirect URL` length is encoded using a `uint24`, and the `Issued At` field is a `uint64` timestamp representing when the attestation was issued. The encoding order is: `redirectUrlLength` (uint24), `redirectUrl` (string), `issuedAt` (uint64).
 
 ### Attestation Validation
 

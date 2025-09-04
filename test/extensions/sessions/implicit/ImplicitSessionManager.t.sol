@@ -103,6 +103,39 @@ contract ImplicitSessionManagerTest is SessionTestBase {
     sessionManager.validateImplicitCall(call, wallet, sessionWallet.addr, attestation, blacklist);
   }
 
+  /// @notice Test for an unsorted blacklist skipping the binary search.
+  function test_blacklist_unsortedSkipsBinarySearch(
+    address[] memory blacklist
+  ) public view {
+    // Ensure not sorted
+    bool isSorted = true;
+    for (uint256 i = 0; i < blacklist.length; i++) {
+      for (uint256 j = 0; j < blacklist.length - i - 1; j++) {
+        if (blacklist[j] > blacklist[j + 1]) {
+          isSorted = false;
+          break;
+        }
+      }
+    }
+    vm.assume(!isSorted);
+
+    bool missedBlacklist = false;
+    for (uint256 i = 0; i < blacklist.length; i++) {
+      if (sessionManager.isAddressBlacklisted(blacklist[i], blacklist)) {
+        missedBlacklist = true;
+        break;
+      }
+    }
+    // Any unsorted blacklist WILL result in missed detection of a blacklisted address in the list
+    assertEq(missedBlacklist, true);
+
+    // Sorting the blacklist will result in all blacklisted addresses being detected
+    _sortAddressesMemory(blacklist);
+    for (uint256 i = 0; i < blacklist.length; i++) {
+      assertEq(sessionManager.isAddressBlacklisted(blacklist[i], blacklist), true);
+    }
+  }
+
   /// @notice Test for delegateCall not allowed.
   function test_delegateCallNotAllowed(
     Attestation memory attestation
@@ -164,6 +197,7 @@ contract ImplicitSessionManagerTest is SessionTestBase {
     vm.expectRevert(abi.encodeWithSelector(SessionErrors.InvalidImplicitResult.selector));
     sessionManager.validateImplicitCall(call, wallet, sessionWallet.addr, attestation, emptyBlacklist);
   }
+
 }
 
 contract ImplicitSessionManagerHarness is ImplicitSessionManager {

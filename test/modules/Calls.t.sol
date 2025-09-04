@@ -437,4 +437,21 @@ contract CallsTest is AdvTest {
     calls.execute{ gas: txGasLimit }(packed, _signature);
   }
 
+  function test_empty_payload_consumes_nonce(uint256 space, uint256 nonce, bytes calldata signature) external {
+    Payload.Decoded memory decoded;
+    decoded.kind = Payload.KIND_TRANSACTIONS;
+    decoded.space = space;
+    decoded.nonce = nonce;
+    boundToLegalPayload(decoded);
+
+    bytes memory packed = PrimitivesRPC.toPackedPayload(vm, decoded);
+    calls.writeNonce(decoded.space, decoded.nonce);
+
+    calls.setExpectedSignature(signature);
+    calls.setExpectedOpHash(keccak256(packed));
+
+    calls.execute(packed, signature);
+    assertEq(calls.readNonce(decoded.space), decoded.nonce + 1);
+  }
+
 }
